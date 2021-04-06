@@ -127,3 +127,17 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# Extra Stuff
+.ipynb_checkpoints*
+downloads/*
+__pycache__
+.vscode/
+.DS_Store
+*.h5
+*.cpython-37.pyc
+*.pth
+*.zip
+data/*
+*.swp
+lightning_logs/*
