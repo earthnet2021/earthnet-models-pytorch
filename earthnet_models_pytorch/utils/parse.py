@@ -20,6 +20,7 @@ def parse_setting(setting_file, track = None):
             setting, architecture, feature, _, config = setting_file.parts[-5:]
         else:
             setting, architecture, feature, config = setting_file.parts[-4:]
+        config = "config_"+config[:-5] if config != "base.yaml" else "full_train"
         if setting not in SETTINGS: 
             setting = None
         if architecture not in MODELS:
@@ -53,8 +54,8 @@ def parse_setting(setting_file, track = None):
     if "Logger" in setting_dict:
         if "save_dir" in setting_dict["Logger"]:
             save_dir = setting_dict["Logger"]["save_dir"]
-            if (Path(save_dir).parts[-2] != setting_dict["Setting"]) and (Path(save_dir).parts[-1] != setting_dict["Architecture"]):
-                save_dir = str(Path(save_dir)/setting_dict["Setting"]/setting_dict["Architecture"])
+            if (len(list(Path(save_dir).parts)) < 2) or ((Path(save_dir).parts[-2] != setting_dict["Setting"]) and (Path(save_dir).parts[-1] != setting_dict["Architecture"])):
+                setting_dict["Logger"]["save_dir"] = str(Path(save_dir)/setting_dict["Setting"]/setting_dict["Architecture"])
         else:
             setting_dict["Logger"]["save_dir"] = str(Path("experiments/")/setting_dict["Setting"]/setting_dict["Architecture"])
         if "name" in setting_dict["Logger"]:
@@ -67,7 +68,7 @@ def parse_setting(setting_file, track = None):
                 if setting_dict["Logger"]["version"] != config:
                     warnings.warn(f"Ambivalent definition of logger experiment config, found {setting_dict['Logger']['version']} in yaml but {config} in the path. Using {setting_dict['Logger']['version']}.")
         elif config is not None:
-            setting_dict["Logger"]["version"]
+            setting_dict["Logger"]["version"] = config
 
     else:
         setting_dict["Logger"] = {
@@ -84,7 +85,7 @@ def parse_setting(setting_file, track = None):
     setting_dict["Trainer"]["precision"] = setting_dict["Trainer"]["precision"] if "precision" in setting_dict["Trainer"] else 32
     setting_dict["Data"]["fp16"] = (setting_dict["Trainer"]["precision"] == 16)
 
-    setting_dict["Checkpointer"] = setting_dict["Checkpointer"].update(METRIC_CHECKPOINT_INFO[setting_dict["Setting"]]) if "Checkpointer" in setting_dict else METRIC_CHECKPOINT_INFO[setting_dict["Setting"]]
+    setting_dict["Checkpointer"] = {**setting_dict["Checkpointer"], **METRIC_CHECKPOINT_INFO[setting_dict["Setting"]]} if "Checkpointer" in setting_dict else METRIC_CHECKPOINT_INFO[setting_dict["Setting"]]
 
     bs = setting_dict["Data"]["train_batch_size"]
     gpus = setting_dict["Trainer"]["gpus"]
@@ -105,5 +106,8 @@ def parse_setting(setting_file, track = None):
 
         if "pred_dir" not in setting_dict["Task"]:
             setting_dict["Task"]["pred_dir"] = Path(setting_dict["Logger"]["save_dir"])/setting_dict["Logger"]["name"]/setting_dict["Logger"]["version"]/"preds"/track
+
+    if setting_dict["Architecture"] == "channel-u-net":
+        setting_dict["Model"]["setting"] = setting_dict["Setting"]
 
     return setting_dict

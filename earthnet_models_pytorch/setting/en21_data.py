@@ -15,7 +15,7 @@ import torch
 from torch import nn
 from torch.utils.data import Dataset, DataLoader, random_split
 
-from earthnet_models_pytorch import str2bool
+from earthnet_models_pytorch.utils import str2bool
 
 class EarthNet2021Dataset(Dataset):
 

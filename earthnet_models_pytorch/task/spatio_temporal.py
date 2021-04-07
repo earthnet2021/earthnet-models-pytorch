@@ -20,7 +20,7 @@ from torch import nn
 from pathlib import Path
 import shutil
 
-from earthnet_models_pytorch import str2bool
+from earthnet_models_pytorch.utils import str2bool
 from earthnet_models_pytorch.task import setup_loss, SHEDULERS
 from earthnet_models_pytorch.setting import METRICS
 
@@ -46,7 +46,7 @@ class SpatioTemporalTask(pl.LightningModule):
 
         self.current_filepaths = []
 
-        self.metric = METRICS[self.hparams.setting]
+        self.metric = METRICS[self.hparams.setting]()
         self.ndvi_pred = (self.hparams.setting == "en21-veg") #TODO: Legacy, remove this...
 
         self.model_shedules = []
@@ -136,7 +136,8 @@ class SpatioTemporalTask(pl.LightningModule):
         self.log_dict({l+"_val": mean_logs[l] for l in mean_logs}, sync_dist=True)
 
         if batch_idx < self.hparams.n_log_batches:
-            self.log_viz(all_viz, batch, batch_idx)
+            if self.logger is not None:
+                self.log_viz(all_viz, batch, batch_idx)
 
     def validation_epoch_end(self, validation_step_outputs):
         self.log_dict(self.metric.compute())

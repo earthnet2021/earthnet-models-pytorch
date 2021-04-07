@@ -1,6 +1,5 @@
 
 import argparse
-from earthnet_models_pytorch.utils.parse import parse_setting
 
 def str2bool(v):
     if isinstance(v, bool):
@@ -11,3 +10,6 @@ def str2bool(v):
         return False
     else:
         raise argparse.ArgumentTypeError('Boolean value expected.')
+
+from earthnet_models_pytorch.utils.parse import parse_setting
+
