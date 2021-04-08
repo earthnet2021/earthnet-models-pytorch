@@ -21,9 +21,9 @@ Trainer:
     #fast_dev_run: True
     #log_gpu_memory: 'all'
     #weights_summary: 'full'
-    max_epochs: 100
-    #limit_train_batches: 64
-    #limit_val_batches: 16
+    max_epochs: 5
+    limit_train_batches: 64
+    limit_val_batches: 16
   
 Data:
     base_dir: "/scratch/EarthNet2021/" #"/workspace/EarthNet2021/earthnet-model-intercomparison-suite/data/datasets/release/" #"/tmp/data/release/" #"/workspace/EarthNet2021/earthnet-model-intercomparison-suite/data/datasets/release/"
@@ -32,9 +32,9 @@ Data:
     noisy_masked_pixels: False
     use_meso_static_as_dynamic: True
     val_pct: 0.01
-    train_batch_size: 4
-    val_batch_size: 2
-    test_batch_size: 4
+    train_batch_size: 4 #16
+    val_batch_size: 2 #8
+    test_batch_size: 2 #32
     num_workers: 6
 
 Task:
@@ -72,7 +72,7 @@ Task:
                 name: 'Adam'
                 args: 
                     betas: [0.9, 0.999]
-                lr_per_sample: 0.0003
+                lr_per_sample: 0.0002
         lr_shedule:
             -
                 name: 'MultiStepLR'
