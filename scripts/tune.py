@@ -13,6 +13,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
+import time
 import yaml
 import pandas as pd
 from earthnet_models_pytorch.utils import parse_setting
@@ -99,7 +100,7 @@ class Tuner:
         if not self.slurm:
             cmd = ["train.py", trial_path] #f"{script_path/'train.py'} {trial_path}"
         else:
-            cmd = f"{script_path/'slurmrun.sh'} {trial_path}"
+            cmd = ["sbatch", f"{script_path/'slurmrun.sh'}", trial_path, "train"] #f"{script_path/'slurmrun.sh'} {trial_path} train"
         out = subprocess.Popen(cmd)
 
         return out
@@ -114,18 +115,38 @@ class Tuner:
 
         errors = ""
 
+        start_time = time.time()
+
         done = [0]*len(managers)
         while not all(done):
             for idx, manager in enumerate(managers):
-                manager.poll()
-                if manager.returncode is not None:
-                    if manager.returncode == 0:
+                if not self.slurm:
+                    manager.poll()
+                    if manager.returncode is not None:
+                        if manager.returncode == 0:
+                            done[idx] = True
+                        else:
+                            # managers[idx] = self.start_one_trial(self.trial_paths[idx]) # TODO this would be auto-restarting
+                            done[idx] = True
+                            errors += f"{self.trial_paths[idx]} failed with returncode {manager.returncode}"
+                else:
+                    trial_path = self.trial_paths[idx]
+                    setting_dict = parse_setting(trial_path)
+                    out_dir = Path(setting_dict["Logger"]["save_dir"])/setting_dict["Logger"]["name"]/setting_dict["Logger"]["version"]
+                    results_file = out_dir/"validation_scores.json"
+                    if results_file.exists():
                         done[idx] = True
-                    else:
-                        # managers[idx] = self.start_one_trial(self.trial_paths[idx]) # TODO this would be auto-restarting
-                        done[idx] = True
-                        errors += f"{self.trial_paths[idx]} failed with returncode {manager.returncode}"
-        
+    
+            current_time = time.time()
+            seconds_elapsed = current_time - start_time
+            hours, rest = divmod(seconds_elapsed, 3600)
+
+            if hours > 6:
+                print("timeout")
+                break
+            
+            time.sleep(60)
+
         return errors
     
     def aggregate_results(self):
