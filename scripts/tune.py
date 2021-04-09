@@ -10,6 +10,7 @@ import itertools
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import yaml
@@ -70,6 +71,25 @@ class Tuner:
         self.trial_paths = trial_paths
 
         return trial_paths
+
+    def select_trials(self, mode = "add"):
+        
+        new_trials = [] if mode == "add" else self.trial_paths
+        for trial_path in self.trial_paths:
+            setting_dict = parse_setting(trial_path)
+            out_dir = Path(setting_dict["Logger"]["save_dir"])/setting_dict["Logger"]["name"]/setting_dict["Logger"]["version"]
+            if out_dir.exists():
+                if mode == "overwrite":
+                    shutil.rmtree(out_dir)
+                    print(f"Overwriting {out_dir}")
+                elif mode == "add":
+                    print(f"Skipping {trial_path}")
+            else:
+                if mode == "add":
+                    new_trials.append(trial_path)
+        self.trial_paths = new_trials
+
+
 
     def start_one_trial(self, trial_path):
         # TODO export CUDA_VISIBLE_DEVICES ???
@@ -145,18 +165,25 @@ class Tuner:
     
 
     @classmethod
-    def tune(cls, params_file, setting_file, slurm = False):
+    def tune(cls, params_file, setting_file, slurm = False, overwrite = False):
         
         self = cls(slurm = slurm)
 
         print("Creating Configs...")
         self.create_tune_cfgs(params_file, setting_file)
 
-        print("Running Trials...")
-        #self.run_trials()
+        print("Selecting Trials...")
+        self.select_trials(mode = ("overwrite" if overwrite else "add"))
 
-        print("Aggregating Results...")
-        self.aggregate_results()
+        if len(self.trial_paths) > 0:
+            print("Running Trials...")
+            errors = self.run_trials()
+            print(errors)
+
+            print("Aggregating Results...")
+            self.aggregate_results()
+        else:
+            print("No trials to run!")
 
 
 if __name__=="__main__":
