@@ -141,7 +141,7 @@ class SpatioTemporalTask(pl.LightningModule):
 
     def validation_epoch_end(self, validation_step_outputs):
         current_scores = self.metric.compute()
-        self.log_dict(current_scores)
+        self.log_dict(current_scores, sync_dist=True)
         self.metric.reset()
         if self.logger is not None and self.trainer.is_global_zero:
             current_scores["epoch"] = self.current_epoch

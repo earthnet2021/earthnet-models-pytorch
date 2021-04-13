@@ -101,7 +101,7 @@ class Tuner:
             cmd = ["train.py", trial_path] #f"{script_path/'train.py'} {trial_path}"
         else:
             cmd = ["sbatch", f"{script_path/'slurmrun.sh'}", trial_path, "train"] #f"{script_path/'slurmrun.sh'} {trial_path} train"
-        out = subprocess.Popen(cmd)
+        out = subprocess.Popen(cmd, stdout=subprocess.PIPE)
 
         return out
 
@@ -117,8 +117,18 @@ class Tuner:
 
         start_time = time.time()
 
+        if self.slurm:
+            time.sleep(15)
+            jobs = []
+            for idx, manager in enumerate(managers):
+                message, err = manager.communicate()
+                job = str(message).split(" ")[-1][:-3] # Extracting Job ID that is outputed when running sbatch
+                jobs.append(job)
+                print(f"Detected SLURM Job: {job} for trial {self.trial_paths[idx]}")
+
         done = [0]*len(managers)
         while not all(done):
+            time.sleep(60)
             for idx, manager in enumerate(managers):
                 if not self.slurm:
                     manager.poll()
@@ -128,14 +138,26 @@ class Tuner:
                         else:
                             # managers[idx] = self.start_one_trial(self.trial_paths[idx]) # TODO this would be auto-restarting
                             done[idx] = True
-                            errors += f"{self.trial_paths[idx]} failed with returncode {manager.returncode}"
+                            errors += f"{self.trial_paths[idx]} failed with returncode {manager.returncode}\n"
                 else:
-                    trial_path = self.trial_paths[idx]
-                    setting_dict = parse_setting(trial_path)
-                    out_dir = Path(setting_dict["Logger"]["save_dir"])/setting_dict["Logger"]["name"]/setting_dict["Logger"]["version"]
-                    results_file = out_dir/"validation_scores.json"
-                    if results_file.exists():
+                    # trial_path = self.trial_paths[idx]
+                    # setting_dict = parse_setting(trial_path)
+                    # out_dir = Path(setting_dict["Logger"]["save_dir"])/setting_dict["Logger"]["name"]/setting_dict["Logger"]["version"]
+                    # results_file = out_dir/"validation_scores.json"
+                    # if results_file.exists(): #TODO needs to wait till this file contains EPOCH max epoch.....
+                    #     done[idx] = True
+                    job = jobs[idx]
+                    cmd = ["sacct", "-j", f"{job}.0", "-o", "state"]
+                    check = subprocess.run(cmd, stdout = subprocess.PIPE)
+                    state = str(check.stdout).split("\\n")[-2].strip() # Extracting State from SLURM sacct command...
+                    if state == "COMPLETED":
                         done[idx] = True
+                    elif state == "CANCELLED":
+                        print(f"SLURM Job {job} Cancelled!")
+                        errors += f"SLURM Job {job} Cancelled!\n"
+                    elif state == "FAILED":
+                        print(f"SLURM Job {job} Failed!")
+                        errors += f"SLURM Job {job} Failed!\n"
     
             current_time = time.time()
             seconds_elapsed = current_time - start_time
@@ -143,9 +165,7 @@ class Tuner:
 
             if hours > 6:
                 print("timeout")
-                break
-            
-            time.sleep(60)
+                #break
 
         return errors
     
