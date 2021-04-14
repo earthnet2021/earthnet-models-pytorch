@@ -155,15 +155,17 @@ class Tuner:
                     elif state == "CANCELLED":
                         print(f"SLURM Job {job} Cancelled!")
                         errors += f"SLURM Job {job} Cancelled!\n"
+                        done[idx] = True
                     elif state == "FAILED":
                         print(f"SLURM Job {job} Failed!")
                         errors += f"SLURM Job {job} Failed!\n"
+                        done[idx] = True
     
             current_time = time.time()
             seconds_elapsed = current_time - start_time
             hours, rest = divmod(seconds_elapsed, 3600)
 
-            if hours > 6:
+            if hours > 48:
                 print("timeout")
                 #break
 
@@ -214,6 +216,7 @@ class Tuner:
         self.create_tune_cfgs(params_file, setting_file)
 
         print("Selecting Trials...")
+        old_trials = self.trial_paths
         self.select_trials(mode = ("overwrite" if overwrite else "add"))
 
         if len(self.trial_paths) > 0:
@@ -221,6 +224,7 @@ class Tuner:
             errors = self.run_trials()
             print(errors)
 
+            self.trial_paths = old_trials
             print("Aggregating Results...")
             self.aggregate_results()
         else:

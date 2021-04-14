@@ -26,10 +26,11 @@ class ChannelUNet(nn.Module):
 
         if self.hparams.hr_head:
             classes = self.hparams.args["classes"]
+            in_channels = self.hparams.args["in_channels"]
             self.hparams.args["classes"] = 50
             self.hparams.args["activation"] = None
             self.head = nn.Sequential(
-                nn.Conv2d(100, 64, 1, stride = 1, padding = 0, bias = True),
+                nn.Conv2d(50+in_channels, 64, 1, stride = 1, padding = 0, bias = True),
                 nn.BatchNorm2d(64),
                 nn.ReLU(inplace = True),
                 nn.Conv2d(64, 32, 1, stride = 1, padding = 0, bias = True),
