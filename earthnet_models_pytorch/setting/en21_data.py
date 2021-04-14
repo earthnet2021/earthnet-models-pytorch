@@ -177,8 +177,11 @@ class EarthNet2021DataModule(pl.LightningDataModule):
             val_size = int(self.hparams.val_pct * len(earthnet_corpus))
             train_size = len(earthnet_corpus) - val_size
 
-            self.earthnet_train, self.earthnet_val = random_split(earthnet_corpus, [train_size, val_size], generator=torch.Generator().manual_seed(int(self.hparams.val_split_seed)))
-        
+            try: #PyTorch 1.5 safe....
+                self.earthnet_train, self.earthnet_val = random_split(earthnet_corpus, [train_size, val_size], generator=torch.Generator().manual_seed(int(self.hparams.val_split_seed)))
+            except TypeError:
+                self.earthnet_train, self.earthnet_val = random_split(earthnet_corpus, [train_size, val_size])
+
         if stage == 'test' or stage is None:
             self.earthnet_test = EarthNet2021Dataset(self.base_dir/self.__TRACKS__[self.hparams.test_track][0], noisy_masked_pixels = self.hparams.noisy_masked_pixels, use_meso_static_as_dynamic = self.hparams.use_meso_static_as_dynamic, fp16 = self.hparams.fp16, landcover_folder=Path(self.hparams.landcover_folder)/self.__TRACKS__[self.hparams.test_track][1] if self.hparams.landcover_folder is not None else None, remove_first_n_steps = 0 if self.hparams.test_track != "full_sea" else self.hparams.full_sea_remove_first_n_steps)
 

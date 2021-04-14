@@ -25,15 +25,17 @@ source ~/.bashrc
 echo "Activating Conda Env"
 conda activate pt15
 
-cd /home/vibe622c/code/earthnet-models-pytorch/scripts
+cd /home/vibe622c/code/earthnet-models-pytorch/
 
-if [ $1 == "train" || $1 == "both"]; then
-    if [ $setting == "en21-std"]; then
+pip install . --upgrade
+
+if [ $2 == 'train' ] || [ $2 == 'both' ]; then
+    if [ $setting == 'en21-std' ]; then
         echo "Making Directories"
         mkdir -p /tmp/data/train/
         echo "Copying Train"
-        cp -rf /scratch/ws/0/vibe622c-codyn/data/release/train/. /tmp/data/release/train/
-    elif [ $setting == "en21-veg"]; then
+        cp -rf /scratch/ws/0/vibe622c-codyn/data/release/train/. /tmp/data/train/
+    elif [ $setting == 'en21-veg' ]; then
         echo "Making Directories"
         mkdir -p /tmp/data/train/
         mkdir -p /tmp/data/landcover/
@@ -41,23 +43,26 @@ if [ $1 == "train" || $1 == "both"]; then
         cp -rf /scratch/ws/0/vibe622c-codyn/data/release/train/. /tmp/data/train/
         echo "Copying Landcover"
         cp -rf /scratch/ws/0/vibe622c-codyn/data/release/landcover/. /tmp/data/landcover/
-    else [ $setting == "europe-veg"]; then
+    #elif [ $setting == "europe-veg"]; then
+    #    echo "Not Implemented"
+    #    exit 1
+    else   
         echo "Not Implemented"
         exit 1
     fi
     
     echo "Start training"
-    srun python train.py $1
+    srun train.py $1
 fi
 
-if [ $1 == "test" || $1 == "both"]; then
-    exit 1
-    for track in $4
-    do
-        echo "Copying IID Test"
-        mkdir -p /tmp/data/${track}_test_split/ #Here copy the right track !!!!
-        cp -rf /scratch/ws/0/vibe622c-codyn/data/release/${track}_test_split/. /tmp/data/${track}_test_split/
-        echo "Start testing"
-        srun python test.py $1 $track #Need getting best checkpoint!!!
-    done
-fi
+# if [ $1 == "test" || $1 == "both"]; then
+#     exit 1
+#     for track in $4
+#     do
+#         echo "Copying IID Test"
+#         mkdir -p /tmp/data/${track}_test_split/ #Here copy the right track !!!!
+#         cp -rf /scratch/ws/0/vibe622c-codyn/data/release/${track}_test_split/. /tmp/data/${track}_test_split/
+#         echo "Start testing"
+#         srun python test.py $1 $track #Need getting best checkpoint!!!
+#     done
+# fi

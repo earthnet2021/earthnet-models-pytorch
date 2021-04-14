@@ -1,0 +1,10 @@
+Model.args.encoder_name:
+  - "densenet161"
+  - "efficientnet-b4"
+Task.optimization.optimizer.0.lr_per_sample:
+  - 0.00005
+  - 0.00002
+  - 0.000005
+Model.hr_head:
+  - True
+  - False

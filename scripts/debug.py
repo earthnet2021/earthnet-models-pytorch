@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """Debug script
 """
 #TODO Add more output to textfile
@@ -85,6 +86,7 @@ def overfit_model(setting_dict: dict):
     model = MODELS[setting_dict["Architecture"]](model_params)
 
     # Task
+    setting_dict["Task"]["optimization"]["lr_shedule"][0]["args"]["milestones"] = [1000,2000]
     task_args = ["--{}={}".format(key,value) for key, value in setting_dict["Task"].items()]
     task_parser = ArgumentParser()
     task_parser = MODELTASKS[setting_dict["Architecture"]].add_task_specific_args(task_parser)

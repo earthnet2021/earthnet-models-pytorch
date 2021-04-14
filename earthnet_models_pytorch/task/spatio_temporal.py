@@ -140,8 +140,22 @@ class SpatioTemporalTask(pl.LightningModule):
                 self.log_viz(all_viz, batch, batch_idx)
 
     def validation_epoch_end(self, validation_step_outputs):
-        self.log_dict(self.metric.compute())
+        current_scores = self.metric.compute()
+        self.log_dict(current_scores, sync_dist=True)
         self.metric.reset()
+        if self.logger is not None and self.trainer.is_global_zero:
+            current_scores["epoch"] = self.current_epoch
+            outpath = Path(self.logger.log_dir)/"validation_scores.json"
+            if outpath.is_file():
+                with open(outpath, "r") as fp:
+                    past_scores = json.load(fp)
+                scores = past_scores + [current_scores]
+            else:
+                scores = [current_scores]        
+
+            with open(outpath, "w") as fp:
+                json.dump(scores, fp)
+
 
     def test_step(self, batch, batch_idx):
         scores = []

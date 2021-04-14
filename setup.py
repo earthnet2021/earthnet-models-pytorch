@@ -13,6 +13,7 @@ scripts = [
     'scripts/train.py', 
     'scripts/test.py', 
     'scripts/tune.py', 
+    'scripts/slurmrun.sh'
 ]
 
 setup(name='earthnet-models-pytorch', 
