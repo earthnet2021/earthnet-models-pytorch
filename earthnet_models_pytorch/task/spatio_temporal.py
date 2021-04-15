@@ -143,7 +143,7 @@ class SpatioTemporalTask(pl.LightningModule):
         current_scores = self.metric.compute()
         self.log_dict(current_scores, sync_dist=True)
         self.metric.reset()
-        if self.logger is not None and self.trainer.is_global_zero:
+        if self.logger is not None and type(self.logger.experiment).__name__ != "DummyExperiment" and self.trainer.is_global_zero:
             current_scores["epoch"] = self.current_epoch
             outpath = Path(self.logger.log_dir)/"validation_scores.json"
             if outpath.is_file():

@@ -41,6 +41,17 @@ class ChannelUNet(nn.Module):
 
         self.unet = getattr(smp, self.hparams.name)(**self.hparams.args)
 
+        if self.hparams.args["encoder_name"].startswith("timm-efficientnet"):
+            for name, param in self.unet.named_parameters():
+                if name in ["encoder.conv_head.weight", "encoder.bn2.weight","encoder.bn2.bias"]:
+                    print(f"Removing grads for redudent layers {name}")
+                    param.requires_grad = False
+        elif self.hparams.args["encoder_name"].startswith("efficientnet"):
+            for name, param in self.unet.named_parameters():
+                if name in ["encoder._conv_head.weight","encoder._bn1.weight","encoder._bn1.bias"]:
+                    print(f"Removing grads for redudent layers {name}")
+                    param.requires_grad = False
+
         self.upsample = nn.Upsample(size = (128,128))
 
 
