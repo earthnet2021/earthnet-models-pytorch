@@ -16,6 +16,8 @@
 # $2 train (test both)
 # $3 test tracks list
 
+echo $1
+
 arr=($(cat $1 | grep "Setting:"))
 setting=${arr[1]}
 echo $setting
