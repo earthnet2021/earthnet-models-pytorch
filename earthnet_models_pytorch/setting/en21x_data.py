@@ -31,6 +31,9 @@ class EarthNet2021XDataset(Dataset):
         self.eobs_scaling_cube = xr.DataArray(data = [100, 100, 100, 20, 100, 100, 100, 100, 1000, 1000, 1000, 200, 1000, 1000, 1000, 200, 50, 50, 50, 10, 50, 50, 50, 10, 50, 50, 50, 10], coords = {"variable": ['fg_max', 'fg_mean', 'fg_min', 'fg_spread', 'hu_max', 'hu_mean', 'hu_min', 'hu_spread', 'qq_max',
     'qq_mean', 'qq_min', 'qq_spread', 'rr_max', 'rr_mean', 'rr_min', 'rr_spread', 'tg_max', 'tg_mean', 'tg_min', 'tg_spread', 'tn_max', 'tn_mean', 'tn_min', 'tn_spread', 'tx_max', 'tx_mean', 'tx_min', 'tx_spread']})
 
+        self.eobs_vars = ['fg_max', 'fg_mean', 'fg_min', 'fg_spread', 'hu_max', 'hu_mean', 'hu_min', 'hu_spread', 'qq_max',
+    'qq_mean', 'qq_min', 'qq_spread', 'rr_max', 'rr_mean', 'rr_min', 'rr_spread', 'tg_max', 'tg_mean', 'tg_min', 'tg_spread', 'tn_max', 'tn_mean', 'tn_min', 'tn_spread', 'tx_max', 'tx_mean', 'tx_min', 'tx_spread']
+
     def __getitem__(self, idx: int) -> dict:
         
         filepath = self.filepaths[idx]
@@ -46,7 +49,7 @@ class EarthNet2021XDataset(Dataset):
         kndvi[kndvi > 1] = 1
         kndvi[kndvi < 0] = 0
 
-        eobs_cube = minicube[sorted([v for v in minicube.variables if v[:2] in ["hu", "tx", "tn", "tg", "qq", "rr", "fg"]])].to_array()
+        eobs_cube = minicube[self.eobs_vars].to_array()
 
         eobs_cube  = eobs_cube / self.eobs_scaling_cube
 
