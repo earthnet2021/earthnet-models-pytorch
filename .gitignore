@@ -141,3 +141,5 @@ __pycache__
 data/*
 *.swp
 lightning_logs/*
+notebooks/*
+notebooks
