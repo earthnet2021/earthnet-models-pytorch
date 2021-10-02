@@ -59,6 +59,7 @@ class MaskedLoss(nn.Module):
 
 LOSSES = {"masked": MaskedLoss}
 
+
 class BaseLoss(nn.Module):
     def __init__(self, setting: dict):
         super().__init__()
@@ -69,19 +70,29 @@ class BaseLoss(nn.Module):
         self.lambda_l2_res =  WeightShedule(**setting["residuals_shedule"])
         self.dist_scale = 1 if "dist_scale" not in setting else setting["dist_scale"]
         self.ndvi = False if "ndvi" not in setting else setting["ndvi"]
+        self.min_lc = 82 if "min_lc" not in setting else setting["min_lc"]
+        self.max_lc = 104 if "max_lc" not in setting else setting["max_lc"]
 
     def forward(self, preds, batch, aux, current_step = None):
         
         logs = {}
         
         targs = batch["dynamic"][0][:,-preds.shape[1]:,...]
-        masks = batch["dynamic_mask"][0][:,-preds.shape[1]:,...]
+        if len(batch["dynamic_mask"]) > 0:
+            masks = batch["dynamic_mask"][0][:,-preds.shape[1]:,...]
+        else:
+            masks = None
         
         if self.ndvi:
-            targs = ((targs[:,:,3,...] - targs[:,:,2,...])/(targs[:,:,3,...] + targs[:,:,2,...] + 1e-6)).unsqueeze(2)
-            masks = masks[:,:,0,...].unsqueeze(2)
-            lc = batch["landcover"].unsqueeze(1).repeat(1,preds.shape[1],1,1,1)
-            masks = torch.where(masks.byte(), ((lc > 63).byte() & (lc < 105).byte()).type_as(masks), masks)
+            if targs.shape[2] >= 3:
+                targs = ((targs[:,:,3,...] - targs[:,:,2,...])/(targs[:,:,3,...] + targs[:,:,2,...] + 1e-6)).unsqueeze(2)
+            if masks is not None:
+                masks = masks[:,:,0,...].unsqueeze(2)
+            lc = batch["landcover"]
+            if masks is None:
+                masks = ((lc >= self.min_lc).byte() & (lc <= self.max_lc).byte()).type_as(preds).unsqueeze(1).repeat(1, preds.shape[1], 1, 1, 1)
+            else:
+                masks = torch.where(masks.byte(), ((lc >= self.min_lc).byte() & (lc <= self.max_lc).byte()).type_as(masks).unsqueeze(1).repeat(1, preds.shape[1], 1, 1, 1), masks)
 
         dist = self.distance(preds, targs, masks)
         

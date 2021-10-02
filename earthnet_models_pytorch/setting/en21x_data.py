@@ -24,7 +24,7 @@ class EarthNet2021XDataset(Dataset):
         if not isinstance(folder, Path):
             folder = Path(folder)
 
-        self.filepaths = sorted(list(folder.glob("**/*.npz")))
+        self.filepaths = sorted(list(folder.glob("**/*.nc")))
         
         self.type = np.float16 if fp16 else np.float32
 
@@ -86,7 +86,7 @@ class EarthNet2021XDataset(Dataset):
                 torch.from_numpy(highresstatic)
             ],
             "static_mask": [],
-            "lc": torch.from_numpy(lc),
+            "landcover": torch.from_numpy(lc),
             "filepath": str(filepath),
             "cubename": self.__name_getter(filepath)
         }
@@ -116,7 +116,7 @@ class EarthNet2021XDataModule(pl.LightningDataModule):
 
     def __init__(self, hparams: argparse.Namespace):
         super().__init__()
-        self.hparams = copy.deepcopy(hparams)
+        self.save_hyperparameters(copy.deepcopy(hparams))
         self.base_dir = Path(hparams.base_dir)
         
     @staticmethod

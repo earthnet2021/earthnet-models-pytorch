@@ -9,8 +9,9 @@ import numpy as np
 import torch
 
 
+
 class RootMeanSquaredError(Metric):
-    def __init__(self, compute_on_step: bool = False, dist_sync_on_step: bool = False, process_group = None, dist_sync_fn = None,):
+    def __init__(self, compute_on_step: bool = False, dist_sync_on_step: bool = False, process_group = None, dist_sync_fn = None, lc_min = 73, lc_max = 104):
         super().__init__(
             compute_on_step=compute_on_step,
             dist_sync_on_step=dist_sync_on_step,
@@ -20,6 +21,9 @@ class RootMeanSquaredError(Metric):
 
         self.add_state("sum_squared_error", default=torch.tensor(0.0), dist_reduce_fx="sum")
         self.add_state("total", default=torch.tensor(0), dist_reduce_fx="sum")
+
+        self.lc_min = lc_min
+        self.lc_max = lc_max
     
     @torch.jit.unused
     def forward(self, *args, **kwargs):
@@ -39,11 +43,17 @@ class RootMeanSquaredError(Metric):
         
     def update(self, preds, targs, just_return = False):
 
-        masks = targs["dynamic_mask"][0][:,-preds.shape[1]:,0,...].unsqueeze(2)
-        lc = targs["landcover"].unsqueeze(1).repeat(1,preds.shape[1],1,1,1)
-        masks = torch.where(masks.byte(), ((lc > 63).byte() & (lc < 105).byte()).type_as(masks), masks)
+        lc = targs["landcover"]
+
+        if len(targs["dynamic_mask"]) > 0:
+            masks = targs["dynamic_mask"][0][:,-preds.shape[1]:,0,...].unsqueeze(2)
+            masks = torch.where(masks.byte(), ((lc >= self.lc_min).byte() & (lc <= self.lc_max).byte()).type_as(masks).unsqueeze(1).repeat(1, preds.shape[1], 1, 1, 1), masks)
+        else:
+            masks = ((lc >= self.lc_min).byte() & (lc <= self.lc_max).byte()).type_as(preds).unsqueeze(1).repeat(1, preds.shape[1], 1, 1, 1)
+        
         targets = targs["dynamic"][0][:,-preds.shape[1]:,...]
-        targets = ((targets[:,:,3,...] - targets[:,:,2,...])/(targets[:,:,3,...] + targets[:,:,2,...] + 1e-6)).unsqueeze(2)
+        if targets.shape[2] >= 3:
+            targets = ((targets[:,:,3,...] - targets[:,:,2,...])/(targets[:,:,3,...] + targets[:,:,2,...] + 1e-6)).unsqueeze(2)
 
         sum_squared_error = torch.pow(preds * masks - targets * masks, 2).sum((1,2,3,4))
         n_obs = (masks != 0).sum((1,2,3,4))
@@ -60,3 +70,16 @@ class RootMeanSquaredError(Metric):
         Computes mean squared error over state.
         """
         return {"RMSE_Veg": torch.sqrt(self.sum_squared_error / self.total)}
+
+
+class RMSE_ens21x(RootMeanSquaredError):
+
+    def __init__(self, compute_on_step: bool = False, dist_sync_on_step: bool = False, process_group = None, dist_sync_fn = None):
+        super().__init__(
+            compute_on_step=compute_on_step,
+            dist_sync_on_step=dist_sync_on_step,
+            process_group=process_group,
+            dist_sync_fn=dist_sync_fn,
+            lc_min = 82,
+            lc_max = 104
+        )
