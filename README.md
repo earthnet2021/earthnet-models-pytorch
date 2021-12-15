@@ -9,6 +9,7 @@ It is currently under development, thus do expect bugs and please report them!
 The library is build on [PyTorch](www.pytorch.org), a Python deep learning library, and [PyTorch Lightning](https://www.pytorchlightning.ai/), a PyTorch wrapper reducing boilerplate code and adding functionality to scale experiments.
 
 In earthnet-models-pytorch there is three main components:
+
     1. Model - plain PyTorch models just implementing simple forward passes.
     2. Setting - Dataset and Metrics for a particular problem
     3. Task - Abstraction for the training, validation & test loops, tying together models and settings, normally both models and settings are task-specific.
@@ -92,6 +93,7 @@ The task is a PyTorch Lightning module that implements the training, validation 
 **spatio-temporal**
 
 The required data has
+
 - dynamic
 - dynamic_mask
 - static
@@ -108,6 +110,7 @@ A setting must implement a metric with a Lightning metrics interface. Note: The 
 ### **earthnet_models_pytorch.setting**
 
 The setting is a combination of a Lightning DataModule and a Lightning Metric. Settings include:
+
 - `en21-std`; the setting of the EarthNet2021 challenge.
 - `en21-veg`; Only predicting vegetation on EarthNet2021 data with additional S2GLC Landcover data.
 - `en21x`; The EarthNet2021x data, which is reworked data from the EarthNet2021 challenge, now focusing on vegetation forecasting in Europe.
