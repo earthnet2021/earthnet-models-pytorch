@@ -1,0 +1,101 @@
+Architecture: "local-rnn"
+
+Seed: 42
+
+Setting: "en21x"
+
+Logger:
+    save_dir: "experiments/"
+
+Checkpointer:
+    save_top_k: 1
+    save_last: True
+    period: 1
+
+Trainer:
+    gpus: 4 #6
+    accelerator: 'ddp'
+    #deterministic: True
+    log_every_n_steps: 32
+    #profiler: 'advanced'
+    #fast_dev_run: True
+    #log_gpu_memory: 'all'
+    #weights_summary: 'full'
+    max_epochs: 100
+    #limit_train_batches: 128
+    #limit_val_batches: 64
+    gradient_clip_val: 1
+    val_check_interval: 1.0
+  
+Data:
+    base_dir: "/scratch/vbenson/minicubes_xs/" 
+    test_track: "iid"
+    val_pct: 0.01
+    train_batch_size: 8 #96
+    val_batch_size: 1
+    test_batch_size: 1 #96
+    num_workers: 16 #2
+    spatial_eobs: False
+    eobs_spread: False
+    soilgrids_all: False
+
+Task:
+    loss:
+        name: "masked"
+        args: {
+            distance_type: "L2"
+        }
+        dist_scale: 1
+        state_shedule: {
+            initial_weight: 0,
+            increase_from_step: 1500,
+            weight_step: 0.00001,
+            max_weight: 1
+        }
+        inference_shedule: {
+            initial_weight: 0,
+            increase_from_step: 3000,
+            weight_step: 0.0000000001,
+            max_weight: 1
+        }
+        residuals_shedule: {
+            initial_weight: 0,
+            increase_from_step: 1500,
+            weight_step: 0.00001,
+            max_weight: 1
+        }
+        ndvi: True
+        min_lc: 82
+        max_lc: 104
+    context_length: 9
+    target_length: 36
+    n_stochastic_preds: 1
+    optimization:
+        optimizer:
+            - 
+                name: Adam
+                args: 
+                    betas: [0.9, 0.999]
+                lr_per_sample: 0.000005
+        lr_shedule:
+            -
+                name: MultiStepLR
+                args:
+                    milestones: [40,70,90] #[2, 20, 50, 90]
+                    gamma: 0.1
+    n_log_batches: 8
+    compute_metric_on_test: True
+
+Model:
+    state_encoder_name: FPN
+    state_encoder_args: 
+        encoder_name: timm-efficientnet-b3
+        encoder_weights: noisy-student
+        in_channels: 30
+        classes: 256
+        decoder_merge_policy: cat
+        decoder_dropout: 0
+    update_encoder_name: MLP
+    update_encoder_inchannels: 85
+    update_encoder_nclasses: 96
+    train_lstm_npixels: 512
