@@ -143,3 +143,9 @@ data/*
 lightning_logs/*
 notebooks/*
 notebooks
+experiments
+experiments/*
+plots
+plots/*
+checkpoints 
+checkpoints/*

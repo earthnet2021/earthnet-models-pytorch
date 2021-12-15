@@ -99,15 +99,15 @@ def parse_setting(setting_file, track = None):
         
     if track is not None:
 
-        setting_dict["Task"]["context_length"] = TRACK_INFO[MODELTASKNAMES[setting_dict["Architecture"]]][track]["context_length"]
-        setting_dict["Task"]["target_length"] = TRACK_INFO[MODELTASKNAMES[setting_dict["Architecture"]]][track]["target_length"]
+        setting_dict["Task"]["context_length"] = TRACK_INFO[setting_dict["Setting"]][track]["context_length"]
+        setting_dict["Task"]["target_length"] = TRACK_INFO[setting_dict["Setting"]][track]["target_length"]
 
         setting_dict["Data"]["test_track"] = track
 
         if "pred_dir" not in setting_dict["Task"]:
             setting_dict["Task"]["pred_dir"] = Path(setting_dict["Logger"]["save_dir"])/setting_dict["Logger"]["name"]/setting_dict["Logger"]["version"]/"preds"/track
 
-    if setting_dict["Architecture"] in ["channel-u-net", "local-rnn"]:
+    if setting_dict["Architecture"] in ["channel-u-net", "local-rnn","rnn"]:
         setting_dict["Model"]["setting"] = setting_dict["Setting"]
 
     return setting_dict

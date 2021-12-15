@@ -54,10 +54,14 @@ def veg_colorize(data, mask = None, clouds = None, mode = "ndvi"): #TODO move to
 
 def log_viz(tensorboard_logger, viz_data, batch, batch_idx, current_epoch, mode = "rgb"):
 
+
     targs = batch["dynamic"][0]
+
+    nrow = 9 if targs.shape[1]%9 == 0 else 10
+
     if "landcover" in batch:
         lc = batch["landcover"]
-        lc = 1 - (lc > 63).byte() & (lc < 105).byte()
+        lc = 1 - (lc >= 82).byte() & (lc <= 104).byte()
     if len(batch["dynamic_mask"]) > 0:
         masks = batch["dynamic_mask"][0].byte()
     else:
@@ -68,33 +72,33 @@ def log_viz(tensorboard_logger, viz_data, batch, batch_idx, current_epoch, mode 
             
             if mode == "rgb":
                 rgb = torch.cat([preds[j,:,2,...].unsqueeze(1)*10000,preds[j,:,1,...].unsqueeze(1)*10000,preds[j,:,0,...].unsqueeze(1)*10000],dim = 1)
-                grid = torchvision.utils.make_grid(rgb, nrow = 10, normalize = True, range = (0,5000))
+                grid = torchvision.utils.make_grid(rgb, nrow = nrow, normalize = True, range = (0,5000))
                 text = f"Cube: {scores[j]['name']} ENS: {scores[j]['ENS']:.4f} MAD: {scores[j]['MAD']:.4f} OLS: {scores[j]['OLS']:.4f} EMD: {scores[j]['EMD']:.4f} SSIM: {scores[j]['SSIM']:.4f}"
                 text = torch.tensor(text_phantom(text, width = grid.shape[-1]), dtype=torch.float32, device = targs.device).type_as(grid).permute(2,0,1)
                 grid = torch.cat([grid, text], dim = -2)
                 tensorboard_logger.add_image(f"Cube: {batch_idx*preds.shape[0] + j} RGB Preds, Sample: {i}", grid, current_epoch)
                 ndvi = veg_colorize((preds[j,:,3,...] - preds[j,:,2,...])/(preds[j,:,3,...] + preds[j,:,2,...]+1e-6), mask = None if "landcover" not in batch else lc[j,...].repeat(preds.shape[1],1,1), mode = "ndvi")
-                grid = torchvision.utils.make_grid(ndvi, nrow = 10)
+                grid = torchvision.utils.make_grid(ndvi, nrow = nrow)
             else:
                 ndvi = veg_colorize(preds[j,...].squeeze(), mask = None if "landcover" not in batch else lc[j,...].repeat(preds.shape[1],1,1), mode = mode)
                 text = f"Cube: {scores[j]['name']} RMSE: {scores[j]['rmse']:.4f}"
-                grid = torchvision.utils.make_grid(ndvi, nrow = 10)
+                grid = torchvision.utils.make_grid(ndvi, nrow = nrow)
                 text = torch.tensor(text_phantom(text, width = grid.shape[-1]), dtype=torch.float32, device = targs.device).type_as(grid).permute(2,0,1)
             grid = torch.cat([grid, text], dim = -2)
             tensorboard_logger.add_image(f"Cube: {batch_idx*preds.shape[0] + j} NDVI Preds, Sample: {i}", grid, current_epoch)
             ndvi = (preds[j,:,3,...] - preds[j,:,2,...])/(preds[j,:,3,...] + preds[j,:,2,...]+1e-6) if mode == "rgb" else preds[j,...].squeeze()
             ndvi_chg = (ndvi[1:,...]-ndvi[:-1,...]+1)/2
-            grid = torchvision.utils.make_grid(ndvi_chg.unsqueeze(1), nrow = 10)
+            grid = torchvision.utils.make_grid(ndvi_chg.unsqueeze(1), nrow = nrow)
             grid = torch.cat([grid, text], dim = -2)
             tensorboard_logger.add_image(f"Cube: {batch_idx*preds.shape[0] + j} NDVI Change, Sample: {i}", grid, current_epoch)
             # Images
             if i == 0:
                 if targs.shape[2] >= 3:
                     rgb = torch.cat([targs[j,:,2,...].unsqueeze(1)*10000,targs[j,:,1,...].unsqueeze(1)*10000,targs[j,:,0,...].unsqueeze(1)*10000],dim = 1)
-                    grid = torchvision.utils.make_grid(rgb, nrow = 10, normalize = True, range = (0,5000))
+                    grid = torchvision.utils.make_grid(rgb, nrow = nrow, normalize = True, range = (0,5000))
                     tensorboard_logger.add_image(f"Cube: {batch_idx*preds.shape[0] + j} RGB Targets", grid, current_epoch)
                     ndvi = veg_colorize((targs[j,:,3,...] - targs[j,:,2,...])/(targs[j,:,3,...] + targs[j,:,2,...]+1e-6), mask = None if "landcover" not in batch else lc[j,...].repeat(targs.shape[1],1,1), clouds = masks[j,:,0,...] if masks is not None else None, mode = "ndvi")
                 else:
                     ndvi = veg_colorize(targs[j,:,0,...], mask = None if "landcover" not in batch else lc[j,...].repeat(targs.shape[1],1,1), clouds = None, mode = mode)
-                grid = torchvision.utils.make_grid(ndvi, nrow = 10)
+                grid = torchvision.utils.make_grid(ndvi, nrow = nrow)
                 tensorboard_logger.add_image(f"Cube: {batch_idx*preds.shape[0] + j} NDVI Targets", grid, current_epoch)

@@ -99,9 +99,9 @@ def overfit_model(setting_dict: dict):
 
     # Trainer
     trainer_dict = setting_dict["Trainer"]
-    trainer_dict["overfit_batches"] = 10
-    trainer_dict["check_val_every_n_epoch"] = 20
-    trainer_dict["max_epochs"] = 400
+    trainer_dict["overfit_batches"] = 4
+    trainer_dict["check_val_every_n_epoch"] = 50
+    trainer_dict["max_epochs"] = 1000
     if "profiler" in trainer_dict:
         trainer_dict["profiler"] = pl.profiler.AdvancedProfiler(output_filename="curr_profile")
 

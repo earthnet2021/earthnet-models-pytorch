@@ -48,11 +48,12 @@ class SpatioTemporalTask(pl.LightningModule):
 
         self.metric = METRICS[self.hparams.setting]()
         self.ndvi_pred = (self.hparams.setting == "en21-veg") #TODO: Legacy, remove this...
-        self.pred_mode = {"en21-veg": "ndvi", "en21-std": "rgb", "en21x": "kndvi"}[self.hparams.setting]
+        self.pred_mode = {"en21-veg": "ndvi", "en21-std": "rgb", "en21x": "kndvi", "en21x-px": "kndvi"}[self.hparams.setting]
 
         self.model_shedules = []
         for shedule in self.hparams.model_shedules:
             self.model_shedules.append((shedule["call_name"], SHEDULERS[shedule["name"]](**shedule["args"])))
+
 
     @staticmethod
     def add_task_specific_args(parent_parser: Optional[Union[argparse.ArgumentParser,list]] = None):
@@ -96,6 +97,17 @@ class SpatioTemporalTask(pl.LightningModule):
         shedulers = [getattr(torch.optim.lr_scheduler,s["name"])(optimizers[i], **s["args"]) for i, s in enumerate(self.hparams.optimization["lr_shedule"])] # This gets any(!) torch.optim.lr_scheduler - but only those with standard callback will work (i.e. not the Plateau one)
         return optimizers, shedulers
 
+    
+#     def tbptt_split_batch(self, batch, split_size):
+#         splits = []
+
+#         split_times = [0,15,21,27,33,39,45]
+
+#         for i in range(6):
+#             splits.append({k: batch[k] if "dynamic" not in k else [v[:, split_times[i]:split_times[i+1],...] for v in batch[k]] for k in batch})
+# ˇ        return splits
+
+    
     def training_step(self, batch, batch_idx):
         
         kwargs = {}
@@ -126,6 +138,7 @@ class SpatioTemporalTask(pl.LightningModule):
         for i in range(self.n_stochastic_preds):
             preds, aux = self(data, pred_start = self.context_length, n_preds = self.target_length)
             all_logs.append(self.loss(preds, batch, aux)[1])
+            preds = ((preds - 0.2)/0.6)
             if batch_idx < self.hparams.n_log_batches:
                 self.metric.compute_on_step = True
                 scores = self.metric(preds, batch)
@@ -137,7 +150,7 @@ class SpatioTemporalTask(pl.LightningModule):
         mean_logs = {l: torch.tensor([log[l] for log in all_logs], dtype=torch.float32, device = self.device).mean() for l in all_logs[0]}
         self.log_dict({l+"_val": mean_logs[l] for l in mean_logs}, sync_dist=True)
 
-        if batch_idx < self.hparams.n_log_batches:
+        if batch_idx < self.hparams.n_log_batches and len(preds.shape) == 5:
             if self.logger is not None:
                 log_viz(self.logger.experiment, all_viz, batch, batch_idx, self.current_epoch, mode = self.pred_mode)
 
@@ -147,7 +160,7 @@ class SpatioTemporalTask(pl.LightningModule):
         self.metric.reset()
         if self.logger is not None and type(self.logger.experiment).__name__ != "DummyExperiment" and self.trainer.is_global_zero:
             current_scores["epoch"] = self.current_epoch
-            current_scores = {k: str(v.detach().cpu().item)  if isinstance(v, torch.Tensor) else str(v) for k,v in current_scores.items()}
+            current_scores = {k: str(v.detach().cpu().item())  if isinstance(v, torch.Tensor) else str(v) for k,v in current_scores.items()}
             outpath = Path(self.logger.log_dir)/"validation_scores.json"
             if outpath.is_file():
                 with open(outpath, "r") as fp:
@@ -164,6 +177,7 @@ class SpatioTemporalTask(pl.LightningModule):
         scores = []
         for i in range(self.n_stochastic_preds):
             preds, aux = self(batch, pred_start = self.context_length, n_preds = self.target_length)
+            preds = ((preds - 0.2)/0.6)
             for j in range(preds.shape[0]):
                 cubename = batch["cubename"][j]
                 cube_dir = self.pred_dir/cubename[:5]

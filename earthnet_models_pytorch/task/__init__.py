@@ -11,7 +11,7 @@ TASKS = {
 
 
 TRACK_INFO = {
-    "spatio-temporal": {
+    "en21-std": {
         "iid": {
             "context_length": 10,
             "target_length": 20
@@ -31,6 +31,26 @@ TRACK_INFO = {
         "full_sea": {
             "context_length": 10,
             "target_length": 20
+        }
+    },
+    "en21x": {
+        "iid": {
+            "context_length": 9,
+            "target_length": 36
+        },
+        "ood": {
+            "context_length": 9,
+            "target_length": 36
+        }
+    },
+    "en21x-px": {
+        "iid": {
+            "context_length": 9,
+            "target_length": 36
+        },
+        "ood": {
+            "context_length": 9,
+            "target_length": 36
         }
     }
 }

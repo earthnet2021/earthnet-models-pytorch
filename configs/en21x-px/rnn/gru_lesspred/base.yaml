@@ -1,0 +1,83 @@
+Architecture: "rnn"
+
+Seed: 42
+
+Setting: "en21x-px"
+
+Logger:
+    save_dir: "experiments/"
+
+Checkpointer:
+    save_top_k: 1
+    save_last: True
+    period: 1
+
+Trainer:
+    gpus: 4 #6
+    accelerator: 'ddp'
+    #deterministic: True
+    log_every_n_steps: 32
+    #profiler: 'advanced'
+    #fast_dev_run: True
+    #log_gpu_memory: 'all'
+    #weights_summary: 'full'
+    max_epochs: 100
+    #limit_train_batches: 128
+    #limit_val_batches: 64
+    gradient_clip_val: 1
+    #val_check_interval: 0.125
+  
+Data:
+    base_dir: "/Net/Groups/BGI/work_1/scratch/EarthNet2021/data/datacubes/minicubes_xs/" #"/scratch/vbenson/minicubes_xs/"
+    test_track: "iid"
+    val_pct: 0.01
+    train_batch_size: 512 #96
+    val_batch_size: 4
+    test_batch_size: 4 #96
+    num_workers: 8 #2
+    spatial_eobs: False
+    eobs_spread: False
+    soilgrids_all: False
+
+Task:
+    loss:
+        pixelwise: True
+        name: "masked"
+        args: {
+            distance_type: "L2"
+        }
+        min_lc: 82
+        max_lc: 104
+    context_length: 9
+    target_length: 36
+    n_stochastic_preds: 1
+    optimization:
+        optimizer:
+            - 
+                name: Adam
+                args: 
+                    betas: [0.9, 0.999]
+                lr_per_sample: 0.000005
+        lr_shedule:
+            -
+                name: MultiStepLR
+                args:
+                    milestones: [80,90,100] #[2, 20, 50, 90]
+                    gamma: 0.1
+    n_log_batches: 8
+    compute_metric_on_test: True
+
+Model:
+    state_mlp_args: 
+        ninp: 30
+        nhid: 384
+        nout: 192
+        nlayers: 3
+        activation: relu
+    update_mlp_args:
+        ninp: 27
+        nhid: 128
+        nout: 96
+        nlayers: 2
+        activation: relu
+    lc_onehot: True

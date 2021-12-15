@@ -7,7 +7,7 @@ conda create -n emp python=3.8
 conda activate emp
 conda install -c conda-forge mamba
 mamba install pytorch torchvision tensorboard
-mamba install numpy matplotlib pillow
+mamba install numpy matplotlib pillow xarray zarr netcdf4
 pip install pytorch-lightning earthnet segmentation-models-pytorch
 ```
 

@@ -50,7 +50,7 @@ class MaskedLoss(nn.Module):
     def forward(self, preds,targets,mask):
         assert(preds.shape == targets.shape)
         predsmasked = preds * mask
-        targetsmasked = targets * mask
+        targetsmasked = (targets * 0.6 + 0.2) * mask
 
         if self.distance_type == "L2":
             return F.mse_loss(predsmasked,targetsmasked,reduction = 'sum')/ ((mask > 0).sum() + 1)
@@ -58,6 +58,38 @@ class MaskedLoss(nn.Module):
             return F.l1_loss(predsmasked,targetsmasked,reduction = 'sum')/ ((mask > 0).sum() + 1)
 
 LOSSES = {"masked": MaskedLoss}
+
+class PixelwiseLoss(nn.Module):
+    def __init__(self, setting: dict):
+        super().__init__()
+
+        self.distance = LOSSES[setting["name"]](**setting["args"])
+        self.min_lc = 82 if "min_lc" not in setting else setting["min_lc"]
+        self.max_lc = 104 if "max_lc" not in setting else setting["max_lc"]
+
+    def forward(self, preds, batch, aux, current_step = None):
+
+        logs = {}
+
+        targs = batch["dynamic"][0][:,-preds.shape[1]:,...]
+
+        lc = batch["landcover"]
+
+        masks = ((lc >= self.min_lc).byte() & (lc <= self.max_lc).byte()).type_as(preds).unsqueeze(1).repeat(1, preds.shape[1], 1, 1, 1)
+
+        masks = torch.where(masks.byte(), (preds >= 0).type_as(masks), masks)
+
+        dist = self.distance(preds, targs, masks)
+        
+        logs["distance"] = dist
+
+        loss = dist
+
+        logs["loss"] = loss
+
+        return loss, logs
+
+
 
 
 class BaseLoss(nn.Module):
@@ -93,6 +125,7 @@ class BaseLoss(nn.Module):
                 masks = ((lc >= self.min_lc).byte() & (lc <= self.max_lc).byte()).type_as(preds).unsqueeze(1).repeat(1, preds.shape[1], 1, 1, 1)
             else:
                 masks = torch.where(masks.byte(), ((lc >= self.min_lc).byte() & (lc <= self.max_lc).byte()).type_as(masks).unsqueeze(1).repeat(1, preds.shape[1], 1, 1, 1), masks)
+            masks = torch.where(masks.byte(), (preds >= 0).type_as(masks), masks)
 
         dist = self.distance(preds, targs, masks)
         
@@ -130,4 +163,8 @@ class BaseLoss(nn.Module):
 
 
 def setup_loss(args):
+    if "pixelwise" in args:
+        if args["pixelwise"]:
+            return PixelwiseLoss(args)
+    
     return BaseLoss(args)

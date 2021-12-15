@@ -49,14 +49,22 @@ class RootMeanSquaredError(Metric):
             masks = targs["dynamic_mask"][0][:,-preds.shape[1]:,0,...].unsqueeze(2)
             masks = torch.where(masks.byte(), ((lc >= self.lc_min).byte() & (lc <= self.lc_max).byte()).type_as(masks).unsqueeze(1).repeat(1, preds.shape[1], 1, 1, 1), masks)
         else:
-            masks = ((lc >= self.lc_min).byte() & (lc <= self.lc_max).byte()).type_as(preds).unsqueeze(1).repeat(1, preds.shape[1], 1, 1, 1)
+            masks = ((lc >= self.lc_min).byte() & (lc <= self.lc_max).byte()).type_as(preds).unsqueeze(1)
+            if len(masks.shape) == 5:
+                masks = masks.repeat(1, preds.shape[1], 1, 1, 1)
+            else:
+                masks = masks.repeat(1, preds.shape[1], 1)
         
         targets = targs["dynamic"][0][:,-preds.shape[1]:,...]
         if targets.shape[2] >= 3:
             targets = ((targets[:,:,3,...] - targets[:,:,2,...])/(targets[:,:,3,...] + targets[:,:,2,...] + 1e-6)).unsqueeze(2)
 
-        sum_squared_error = torch.pow(preds * masks - targets * masks, 2).sum((1,2,3,4))
-        n_obs = (masks != 0).sum((1,2,3,4))
+        if len(masks.shape) == 5:
+            sum_squared_error = torch.pow(preds * masks - targets * masks, 2).sum((1,2,3,4))
+            n_obs = (masks != 0).sum((1,2,3,4))
+        else:
+            sum_squared_error = torch.pow(preds * masks - targets * masks, 2).sum((1,2))
+            n_obs = (masks != 0).sum((1,2))
         if just_return:
             cubenames = targs["cubename"]
             rmse = torch.sqrt(sum_squared_error / n_obs)
