@@ -104,6 +104,7 @@ class BaseLoss(nn.Module):
         self.ndvi = False if "ndvi" not in setting else setting["ndvi"]
         self.min_lc = 82 if "min_lc" not in setting else setting["min_lc"]
         self.max_lc = 104 if "max_lc" not in setting else setting["max_lc"]
+        self.comp_ndvi = True if "comp_ndvi" not in setting else setting["comp_ndvi"]
 
     def forward(self, preds, batch, aux, current_step = None):
         
@@ -116,8 +117,10 @@ class BaseLoss(nn.Module):
             masks = None
         
         if self.ndvi:
-            if targs.shape[2] >= 3:
+            if targs.shape[2] >= 3 and self.comp_ndvi:
                 targs = ((targs[:,:,3,...] - targs[:,:,2,...])/(targs[:,:,3,...] + targs[:,:,2,...] + 1e-6)).unsqueeze(2)
+            elif targs.shape[2] >= 1:
+                targs = targs[:,:,0,...].unsqueeze(2)
             if masks is not None:
                 masks = masks[:,:,0,...].unsqueeze(2)
             lc = batch["landcover"]

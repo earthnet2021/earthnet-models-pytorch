@@ -4,14 +4,14 @@ from typing import Tuple, Optional, Sequence, Union
 import copy
 import multiprocessing
 
-from pytorch_lightning.metrics import Metric
+from torchmetrics import Metric
 import numpy as np
 import torch
 
 
 
 class RootMeanSquaredError(Metric):
-    def __init__(self, compute_on_step: bool = False, dist_sync_on_step: bool = False, process_group = None, dist_sync_fn = None, lc_min = 73, lc_max = 104):
+    def __init__(self, compute_on_step: bool = False, dist_sync_on_step: bool = False, process_group = None, dist_sync_fn = None, lc_min = 73, lc_max = 104, comp_ndvi = True):
         super().__init__(
             compute_on_step=compute_on_step,
             dist_sync_on_step=dist_sync_on_step,
@@ -24,6 +24,8 @@ class RootMeanSquaredError(Metric):
 
         self.lc_min = lc_min
         self.lc_max = lc_max
+
+        self.comp_ndvi = comp_ndvi
     
     @torch.jit.unused
     def forward(self, *args, **kwargs):
@@ -56,9 +58,11 @@ class RootMeanSquaredError(Metric):
                 masks = masks.repeat(1, preds.shape[1], 1)
         
         targets = targs["dynamic"][0][:,-preds.shape[1]:,...]
-        if targets.shape[2] >= 3:
+        if targets.shape[2] >= 3 and self.comp_ndvi:
             targets = ((targets[:,:,3,...] - targets[:,:,2,...])/(targets[:,:,3,...] + targets[:,:,2,...] + 1e-6)).unsqueeze(2)
-
+        elif targets.shape[2] >= 3:
+            targets = targets[:,:,0,...].unsqueeze(2)
+        
         if len(masks.shape) == 5:
             sum_squared_error = torch.pow(preds * masks - targets * masks, 2).sum((1,2,3,4))
             n_obs = (masks != 0).sum((1,2,3,4))
@@ -90,4 +94,17 @@ class RMSE_ens21x(RootMeanSquaredError):
             dist_sync_fn=dist_sync_fn,
             lc_min = 82,
             lc_max = 104
+        )
+
+class RMSE_ens22(RootMeanSquaredError):
+
+    def __init__(self, compute_on_step: bool = False, dist_sync_on_step: bool = False, process_group = None, dist_sync_fn = None):
+        super().__init__(
+            compute_on_step=compute_on_step,
+            dist_sync_on_step=dist_sync_on_step,
+            process_group=process_group,
+            dist_sync_fn=dist_sync_fn,
+            lc_min = 2,
+            lc_max = 6,
+            comp_ndvi = False
         )
