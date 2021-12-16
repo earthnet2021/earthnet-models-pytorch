@@ -17,14 +17,14 @@ In earthnet-models-pytorch there is three main components:
 
 ## Requirements
 
-We recommend using Anaconda for managing dependencies of this library. The following bash commands create a suitable environment.
+We recommend using Anaconda for managing dependencies of this library. The following bash commands create a suitable environment. Please note the PyTorch installation requirements for your system, see (https://pytorch.org/) - esp. cudatoolkit might have to be installed with a different cuda version.
 
 ```
-conda create -n emp python=3.8
+conda create -n emp python=3.10
 conda activate emp
 conda install -c conda-forge mamba
-mamba install pytorch torchvision tensorboard
-mamba install numpy matplotlib pillow xarray zarr netcdf4
+mamba install -c pytorch -c conda-forge pytorch torchvision torchaudio cudatoolkit=11.3 tensorboard
+mamba install -c conda-forge numpy matplotlib pillow xarray zarr netcdf4
 pip install pytorch-lightning earthnet segmentation-models-pytorch
 ```
 
@@ -47,12 +47,12 @@ In order to use it, we need to set up a `config.yaml` containing all configs for
 
 We can check if a model works as desired by running:
 ```
-python debug.py path/to/setting.yaml
+debug.py path/to/setting.yaml
 ```
 
 It starts with a fast dev run in PyTorch lightning, which is essentially just performing two train, validation and test loops. It then also overfits a model on 4 batches for 1000 epochs, to check if gradients flow properly and the model does indeed learn. 
 
-Note, the debug and all other scripts are registered by PyPI, so it does not matter from which directory they are started, the should always work.
+Note, the debug and all other scripts are registered by PyPI, so it does not matter from which directory they are started and we dont need to use python for them, they should always work.
 
 ## Train
 
@@ -60,7 +60,7 @@ In order to train a model we again need to set up a `config.yaml`, see above reg
 
 Then we just do:
 ```
-python train.py path/to/setting.yaml
+train.py path/to/setting.yaml
 ```
 
 It trains the model as specified in the config.
@@ -73,7 +73,7 @@ Hyperparameter tuning. Explanation tbd.
 
 The script for testing a trained model works as follows:
 ```
-python test.py path/to/setting.yaml path/to/checkpoint track --pred_dir path/to/predictions/directory/
+test.py path/to/setting.yaml path/to/checkpoint track --pred_dir path/to/predictions/directory/
 ```
 
 Here we replace `track` by the track that we want to test on; this depends on the particular setting you choose. For example in `en21-std` there are 4 tracks: `iid`, `ood`, `ex` and `sea`.
@@ -115,6 +115,7 @@ The setting is a combination of a Lightning DataModule and a Lightning Metric. S
 - `en21-veg`; Only predicting vegetation on EarthNet2021 data with additional S2GLC Landcover data.
 - `en21x`; The EarthNet2021x data, which is reworked data from the EarthNet2021 challenge, now focusing on vegetation forecasting in Europe.
 - `en21x-px`; Same as `en21x`, but using pixelwise data from a `.csv` to efficiently create batches for pixelwise models.
+- `en22`; The EarthNet2022 data from the DeepCube UC1 project. Similar to `en21x`.
 
 
 Important is that the respective lists and dicts in the init are filled and that possible global arguments are mapped in the `parse.py`.

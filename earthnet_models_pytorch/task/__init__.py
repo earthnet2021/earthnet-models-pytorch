@@ -52,5 +52,11 @@ TRACK_INFO = {
             "context_length": 9,
             "target_length": 36
         }
+    },
+    "en22": {
+        "iid": {
+            "context_length": 9,
+            "target_length": 36
+        }
     }
 }

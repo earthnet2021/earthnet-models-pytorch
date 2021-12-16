@@ -25,7 +25,7 @@ class LocalRNN(nn.Module):
 
         self.hparams = hparams
 
-        self.ndvi_pred = (hparams.setting in ["en21-veg", "europe-veg", "en21x"])
+        self.ndvi_pred = (hparams.setting in ["en21-veg", "europe-veg", "en21x", "en22"])
 
         self.state_encoder = getattr(smp, self.hparams.state_encoder_name)(**self.hparams.state_encoder_args)
 
@@ -66,6 +66,9 @@ class LocalRNN(nn.Module):
         parser.add_argument("--target_length", type = int, default = 36)
         parser.add_argument("--use_dem", type = str2bool, default = True)
         parser.add_argument("--use_soilgrids", type = str2bool, default = True)
+        parser.add_argument("--lc_min", type = int, default = 82)
+        parser.add_argument("--lc_max", type = int, default = 104)
+        parser.add_argument("--val_n_splits", type = int, default = 20)
 
         return parser
 
@@ -124,8 +127,11 @@ class LocalRNN(nn.Module):
             if self.training:
                 idxs = torch.randperm(b*h*w).type_as(state).long()
                 lc = data["landcover"].reshape(-1)
-                idxs = idxs[(lc >= 82).byte() & (lc <= 104).byte()][:self.hparams.train_lstm_npixels*b]
+                idxs = idxs[(lc >= self.hparams.lc_min).byte() & (lc <= self.hparams.lc_max).byte()][:self.hparams.train_lstm_npixels*b]
                 # idxs = torch.randint(low = 0, high = b*h*w, size = (self.hparams.train_lstm_npixels*b, )).type_as(update).long()
+                if len(idxs) == 0:
+                    print(f"Detected cube without vegetation: {data['cubename']}")
+                    idxs = [1,2,3,4]
 
                 update_inputs = update_inputs[idxs, :, :]
 
@@ -151,13 +157,24 @@ class LocalRNN(nn.Module):
             if self.training:
                 idxs = torch.randperm(b*h*w).type_as(update).long()
                 lc = data["landcover"].reshape(-1)
-                idxs = idxs[(lc >= 82).byte() & (lc <= 104).byte()][:self.hparams.train_lstm_npixels*b]
+                idxs = idxs[(lc >= self.hparams.lc_min).byte() & (lc <= self.hparams.lc_max).byte()][:self.hparams.train_lstm_npixels*b]
                 # idxs = torch.randint(low = 0, high = b*h*w, size = (self.hparams.train_lstm_npixels*b, )).type_as(update).long()
+                if len(idxs) == 0:
+                    print(f"Detected cube without vegetation: {data['cubename']}")
+                    idxs = [1,2,3,4]
 
                 state = state[:,idxs,:]
                 update = update[idxs,:,:]
 
-        out, _ = self.rnn(update.contiguous(), state.contiguous())
+        if self.training:
+            out, _ = self.rnn(update.contiguous(), state.contiguous())
+        else:
+            out_arr = []
+            states = torch.chunk(state, self.hparams.val_n_splits, dim = 1)
+            updates = torch.chunk(update, self.hparams.val_n_splits, dim = 0)
+            for i in range(self.hparams.val_n_splits):
+                out_arr.append(self.rnn(updates[i].contiguous(),states[i].contiguous())[0])
+            out = torch.cat(out_arr, dim = 0)
 
         if not self.hparams.update_encoder_name == "MLP":
             out = torch.cat([out,state.repeat(t_m,1,1).permute(1,0,2)], dim = -1)

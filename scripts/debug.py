@@ -99,9 +99,10 @@ def overfit_model(setting_dict: dict):
 
     # Trainer
     trainer_dict = setting_dict["Trainer"]
-    trainer_dict["overfit_batches"] = 4
+    trainer_dict["overfit_batches"] = 2
     trainer_dict["check_val_every_n_epoch"] = 50
     trainer_dict["max_epochs"] = 1000
+    #trainer_dict["num_sanity_val_steps"] = 0
     if "profiler" in trainer_dict:
         trainer_dict["profiler"] = pl.profiler.AdvancedProfiler(output_filename="curr_profile")
 
@@ -133,7 +134,8 @@ if __name__ == "__main__":
     outtext = "Starting fast dev run....\n"
 
     outtext += fast_dev_run(copy.deepcopy(setting_dict))
-    
+    torch.cuda.empty_cache()
+
     outtext += "Starting overfitting....\n"
 
     outtext += overfit_model(copy.deepcopy(setting_dict))

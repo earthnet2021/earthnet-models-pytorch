@@ -4,7 +4,7 @@ from typing import Tuple, Optional, Sequence, Union
 import copy
 import multiprocessing
 
-from pytorch_lightning.metrics import Metric
+from torchmetrics import Metric
 import earthnet as en
 import numpy as np
 import torch

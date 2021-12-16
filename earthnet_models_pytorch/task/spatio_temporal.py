@@ -48,7 +48,7 @@ class SpatioTemporalTask(pl.LightningModule):
 
         self.metric = METRICS[self.hparams.setting]()
         self.ndvi_pred = (self.hparams.setting == "en21-veg") #TODO: Legacy, remove this...
-        self.pred_mode = {"en21-veg": "ndvi", "en21-std": "rgb", "en21x": "kndvi", "en21x-px": "kndvi"}[self.hparams.setting]
+        self.pred_mode = {"en21-veg": "ndvi", "en21-std": "rgb", "en21x": "kndvi", "en21x-px": "kndvi", "en22": "kndvi"}[self.hparams.setting]
 
         self.model_shedules = []
         for shedule in self.hparams.model_shedules:
@@ -183,7 +183,11 @@ class SpatioTemporalTask(pl.LightningModule):
                 cube_dir = self.pred_dir/cubename[:5]
                 cube_dir.mkdir(parents = True, exist_ok = True)
                 cube_path = cube_dir/f"pred{i+1}_{cubename}"
-                np.savez_compressed(cube_path, highresdynamic = preds[j,...].permute(2,3,1,0).detach().cpu().numpy() if "full" not in aux else aux["full"][j,...].permute(2,3,1,0).detach().cpu().numpy())
+                if self.hparams.setting == "en22":
+                    hrd = preds[j,...].permute(2,3,1,0).detach().cpu().numpy() if "full" not in aux else aux["full"][j,...].permute(2,3,1,0).detach().cpu().numpy()
+                    pass
+                else:
+                    np.savez_compressed(cube_path, highresdynamic = preds[j,...].permute(2,3,1,0).detach().cpu().numpy() if "full" not in aux else aux["full"][j,...].permute(2,3,1,0).detach().cpu().numpy())
 
             if self.hparams.compute_metric_on_test:
                 self.metric.compute_on_step = True
