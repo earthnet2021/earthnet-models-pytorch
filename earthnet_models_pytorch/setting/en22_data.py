@@ -30,9 +30,9 @@ class EarthNet2022Dataset(Dataset):
 
         self.bands = ['kndvi', 'blue', 'green', 'red', 'nir']
 
-        self.meteo_vars = ['e_max', 'e_mean', 'e_min', 'heat_flux_latent_max', 'heat_flux_latent_mean', 'heat_flux_latent_min', 'heat_flux_sensible_max', 'heat_flux_sensible_mean', 'heat_flux_sensible_min', 'sm_rootzone_max', 'sm_rootzone_mean', 'sm_rootzone_min', 'sm_surface_max', 'sm_surface_mean', 'sm_surface_min', 'sp_max', 'sp_mean', 'sp_min', 'ssr_max', 'ssr_mean', 'ssr_min', 'surface_pressure_max', 'surface_pressure_mean', 'surface_pressure_min', 't2m_max', 't2m_mean', 't2m_min', 'tp_max', 'tp_mean', 'tp_min']
+        self.meteo_vars = ['e_max', 'e_mean', 'e_min', 'heat_flux_latent_max', 'heat_flux_latent_mean', 'heat_flux_latent_min', 'heat_flux_sensible_max', 'heat_flux_sensible_mean', 'heat_flux_sensible_min', 'pev_max', 'pev_mean', 'pev_min', 'sm_rootzone_max', 'sm_rootzone_mean', 'sm_rootzone_min', 'sm_surface_max', 'sm_surface_mean', 'sm_surface_min', 'sp_max', 'sp_mean', 'sp_min', 'ssr_max', 'ssr_mean', 'ssr_min', 'surface_pressure_max', 'surface_pressure_mean', 'surface_pressure_min', 't2m_max', 't2m_mean', 't2m_min', 'tp_max', 'tp_mean', 'tp_min']
 
-        self.meteo_scaling_cube = xr.DataArray(data = [10, 10, 10, 3000, 3000, 3000, 3000, 3000, 3000, 1, 1, 1, 1, 1, 1, 1000, 1000, 1000, 50, 50, 50, 1000, 1000, 1000, 400, 400, 400, 500, 500, 500], coords = {"variable": self.meteo_vars})
+        self.meteo_scaling_cube = xr.DataArray(data = [10, 10, 10, 3000, 3000, 3000, 3000, 3000, 3000, 1e-4, 1e-4, 1e-4, 1, 1, 1, 1, 1, 1, 1000, 1000, 1000, 50, 50, 50, 1000, 1000, 1000, 400, 400, 400, 500, 500, 500], coords = {"variable": self.meteo_vars})
 
 
     def __getitem__(self, idx: int) -> dict:
