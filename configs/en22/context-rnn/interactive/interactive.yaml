@@ -30,7 +30,7 @@ Trainer:
 Data:
     base_dir: "/Net/Groups/BGI/scratch/DeepCube/UC1/L2_minicubes/" 
     test_track: "iid"
-    train_batch_size: 8 #96
+    train_batch_size: 4 #96
     val_batch_size: 1
     test_batch_size: 1 #96
     num_workers: 16 #2

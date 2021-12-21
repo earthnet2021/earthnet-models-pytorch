@@ -84,6 +84,7 @@ if __name__ == "__main__":
             del os.environ[k]
 
     setting_dict = parse_setting(args.setting)
+    print(setting_dict)
 
     train_model(setting_dict, args.setting)
     

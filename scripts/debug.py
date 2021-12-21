@@ -23,13 +23,13 @@ def fast_dev_run(setting_dict: dict):
     start = time.time()
 
     pl.seed_everything(setting_dict["Seed"])
+    
     # Data
-
     data_args = ["--{}={}".format(key,value) for key, value in setting_dict["Data"].items()]
     data_parser = ArgumentParser()
     data_parser = DATASETS[setting_dict["Setting"]].add_data_specific_args(data_parser)
     data_params = data_parser.parse_args(data_args)
-    dm = DATASETS[setting_dict["Setting"]](data_params)
+    dm = DATASETS[setting_dict["Setting"]](data_params) 
 
     # Model
     model_args = ["--{}={}".format(key,value) for key, value in setting_dict["Model"].items()]
@@ -130,17 +130,17 @@ if __name__ == "__main__":
             del os.environ[k]
 
     setting_dict = parse_setting(args.setting)
-
+    
+    # Fast train run
     outtext = "Starting fast dev run....\n"
-
     outtext += fast_dev_run(copy.deepcopy(setting_dict))
     torch.cuda.empty_cache()
-
+    
+    # Model overfitting (runs for 1000 epochs)
     outtext += "Starting overfitting....\n"
-
     outtext += overfit_model(copy.deepcopy(setting_dict))
 
+    # Save debug results
     outpath = Path(setting_dict["Logger"]["save_dir"])/setting_dict["Logger"]["name"]/"debug/debug_results.txt"
-
     with open(outpath, 'w') as f:
         f.write(outtext)
