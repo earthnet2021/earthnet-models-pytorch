@@ -149,5 +149,4 @@ plots
 plots/*
 checkpoints 
 checkpoints/*
-earthnet_test.ipynb
 test.ipynb
