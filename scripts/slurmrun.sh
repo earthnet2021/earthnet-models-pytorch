@@ -29,7 +29,7 @@ conda activate pt15
 
 cd /home/vibe622c/code/earthnet-models-pytorch/
 
-pip install . --upgrade
+#pip install git+file:///home/vibe622c/code/earthnet-models-pytorch@codyn --upgrade
 
 if [ $2 == 'train' ] || [ $2 == 'both' ]; then
     if [ $setting == 'en21-std' ]; then
@@ -45,6 +45,12 @@ if [ $2 == 'train' ] || [ $2 == 'both' ]; then
         cp -rf /scratch/ws/0/vibe622c-codyn/data/release/train/. /tmp/data/train/
         echo "Copying Landcover"
         cp -rf /scratch/ws/0/vibe622c-codyn/data/release/landcover/. /tmp/data/landcover/
+    elif [ $setting == 'en21x' ]; then
+        echo "Making Directories"
+        mkdir -p /tmp/data/minicubes_xs
+        echo "Copying Data"
+        cd /scratch/ws/0/vibe622c-en21/minicubes_xs/
+        tar cf - . | tar xf - -C /tmp/data/minicubes_xs
     #elif [ $setting == "europe-veg"]; then
     #    echo "Not Implemented"
     #    exit 1
@@ -53,6 +59,8 @@ if [ $2 == 'train' ] || [ $2 == 'both' ]; then
         exit 1
     fi
     
+    cd /home/vibe622c/code/earthnet-models-pytorch/
+
     echo "Start training"
     srun train.py $1
 fi

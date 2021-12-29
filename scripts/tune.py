@@ -112,6 +112,8 @@ class Tuner:
             managers.append(self.start_one_trial(trial_path))
             if not self.slurm:
                 managers[-1].wait()
+            else:
+                time.sleep(15)
 
         errors = ""
 

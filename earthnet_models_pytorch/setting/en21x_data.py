@@ -231,7 +231,10 @@ class EarthNet2021XDataModule(pl.LightningDataModule):
 
     def __init__(self, hparams: argparse.Namespace):
         super().__init__()
-        self.save_hyperparameters(copy.deepcopy(hparams))
+        if hasattr(self, "save_hyperparameters"):
+            self.save_hyperparameters(copy.deepcopy(hparams))
+        else:
+            self.hparams = copy.deepcopy(hparams)
         self.base_dir = Path(hparams.base_dir)
         
     @staticmethod

@@ -29,7 +29,10 @@ class SpatioTemporalTask(pl.LightningModule):
     def __init__(self, model: nn.Module, hparams: argparse.Namespace):
         super().__init__()
 
-        self.save_hyperparameters(copy.deepcopy(hparams))
+        if hasattr(self, "save_hyperparameters"):
+            self.save_hyperparameters(copy.deepcopy(hparams))
+        else:
+            self.hparams = copy.deepcopy(hparams)
         self.model = model
 
         if hparams.pred_dir is None:
