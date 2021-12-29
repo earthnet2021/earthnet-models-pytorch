@@ -1,0 +1,184 @@
+Seed: 42
+
+Architecture: "codyn"
+
+Setting: "en21x"
+
+Logger:
+    save_dir: "experiments/"
+
+Checkpointer:
+    save_top_k: 1
+    save_last: True
+    every_n_epochs: 1
+
+Trainer:
+    gpus: 4 #6
+    accelerator: 'ddp'
+    #deterministic: True
+    log_every_n_steps: 32
+    #profiler: 'advanced'
+    #fast_dev_run: True
+    #log_gpu_memory: 'all'
+    #weights_summary: 'full'
+    max_epochs: 100
+    #limit_train_batches: 128
+    #limit_val_batches: 64
+    gradient_clip_val: 1
+    val_check_interval: 1.0
+
+Data:
+    base_dir: "/scratch/vbenson/minicubes_xs/" 
+    test_track: "iid"
+    val_pct: 0.01
+    train_batch_size: 6 #96
+    val_batch_size: 8
+    test_batch_size: 8 #96
+    num_workers: 6 #2
+    spatial_eobs: False
+    eobs_spread: False
+    soilgrids_all: False
+
+Task:
+    compute_metric_on_test: True
+    loss:
+        name: "masked"
+        args: {
+            distance_type: "L2"
+        }
+        dist_scale: 1 #000
+        state_shedule: {
+            initial_weight: 0,
+            increase_from_step: 9000,
+            weight_step: 0, #0.00001,
+            max_weight: 1
+        }
+        inference_shedule: {
+            initial_weight: 0,
+            increase_from_step: 9000,
+            weight_step: 0, #0.0000000001,
+            max_weight: 1
+        }
+        residuals_shedule: {
+            initial_weight: 0,
+            increase_from_step: 9000,
+            weight_step: 0, #0.00001,
+            max_weight: 1
+        }
+        ndvi: True
+        comp_ndvi: False
+        min_lc: 82
+        max_lc: 104
+    context_length: 9
+    target_length: 36
+    n_stochastic_preds: 1
+    optimization:
+        optimizer:
+            - 
+                name: Adam
+                args: 
+                    betas: [0.9, 0.999]
+                lr_per_sample: 0.000005
+        lr_shedule:
+            -
+                name: MultiStepLR
+                args:
+                    milestones: [40,70,90] #[2, 20, 50, 90]
+                    gamma: 0.1
+    n_log_batches: 1
+    model_shedules:
+        -
+            call_name: 'p_dropout'
+            name: linear
+            args:
+                initial_weight: 0.9
+                increase_from_step: 5000
+                weight_step: -0.0002
+                max_weight: 0
+                decreasing: True
+
+Model:
+    noisy_pixel_mask: False
+    skip_dropout: True
+    ndvi_pred: True
+    dynamic_encoders:
+        - 
+            name: 'resnet18'
+            args: {
+                in_channels: 1,
+                output_skips: True
+            }
+        -
+            name: 'pixel'
+            args: {
+                n_channels: 21
+            }
+    static_encoders:
+        -
+            name: 'resnet18'
+            args: {
+                in_channels: 21,
+                output_skips: True
+            }
+
+    content_extraction:
+        name: 'sum'
+        args: {context_length: 9}
+
+    content_fusion:
+        name: 'simple'
+        args: 
+            mlp_args: 
+                enc_input_channels: 1024
+                mlp_hidden_channels: 128
+                enc_output_channels: 256
+                n_layers: 3
+                activation: [null, 'relu', 'tanh']
+            conv_args: 
+                channels: [[512,256],[256,128],[128, 64],[128, 64],[22,1]]
+                kernel_size: 1
+                stride: 1
+                padding: 0
+                bias: True
+                norm: 'bn'
+                activation: 'leaky_relu'
+
+    dynamics_core:
+        name: "simple"
+        args: 
+            state_extraction_args:
+                name: "deterministicmlp"
+                args:
+                    use_n_steps: 9
+                    input_frequencies: [1,1]
+                    input_channels: [512, 21]
+                    hidden_fusion_channels: [256, 256]
+                    hidden_channels: 256
+                    output_channels: 1152
+                    n_layers: 3
+                    activation: [null, 'relu', 'relu']
+            pred_inference_args:
+                -
+                    null
+                -
+                    name: "throughpass"
+                    args: {
+                        context_length: 9,
+                        aggregation_frequency: 1
+                    }
+            state_update_args: 
+                name: "lstm"
+                args: 
+                    input_channels: 21
+                    hidden_channels: 192
+                    num_layers: 3
+
+
+    decoder:
+        name: 'resnet18'
+        args: {
+            output_channels: 1,
+            latent_channels: 448,
+            last_filters: 32,
+            skip: True
+        }

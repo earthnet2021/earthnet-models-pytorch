@@ -1,0 +1,7 @@
+Task.optimization.optimizer.0.lr_per_sample:
+  - 0.00001
+  - 0.000005
+  - 0.000001
+Model.skip_dropout:
+  - False
+  - True
