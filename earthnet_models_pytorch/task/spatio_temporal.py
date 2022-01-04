@@ -156,7 +156,7 @@ class SpatioTemporalTask(pl.LightningModule):
 
         if batch_idx < self.hparams.n_log_batches and len(preds.shape) == 5:
             if self.logger is not None:
-                log_viz(self.logger.experiment, all_viz, batch, batch_idx, self.current_epoch, mode = self.pred_mode)
+                log_viz(self.logger.experiment, all_viz, batch, batch_idx, self.current_epoch, mode = self.pred_mode, lc_min = 82 if not self.hparams.setting == "en22" else 2, lc_max = 104 if not self.hparams.setting == "en22" else 6)
 
     def validation_epoch_end(self, validation_step_outputs):
         current_scores = self.metric.compute()

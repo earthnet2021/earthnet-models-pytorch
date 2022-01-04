@@ -52,7 +52,7 @@ def veg_colorize(data, mask = None, clouds = None, mode = "ndvi"): #TODO move to
 
 
 
-def log_viz(tensorboard_logger, viz_data, batch, batch_idx, current_epoch, mode = "rgb"):
+def log_viz(tensorboard_logger, viz_data, batch, batch_idx, current_epoch, mode = "rgb", lc_min = 82, lc_max = 104):
 
 
     targs = batch["dynamic"][0]
@@ -61,7 +61,7 @@ def log_viz(tensorboard_logger, viz_data, batch, batch_idx, current_epoch, mode 
 
     if "landcover" in batch:
         lc = batch["landcover"]
-        lc = 1 - (lc >= 82).byte() & (lc <= 104).byte()
+        lc = 1 - (lc >= lc_min).byte() & (lc <= lc_max).byte()
     if len(batch["dynamic_mask"]) > 0:
         masks = batch["dynamic_mask"][0].byte()
     else:
@@ -93,7 +93,12 @@ def log_viz(tensorboard_logger, viz_data, batch, batch_idx, current_epoch, mode 
             tensorboard_logger.add_image(f"Cube: {batch_idx*preds.shape[0] + j} NDVI Change, Sample: {i}", grid, current_epoch)
             # Images
             if i == 0:
-                if targs.shape[2] >= 3:
+                if targs.shape[2] == 5:
+                    rgb = torch.cat([targs[j,:,3,...].unsqueeze(1)*10000,targs[j,:,2,...].unsqueeze(1)*10000,targs[j,:,1,...].unsqueeze(1)*10000],dim = 1)
+                    grid = torchvision.utils.make_grid(rgb, nrow = nrow, normalize = True, range = (0,5000))
+                    tensorboard_logger.add_image(f"Cube: {batch_idx*preds.shape[0] + j} RGB Targets", grid, current_epoch)
+                    ndvi = veg_colorize(targs[j,:,0,...], mask = None if "landcover" not in batch else lc[j,...].repeat(targs.shape[1],1,1), clouds = None, mode = mode)
+                elif targs.shape[2] >= 3:
                     rgb = torch.cat([targs[j,:,2,...].unsqueeze(1)*10000,targs[j,:,1,...].unsqueeze(1)*10000,targs[j,:,0,...].unsqueeze(1)*10000],dim = 1)
                     grid = torchvision.utils.make_grid(rgb, nrow = nrow, normalize = True, range = (0,5000))
                     tensorboard_logger.add_image(f"Cube: {batch_idx*preds.shape[0] + j} RGB Targets", grid, current_epoch)
