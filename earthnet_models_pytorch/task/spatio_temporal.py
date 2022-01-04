@@ -141,7 +141,8 @@ class SpatioTemporalTask(pl.LightningModule):
         for i in range(self.n_stochastic_preds):
             preds, aux = self(data, pred_start = self.context_length, n_preds = self.target_length)
             all_logs.append(self.loss(preds, batch, aux)[1])
-            preds = ((preds - 0.2)/0.6)
+            if self.loss.distance.rescale:
+                preds = ((preds - 0.2)/0.6)
             if batch_idx < self.hparams.n_log_batches:
                 self.metric.compute_on_step = True
                 scores = self.metric(preds, batch)
@@ -180,7 +181,8 @@ class SpatioTemporalTask(pl.LightningModule):
         scores = []
         for i in range(self.n_stochastic_preds):
             preds, aux = self(batch, pred_start = self.context_length, n_preds = self.target_length)
-            preds = ((preds - 0.2)/0.6)
+            if self.loss.distance.rescale:
+                preds = ((preds - 0.2)/0.6)
             for j in range(preds.shape[0]):
                 cubename = batch["cubename"][j]
                 cube_dir = self.pred_dir/cubename[:5]
