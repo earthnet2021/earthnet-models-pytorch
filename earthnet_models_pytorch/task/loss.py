@@ -43,14 +43,18 @@ def make_normal_from_raw_params(raw_params, scale_stddev=1, dim=-1, eps=1e-8):
 
 
 class MaskedLoss(nn.Module):
-    def __init__(self, distance_type = "L2"):
+    def __init__(self, distance_type = "L2", rescale = False):
         super(MaskedLoss, self).__init__()
         self.distance_type = distance_type
+        self.rescale = rescale
 
     def forward(self, preds,targets,mask):
         assert(preds.shape == targets.shape)
         predsmasked = preds * mask
-        targetsmasked = (targets * 0.6 + 0.2) * mask
+        if self.rescale:
+            targetsmasked = (targets * 0.6 + 0.2) * mask
+        else:
+            targetsmasked = targets * mask
 
         if self.distance_type == "L2":
             return F.mse_loss(predsmasked,targetsmasked,reduction = 'sum')/ ((mask > 0).sum() + 1)

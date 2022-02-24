@@ -9,6 +9,7 @@ import json
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 import matplotlib.colors as clr
+import xarray as xr
 
 import torch
 import torchvision
@@ -29,7 +30,10 @@ class SpatioTemporalTask(pl.LightningModule):
     def __init__(self, model: nn.Module, hparams: argparse.Namespace):
         super().__init__()
 
-        self.save_hyperparameters(copy.deepcopy(hparams))
+        if hasattr(self, "save_hyperparameters"):
+            self.save_hyperparameters(copy.deepcopy(hparams))
+        else:
+            self.hparams = copy.deepcopy(hparams)
         self.model = model
 
         if hparams.pred_dir is None:
@@ -138,7 +142,8 @@ class SpatioTemporalTask(pl.LightningModule):
         for i in range(self.n_stochastic_preds):
             preds, aux = self(data, pred_start = self.context_length, n_preds = self.target_length)
             all_logs.append(self.loss(preds, batch, aux)[1])
-            preds = ((preds - 0.2)/0.6)
+            if self.loss.distance.rescale:
+                preds = ((preds - 0.2)/0.6)
             if batch_idx < self.hparams.n_log_batches:
                 self.metric.compute_on_step = True
                 scores = self.metric(preds, batch)
@@ -152,7 +157,7 @@ class SpatioTemporalTask(pl.LightningModule):
 
         if batch_idx < self.hparams.n_log_batches and len(preds.shape) == 5:
             if self.logger is not None:
-                log_viz(self.logger.experiment, all_viz, batch, batch_idx, self.current_epoch, mode = self.pred_mode)
+                log_viz(self.logger.experiment, all_viz, batch, batch_idx, self.current_epoch, mode = self.pred_mode, lc_min = 82 if not self.hparams.setting == "en22" else 2, lc_max = 104 if not self.hparams.setting == "en22" else 6)
 
     def validation_epoch_end(self, validation_step_outputs):
         current_scores = self.metric.compute()
@@ -177,16 +182,43 @@ class SpatioTemporalTask(pl.LightningModule):
         scores = []
         for i in range(self.n_stochastic_preds):
             preds, aux = self(batch, pred_start = self.context_length, n_preds = self.target_length)
-            preds = ((preds - 0.2)/0.6)
+            if self.loss.distance.rescale:
+                preds = ((preds - 0.2)/0.6)
             for j in range(preds.shape[0]):
-                cubename = batch["cubename"][j]
-                cube_dir = self.pred_dir/cubename[:5]
-                cube_dir.mkdir(parents = True, exist_ok = True)
-                cube_path = cube_dir/f"pred{i+1}_{cubename}"
-                if self.hparams.setting == "en22":
+                if self.hparams.setting in ["en21x", "en22"]:
+                    targ_path = Path(batch["filepath"][j])
+                    targ_cube = xr.open_dataset(targ_path)
+                    tile = targ_path.name[:5]
                     hrd = preds[j,...].permute(2,3,1,0).detach().cpu().numpy() if "full" not in aux else aux["full"][j,...].permute(2,3,1,0).detach().cpu().numpy()
-                    pass
+                    if self.n_stochastic_preds == 1:
+                        if targ_path.parents[1].name == "sim_extremes":
+                            pred_dir = self.pred_dir/targ_path.parents[0].name
+                        else:
+                            pred_dir = self.pred_dir
+                        pred_path = pred_dir/targ_path.name
+                    else:
+                        if targ_path.parents[1].name == "sim_extremes":
+                            pred_dir = self.pred_dir/tile/targ_path.parents[0].name
+                        else:
+                            pred_dir = self.pred_dir/tile
+                        pred_path = pred_dir/f"pred_{i+1}_{targ_path.name}"
+                    # TODO save all preds for one cube in same file....
+                    pred_dir.mkdir(parents = True, exist_ok = True)
+                    y = targ_cube["y"].values
+                    y[0] = y[1] + 20
+                    y[-1] = y[-2] - 20
+                    x = targ_cube["x"].values
+                    x[0] = x[1] - 20
+                    x[-1] = x[-2] + 20
+                    pred_cube = xr.Dataset({"kndvi_pred": xr.DataArray(data = (np.tanh(1) * hrd[:,:,0,:]).clip(0, np.tanh(1)), coords = {"time": targ_cube.time.isel(time = slice(9,45)), "y": y, "x": x}, dims = ["y", "x", "time"])})
+                    pred_cube["kndvi"] = xr.DataArray(data = targ_cube["kndvi"].isel(time = slice(9,45)).values, coords = {"time": targ_cube.time.isel(time = slice(9,45)), "y": y, "x": x}, dims = ["y", "x", "time"])
+                    if not pred_path.is_file():
+                        pred_cube.to_netcdf(pred_path)
                 else:
+                    cubename = batch["cubename"][j]
+                    cube_dir = self.pred_dir/cubename[:5]
+                    cube_dir.mkdir(parents = True, exist_ok = True)
+                    cube_path = cube_dir/f"pred{i+1}_{cubename}"
                     np.savez_compressed(cube_path, highresdynamic = preds[j,...].permute(2,3,1,0).detach().cpu().numpy() if "full" not in aux else aux["full"][j,...].permute(2,3,1,0).detach().cpu().numpy())
 
             if self.hparams.compute_metric_on_test:
