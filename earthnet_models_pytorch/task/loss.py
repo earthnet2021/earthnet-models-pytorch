@@ -48,18 +48,18 @@ class MaskedLoss(nn.Module):
         self.distance_type = distance_type
         self.rescale = rescale
 
-    def forward(self, preds,targets,mask):
+    def forward(self, preds, targets, mask):
         assert(preds.shape == targets.shape)
         predsmasked = preds * mask
         if self.rescale:
-            targetsmasked = (targets * 0.6 + 0.2) * mask
+            targetsmasked = (targets * 0.6 + 0.2) * mask   # ???
         else:
-            targetsmasked = targets * mask
+            targetsmasked = targets * mask  # ???
 
         if self.distance_type == "L2":
-            return F.mse_loss(predsmasked,targetsmasked,reduction = 'sum')/ ((mask > 0).sum() + 1)
+            return F.mse_loss(predsmasked,targetsmasked, reduction='sum')/ ((mask > 0).sum() + 1)  # (input, target, reduction: Specifies the reduction to apply to the output)
         elif self.distance_type == "L1":
-            return F.l1_loss(predsmasked,targetsmasked,reduction = 'sum')/ ((mask > 0).sum() + 1)
+            return F.l1_loss(predsmasked,targetsmasked, reduction='sum')/ ((mask > 0).sum() + 1)
 
 LOSSES = {"masked": MaskedLoss}
 
@@ -68,28 +68,28 @@ class PixelwiseLoss(nn.Module):
         super().__init__()
 
         self.distance = LOSSES[setting["name"]](**setting["args"])
-        self.min_lc = 82 if "min_lc" not in setting else setting["min_lc"]
-        self.max_lc = 104 if "max_lc" not in setting else setting["max_lc"]
+        self.min_lc = 82 if "min_lc" not in setting else setting["min_lc"]  
+        self.max_lc = 104 if "max_lc" not in setting else setting["max_lc"]  
 
     def forward(self, preds, batch, aux, current_step = None):
 
         logs = {}
 
-        targs = batch["dynamic"][0][:,-preds.shape[1]:,...]
+        targs = batch["dynamic"][0][:,-preds.shape[1]:,...]  # the number of sample to predict
 
-        lc = batch["landcover"]
+        lc = batch["landcover"] 
 
-        masks = ((lc >= self.min_lc).byte() & (lc <= self.max_lc).byte()).type_as(preds).unsqueeze(1).repeat(1, preds.shape[1], 1, 1, 1)
+        masks = ((lc >= self.min_lc).byte() & (lc <= self.max_lc).byte()).type_as(preds).unsqueeze(1).repeat(1, preds.shape[1], 1, 1, 1)  # mask for outlayers using lc threshold 
 
         masks = torch.where(masks.byte(), (preds >= 0).type_as(masks), masks)
 
         dist = self.distance(preds, targs, masks)
         
-        logs["distance"] = dist
+        logs["distance"] = dist 
 
         loss = dist
 
-        logs["loss"] = loss
+        logs["loss"] = loss  # ??? difference whith distance ? 
 
         return loss, logs
 
@@ -101,7 +101,7 @@ class BaseLoss(nn.Module):
         super().__init__()
 
         self.distance = LOSSES[setting["name"]](**setting["args"])
-        self.lambda_state = WeightShedule(**setting["state_shedule"])
+        self.lambda_state = WeightShedule(**setting["state_shedule"]) # speed of the learning rate ? (I think)
         self.lambda_infer = WeightShedule(**setting["inference_shedule"])
         self.lambda_l2_res =  WeightShedule(**setting["residuals_shedule"])
         self.dist_scale = 1 if "dist_scale" not in setting else setting["dist_scale"]
@@ -110,8 +110,7 @@ class BaseLoss(nn.Module):
         self.max_lc = 104 if "max_lc" not in setting else setting["max_lc"]
         self.comp_ndvi = True if "comp_ndvi" not in setting else setting["comp_ndvi"]
 
-    def forward(self, preds, batch, aux, current_step = None):
-        
+    def forward(self, preds, batch, aux, current_step = None):   
         logs = {}
         
         targs = batch["dynamic"][0][:,-preds.shape[1]:,...]
@@ -140,15 +139,15 @@ class BaseLoss(nn.Module):
 
         loss = dist * self.dist_scale
         
-        if "state_params" in aux:
-            state_normal = make_normal_from_raw_params(aux["state_params"])
+        if "state_params" in aux:  # What's happen ?
+            state_normal = make_normal_from_raw_params(aux["state_params"])  # create a normal distribution from the given parametres
             kld_state = distrib.kl_divergence(state_normal, distrib.Normal(0,1)).mean()
             lambda_state = self.lambda_state(current_step)
-            loss += lambda_state * kld_state
+            loss += lambda_state * kld_state  # why ?
             logs["kld_state"] = kld_state
             logs["lambda_kld_state"] = lambda_state
         if set(["infer_q_params", "infer_p_params"]).issubset(set(aux)):
-            assert(len(aux["infer_q_params"]) == len(aux["infer_p_params"]))
+            assert(len(aux["infer_q_params"]) == len(aux["infer_p_params"]))  # what's mean ?
             for i, (q_params, p_params) in enumerate(zip(aux["infer_q_params"],aux["infer_p_params"])): 
                 infer_q_normal = make_normal_from_raw_params(q_params)
                 infer_p_normal = make_normal_from_raw_params(p_params)
@@ -170,7 +169,7 @@ class BaseLoss(nn.Module):
 
 
 def setup_loss(args):
-    if "pixelwise" in args:
+    if "pixelwise" in args:  # why ?
         if args["pixelwise"]:
             return PixelwiseLoss(args)
     

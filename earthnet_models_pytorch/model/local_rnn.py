@@ -28,7 +28,6 @@ class LocalRNN(nn.Module):
         self.ndvi_pred = (hparams.setting in ["en21-veg", "europe-veg", "en21x", "en22"])
 
         self.state_encoder = getattr(smp, self.hparams.state_encoder_name)(**self.hparams.state_encoder_args)
-
         if self.hparams.update_encoder_name == "MLP":
             self.update_encoder = MLP(ninp = self.hparams.update_encoder_inchannels, nhid = 128, nout = self.hparams.update_encoder_nclasses, nlayers = 2, activation = "relu")
             hidden_size = self.hparams.state_encoder_args["classes"] - 64
@@ -75,21 +74,25 @@ class LocalRNN(nn.Module):
 
     def forward(self, data, pred_start: int = 0, n_preds: Optional[int] = None):
         
+        # Number of predictions, by default 1.
         n_preds = 0 if n_preds is None else n_preds
 
-        c_l = self.hparams.context_length if self.training else pred_start
+        c_l = self.hparams.context_length if self.training else pred_start  
 
+        # High resolution [0] dynamic inputs only to be used from t 0 to t context_lenght
         hr_dynamic_inputs = data["dynamic"][0][:,(c_l - self.hparams.context_length):c_l,...]
 
         last_dynamic_input = hr_dynamic_inputs[:,-1,...]
 
+        # batch, time, channels, height, width 
         b, t, c, h, w = hr_dynamic_inputs.shape
 
         hr_dynamic_inputs = hr_dynamic_inputs.reshape(b, t*c, h, w)
 
         static_inputs = data["static"][0]
 
-        if self.hparams.use_dem and self.hparams.use_soilgrids:
+        # Concatenates DEM and Soil to High-res dynamic
+        if self.hparams.use_dem and self.hparams.use_soilgrids:  # ???
             state_inputs = torch.cat((hr_dynamic_inputs, static_inputs), dim = 1)
         elif self.hparams.use_dem:
             state_inputs = torch.cat((hr_dynamic_inputs, static_inputs[:,0,...][:,None,...]), dim = 1)
@@ -98,26 +101,30 @@ class LocalRNN(nn.Module):
         else:
             state_inputs = hr_dynamic_inputs
 
+        # Feeds context (highres dynamic and static) to the state encoder.
         state = self.state_encoder(state_inputs)
 
-        state[:,-1,...] = last_dynamic_input[:,0,...]
+        # Last state frame of the encoder output replaced by last high-ress input (so we have cat(encoder(hr_dynamic_inputs+static_input), hr_dynamic_inputs[:,-1,...])
+        state[:,-1,...] = last_dynamic_input[:,0,...]  
 
         _, c_s, _, _ = state.shape
 
-        meso_dynamic_inputs = data["dynamic"][1][:,c_l:,...]
-
+        meso_dynamic_inputs = data["dynamic"][1][:,c_l:,...]  
+        
+        # Determine whether the dataset low-res dynamic variables [1] *meteo* are spatial (5 dims) or scalar (3 dims)
         if len(meso_dynamic_inputs.shape) == 5:
             _, t_m, c_m, h_m, w_m = meso_dynamic_inputs.shape
         else:
             _, t_m, c_m = meso_dynamic_inputs.shape
 
-        
 
         if self.hparams.update_encoder_name == "MLP":
+            # If meso_dynamics has spatial dims, reduces to center value in height and width
             if len(meso_dynamic_inputs.shape) == 5:
-                meso_dynamic_inputs = meso_dynamic_inputs[:,:,:,(h_m//2- 1):(h_m//2),(w_m//2- 1):(w_m//2)].mean((3,4))
+                meso_dynamic_inputs = meso_dynamic_inputs[:,:,:,(h_m//2- 1):(h_m//2),(w_m//2- 1):(w_m//2)].mean((3,4))  # why mean ?
+            # meso_dynamic variables are spatially expanded&repeated to match high-res variables
             meso_dynamic_inputs = meso_dynamic_inputs.reshape(b, 1, 1, t_m, c_m).repeat(1, h, w, 1, 1).reshape(b*h*w,t_m, c_m)
-
+            # location_input is spatio-temporal_context_input, limited to 64 features (why ???), repeated for temporal lenght of mesodynamics, reshaped to batch*height*width, time
             location_input = state[:,None,:64,:,:].repeat(1,t_m, 1, 1,1).permute(0,3,4,1,2).reshape(b*h*w, t_m, 64)
 
             update_inputs = torch.cat([meso_dynamic_inputs,location_input], dim = -1)

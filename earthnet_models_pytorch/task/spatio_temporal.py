@@ -29,15 +29,15 @@ class SpatioTemporalTask(pl.LightningModule):
 
     def __init__(self, model: nn.Module, hparams: argparse.Namespace):
         super().__init__()
-
-        if hasattr(self, "save_hyperparameters"):
+        
+        if hasattr(self, "save_hyperparameters"):  # SpatioTemporalTask herite from the LightningModule
             self.save_hyperparameters(copy.deepcopy(hparams))
         else:
             self.hparams = copy.deepcopy(hparams)
         self.model = model
 
         if hparams.pred_dir is None:
-            self.pred_dir = Path(self.logger.log_dir)/"predictions" if self.logger is not None else Path.cwd()/"experiments"/"predictions"
+            self.pred_dir = Path(self.logger.log_dir)/"predictions" if self.logger is not None else Path.cwd()/"experiments"/"predictions"  # logger: hyperparameter of LightningModule for the Trainer
         else:
             self.pred_dir = Path(self.hparams.pred_dir)
 
@@ -46,12 +46,12 @@ class SpatioTemporalTask(pl.LightningModule):
         self.context_length = hparams.context_length
         self.target_length = hparams.target_length
 
-        self.n_stochastic_preds = hparams.n_stochastic_preds
+        self.n_stochastic_preds = hparams.n_stochastic_preds 
 
         self.current_filepaths = []
 
         self.metric = METRICS[self.hparams.setting]()
-        self.ndvi_pred = (self.hparams.setting == "en21-veg") #TODO: Legacy, remove this...
+        self.ndvi_pred = (self.hparams.setting == "en21-veg") #TODO: Legacy, remove this...  # what means ndvi_pred
         self.pred_mode = {"en21-veg": "ndvi", "en21-std": "rgb", "en21x": "kndvi", "en21x-px": "kndvi", "en22": "kndvi"}[self.hparams.setting]
 
         self.model_shedules = []
@@ -60,13 +60,13 @@ class SpatioTemporalTask(pl.LightningModule):
 
 
     @staticmethod
-    def add_task_specific_args(parent_parser: Optional[Union[argparse.ArgumentParser,list]] = None):
+    def add_task_specific_args(parent_parser: Optional[Union[argparse.ArgumentParser,list]] = None):  # Optional[X] is equivalent to Union[X, None].
         if parent_parser is None:
             parent_parser = []
         elif not isinstance(parent_parser, list):
             parent_parser = [parent_parser]
         
-        parser = argparse.ArgumentParser(parents = parent_parser, add_help = False)
+        parser = argparse.ArgumentParser(parents = parent_parser, add_help = False)  # parents - A list of ArgumentParser objects whose arguments should also be included
 
         parser.add_argument('--pred_dir', type = str, default = None)
 
@@ -98,6 +98,7 @@ class SpatioTemporalTask(pl.LightningModule):
 
     def configure_optimizers(self):
         optimizers = [getattr(torch.optim,o["name"])(self.parameters(), **o["args"]) for o in self.hparams.optimization["optimizer"]] # This gets any (!) torch.optim optimizer
+        # torch.optim.lr_scheduler provides several methods to adjust the learning rate based on the number of epochs. 
         shedulers = [getattr(torch.optim.lr_scheduler,s["name"])(optimizers[i], **s["args"]) for i, s in enumerate(self.hparams.optimization["lr_shedule"])] # This gets any(!) torch.optim.lr_scheduler - but only those with standard callback will work (i.e. not the Plateau one)
         return optimizers, shedulers
 
@@ -116,16 +117,15 @@ class SpatioTemporalTask(pl.LightningModule):
         
         kwargs = {}
         for (shedule_name, shedule) in self.model_shedules:
-            kwargs[shedule_name] = shedule(self.global_step)
+            kwargs[shedule_name] = shedule(self.global_step)  
 
-        preds, aux = self(batch, n_preds = self.context_length+self.target_length, kwargs = kwargs)
-
+        preds, aux = self(batch, n_preds = self.context_length+self.target_length, kwargs = kwargs)  # what is aux ? How is it define ?
         loss, logs = self.loss(preds, batch, aux, current_step = self.global_step)
 
         for arg in kwargs:
             logs[arg] = kwargs[arg]
 
-        self.log_dict(logs)
+        self.log_dict(logs)  
 
         return loss
 
@@ -133,7 +133,7 @@ class SpatioTemporalTask(pl.LightningModule):
 
         data = copy.deepcopy(batch)
 
-        data["dynamic"][0] =  data["dynamic"][0][:,:self.context_length,...]
+        data["dynamic"][0] =  data["dynamic"][0][:,:self.context_length,...]  # selection only the context data
         if len(data["dynamic_mask"]) > 0:
             data["dynamic_mask"][0] = data["dynamic_mask"][0][:,:self.context_length,...]
 
@@ -157,7 +157,8 @@ class SpatioTemporalTask(pl.LightningModule):
 
         if batch_idx < self.hparams.n_log_batches and len(preds.shape) == 5:
             if self.logger is not None:
-                log_viz(self.logger.experiment, all_viz, batch, batch_idx, self.current_epoch, mode = self.pred_mode, lc_min = 82 if not self.hparams.setting == "en22" else 2, lc_max = 104 if not self.hparams.setting == "en22" else 6)
+                # Attention: error in the previous format (lc_min)
+                log_viz(self.logger.experiment, all_viz, batch, batch_idx, self.current_epoch, mode = self.pred_mode) #, lc_min = 82 if not self.hparams.setting == "en22" else 2, lc_max = 104 if not self.hparams.setting == "en22" else 6)
 
     def validation_epoch_end(self, validation_step_outputs):
         current_scores = self.metric.compute()

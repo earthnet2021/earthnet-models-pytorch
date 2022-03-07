@@ -1,4 +1,4 @@
-Architecture: "local-rnn"
+Architecture: "context-convlstm"
 
 Seed: 42
 
@@ -10,11 +10,11 @@ Logger:
 Checkpointer:
     save_top_k: 1
     save_last: True
-    every_n_epochs: 5
+    period: 1
 
 Trainer:
     gpus: 0 #4 #6
-    strategy: 'ddp'
+    accelerator: 'ddp'
     #deterministic: True
     log_every_n_steps: 32
     #profiler: 'advanced'
@@ -34,7 +34,7 @@ Data:
     train_batch_size: 1 #96
     val_batch_size: 1
     test_batch_size: 1 #96
-    num_workers: 0 # 4 #2
+    num_workers: 4 #2
 
 Task:
     loss:

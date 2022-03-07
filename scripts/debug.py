@@ -10,7 +10,7 @@ import time
 import yaml
 from pathlib import Path
 import copy
-
+import sys 
 import torch
 import pytorch_lightning as pl
 
@@ -20,11 +20,12 @@ from earthnet_models_pytorch.utils import parse_setting
 
 
 def fast_dev_run(setting_dict: dict):
+
     start = time.time()
 
     pl.seed_everything(setting_dict["Seed"])
-    # Data
 
+    # Data
     data_args = ["--{}={}".format(key,value) for key, value in setting_dict["Data"].items()]
     data_parser = ArgumentParser()
     data_parser = DATASETS[setting_dict["Setting"]].add_data_specific_args(data_parser)
@@ -39,24 +40,25 @@ def fast_dev_run(setting_dict: dict):
     model = MODELS[setting_dict["Architecture"]](model_params)
 
     # Task
-    task_args = ["--{}={}".format(key,value) for key, value in setting_dict["Task"].items()]
+    task_args = ["--{}={}".format(key,value) for key, value in setting_dict["Task"].items()]  
     task_parser = ArgumentParser()
     task_parser = MODELTASKS[setting_dict["Architecture"]].add_task_specific_args(task_parser)
-    task_params = task_parser.parse_args(task_args)
-    task = MODELTASKS[setting_dict["Architecture"]](model = model, hparams = task_params)
+    task_params = task_parser.parse_args(task_args)   # argsparse.Namespace with the setting_dict["Task"] dictionnary
+    task = MODELTASKS[setting_dict["Architecture"]](model = model, hparams = task_params) # call the SpacioTemporalTask module with the model module
 
     # Trainer
     trainer_dict = setting_dict["Trainer"]
     trainer_dict["logger"] = False
-    trainer_dict["fast_dev_run"] = 2
+    trainer_dict["fast_dev_run"] = 2  # number of batch
     trainer_dict["log_gpu_memory"] = 'all'
+    # trainer_dict["callbacks"] = [pl.callbacks.DeviceStatsMonitor()]
     if "profiler" in trainer_dict:
-        trainer_dict["profiler"] = pl.profiler.AdvancedProfiler(output_filename="curr_profile") #TODO better output filename...
+        trainer_dict["profiler"] = pl.profiler.AdvancedProfiler(output_filename="curr_profile") #TODO better output filename...  # performance analysis
 
-    trainer = pl.Trainer(**trainer_dict)
+    trainer = pl.Trainer(**trainer_dict)  # Customize every aspect of training via flags
 
     dm.setup("fit")
-    trainer.fit(task, dm)
+    trainer.fit(task, dm)  # (model, train_dataloader, val_dataloader)
 
     end = time.time()
 
@@ -99,17 +101,18 @@ def overfit_model(setting_dict: dict):
 
     # Trainer
     trainer_dict = setting_dict["Trainer"]
-    trainer_dict["overfit_batches"] = 2
-    trainer_dict["check_val_every_n_epoch"] = 50
-    trainer_dict["max_epochs"] = 1000
-    #trainer_dict["num_sanity_val_steps"] = 0
+    trainer_dict["overfit_batches"] = 2  # Uses this much data of the training set.
+    trainer_dict["check_val_every_n_epoch"] = 50  #Check val every n train epochs.
+    trainer_dict["max_epochs"] = 10
+    #trainer_dict["num_sanity_val_steps"] = 0  #Sanity check runs n batches of val before starting the training routine
     if "profiler" in trainer_dict:
         trainer_dict["profiler"] = pl.profiler.AdvancedProfiler(output_filename="curr_profile")
 
     trainer = pl.Trainer(logger = logger, **trainer_dict)
 
     dm.setup("fit")
-    trainer.fit(task, dm)
+    trainer.fit(task, dm)  # (model, train_dataloader, val_dataloader)
+
 
     end = time.time()
 
@@ -125,12 +128,11 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # Disabling PyTorch Lightning automatic SLURM detection
-    for k, v in os.environ.items():
+    for k, v in os.environ.items():  # set of environment variables
         if k.startswith("SLURM"):
             del os.environ[k]
 
-    setting_dict = parse_setting(args.setting)
-
+    setting_dict = parse_setting(args.setting)  # run parse_setting on the path of the setting, return 
     outtext = "Starting fast dev run....\n"
 
     outtext += fast_dev_run(copy.deepcopy(setting_dict))

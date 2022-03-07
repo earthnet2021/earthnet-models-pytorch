@@ -11,6 +11,7 @@ import torch
 
 
 class RootMeanSquaredError(Metric):
+    # Each state variable should be called using self.add_state(...)
     def __init__(self, compute_on_step: bool = False, dist_sync_on_step: bool = False, process_group = None, dist_sync_fn = None, lc_min = 73, lc_max = 104, comp_ndvi = True):
         super().__init__(
             compute_on_step=compute_on_step,
@@ -19,7 +20,7 @@ class RootMeanSquaredError(Metric):
             dist_sync_fn=dist_sync_fn,
         )
 
-        self.add_state("sum_squared_error", default=torch.tensor(0.0), dist_reduce_fx="sum")
+        self.add_state("sum_squared_error", default=torch.tensor(0.0), dist_reduce_fx="sum")  
         self.add_state("total", default=torch.tensor(0), dist_reduce_fx="sum")
 
         self.lc_min = lc_min
@@ -43,7 +44,8 @@ class RootMeanSquaredError(Metric):
             kwargs.pop("just_return", None)
             return out_cache
         
-    def update(self, preds, targs, just_return = False):
+    def update(self, preds, targs, just_return = False):  
+        '''Any code needed to update the state given any inputs to the metric.'''
 
         lc = targs["landcover"]
 
@@ -52,7 +54,7 @@ class RootMeanSquaredError(Metric):
             masks = torch.where(masks.byte(), ((lc >= self.lc_min).byte() & (lc <= self.lc_max).byte()).type_as(masks).unsqueeze(1).repeat(1, preds.shape[1], 1, 1, 1), masks)
         else:
             masks = ((lc >= self.lc_min).byte() & (lc <= self.lc_max).byte()).type_as(preds).unsqueeze(1)
-            if len(masks.shape) == 5:
+            if len(masks.shape) == 5:  # spacial dimention ?
                 masks = masks.repeat(1, preds.shape[1], 1, 1, 1)
             else:
                 masks = masks.repeat(1, preds.shape[1], 1)
@@ -64,7 +66,7 @@ class RootMeanSquaredError(Metric):
             targets = targets[:,:,0,...].unsqueeze(2)
         
         if len(masks.shape) == 5:
-            sum_squared_error = torch.pow(preds * masks - targets * masks, 2).sum((1,2,3,4))
+            sum_squared_error = torch.pow(preds * masks - targets * masks, 2).sum((1,2,3,4))  #torch.pow Takes the power of each element in input with exponent and returns a tensor with the result
             n_obs = (masks != 0).sum((1,2,3,4))
         else:
             sum_squared_error = torch.pow(preds * masks - targets * masks, 2).sum((1,2))
@@ -79,6 +81,7 @@ class RootMeanSquaredError(Metric):
 
     def compute(self):
         """
+        Computes a final value from the state of the metric.
         Computes mean squared error over state.
         """
         return {"RMSE_Veg": torch.sqrt(self.sum_squared_error / self.total)}
