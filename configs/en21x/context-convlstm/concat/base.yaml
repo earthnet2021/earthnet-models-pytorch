@@ -14,7 +14,7 @@ Checkpointer:
 
 Trainer:
     gpus: 0 #4 #6
-    accelerator: 'ddp'
+    strategy: 'ddp'
     #deterministic: True
     log_every_n_steps: 32
     #profiler: 'advanced'
@@ -34,7 +34,7 @@ Data:
     train_batch_size: 1 #96
     val_batch_size: 1
     test_batch_size: 1 #96
-    num_workers: 4 #2
+    num_workers: 0 #2
 
 Task:
     loss:
@@ -84,6 +84,12 @@ Task:
     compute_metric_on_test: True
 
 Model:
+    input_dim: 28
+    hidden_dim: [64, 64, 128]
+    kernel_size: 3
+    num_layers: 3
+    bias: True
+    return_all_layers: False
     state_encoder_name: FPN
     state_encoder_args: 
         encoder_name: timm-efficientnet-b3

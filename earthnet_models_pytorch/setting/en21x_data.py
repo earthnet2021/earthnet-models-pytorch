@@ -48,7 +48,7 @@ class EarthNet2021XDataset(Dataset):
 
         kndvi = minicube.kndvi.values.transpose((2,0,1))[:, None, ...].astype(self.type) # t c h w
 
-        kndvi /= np.tanh(1)
+        kndvi /= np.tanh(1)   # WARNING TODO compute the distance between all pixels for sigma (respect the Gustau advice)
 
         kndvi[np.isnan(kndvi)] = 0
 
@@ -63,13 +63,13 @@ class EarthNet2021XDataset(Dataset):
             eobs_cube = eobs_cube.sel(variable = [v for v in self.eobs_vars if "spread" not in v])
 
         if self.spatial_eobs:
-            eobs = eobs_cube.values.transpose((1,0,2,3)).astype(self.type) # t c h w  # ???
+            eobs = eobs_cube.values.transpose((1,0,2,3)).astype(self.type) # t c h w  
         else:
             eobs = eobs_cube.values.transpose((1,0)).astype(self.type)
 
         eobs[np.isnan(eobs)] = 0  # MAYBE BAD IDEA......
         
-        dem = minicube.dem.values[None,...].astype(self.type) # c h w  # ???
+        dem = minicube.dem.values[None,...].astype(self.type) # c h w  
         
         dem /= 2000
         dem[np.isnan(dem)] = 0  # MAYBE BAD IDEA......
@@ -157,7 +157,7 @@ class EarthNet2021XpxDataset(Dataset):
 
         print("Initialized dataset")
 
-    def __getitem__(self, idx: int) -> dict:
+    def __getitem__(self, idx: int) -> dict:   
 
         pixel = self.dataset.isel(loc = idx)
 

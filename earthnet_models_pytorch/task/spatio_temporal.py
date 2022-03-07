@@ -120,6 +120,7 @@ class SpatioTemporalTask(pl.LightningModule):
             kwargs[shedule_name] = shedule(self.global_step)  
 
         preds, aux = self(batch, n_preds = self.context_length+self.target_length, kwargs = kwargs)  # what is aux ? How is it define ?
+        
         loss, logs = self.loss(preds, batch, aux, current_step = self.global_step)
 
         for arg in kwargs:

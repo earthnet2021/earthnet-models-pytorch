@@ -1,8 +1,17 @@
+"""ContextConvLSTM
+"""
+from typing import Optional, Union, List
+
+import argparse
+import ast
+from grpc import dynamic_ssl_server_credentials
+from pip import main
 import torch.nn as nn
 import torch
+import sys
+from earthnet_models_pytorch.utils import str2bool
 
-
-class ConvLSTMCell(nn.Module):
+class ContextConvLSTMCell(nn.Module):
 
     def __init__(self, input_dim, hidden_dim, kernel_size, bias):
         """
@@ -13,21 +22,18 @@ class ConvLSTMCell(nn.Module):
             Number of channels of input tensor.
         hidden_dim: int
             Number of channels of hidden state.
-        kernel_size: (int, int)
+        kernel_size: int
             Size of the convolutional kernel.
         bias: bool
             Whether or not to add the bias.
         """
-
-        super(ConvLSTMCell, self).__init__()
-        
-        
+        super().__init__()
 
         self.input_dim = input_dim
         self.hidden_dim = hidden_dim
 
         self.kernel_size = kernel_size
-        self.padding = kernel_size[0] // 2, kernel_size[1] // 2
+        self.padding = kernel_size // 2, kernel_size // 2
         self.bias = bias
 
         self.conv = nn.Conv2d(in_channels=self.input_dim + self.hidden_dim,
@@ -35,7 +41,8 @@ class ConvLSTMCell(nn.Module):
                               kernel_size=self.kernel_size,
                               padding=self.padding,
                               bias=self.bias)
-
+        
+        
     def forward(self, input_tensor, cur_state):
         h_cur, c_cur = cur_state
 
@@ -59,7 +66,7 @@ class ConvLSTMCell(nn.Module):
                 torch.zeros(batch_size, self.hidden_dim, height, width, device=self.conv.weight.device))
 
 
-class ConvLSTM(nn.Module):
+class ContextConvLSTM(nn.Module):
 
     """
     Parameters:
@@ -67,7 +74,6 @@ class ConvLSTM(nn.Module):
         hidden_dim: Number of hidden channels
         kernel_size: Size of kernel in convolutions
         num_layers: Number of LSTM layers stacked on each other
-        batch_first: Whether or not dimension 0 is the batch or not
         bias: Bias or no bias in Convolution
         return_all_layers: Return the list of computations for all layers
         Note: Will do same padding.
@@ -85,54 +91,111 @@ class ConvLSTM(nn.Module):
         >> h = last_states[0][0]  # 0 for layer index, 0 for h index
     """
 
-    def __init__(self, input_dim, hidden_dim, kernel_size, num_layers,
-                 batch_first=False, bias=True, return_all_layers=False):
-        super(ConvLSTM, self).__init__()
+    def __init__(self, hparams: argparse.Namespace):
+        super().__init__()
 
-        self._check_kernel_size_consistency(kernel_size)
+        self.hparams = hparams
+        self.ndvi_pred = (hparams.setting in ["en21-veg", "europe-veg", "en21x", "en22"])
 
         # Make sure that both `kernel_size` and `hidden_dim` are lists having len == num_layers
-        kernel_size = self._extend_for_multilayer(kernel_size, num_layers)
-        hidden_dim = self._extend_for_multilayer(hidden_dim, num_layers)
-        if not len(kernel_size) == len(hidden_dim) == num_layers:
+        print(self.hparams.hidden_dim, self.hparams.num_layers)
+        if not len(self.hparams.hidden_dim) == self.hparams.num_layers:
             raise ValueError('Inconsistent list length.')
 
-        self.input_dim = input_dim
-        self.hidden_dim = hidden_dim
-        self.kernel_size = kernel_size
-        self.num_layers = num_layers
-        self.batch_first = batch_first
-        self.bias = bias
-        self.return_all_layers = return_all_layers
-
         cell_list = []
-        for i in range(0, self.num_layers):
-            cur_input_dim = self.input_dim if i == 0 else self.hidden_dim[i - 1]
+        for i in range(0, self.hparams.num_layers):
+            cur_input_dim = self.hparams.input_dim if i == 0 else self.hparams.hidden_dim[i - 1]
 
-            cell_list.append(ConvLSTMCell(input_dim=cur_input_dim,
-                                          hidden_dim=self.hidden_dim[i],
-                                          kernel_size=self.kernel_size[i],
-                                          bias=self.bias))
+            cell_list.append(ContextConvLSTMCell(input_dim=cur_input_dim,
+                                          hidden_dim=self.hparams.hidden_dim[i],
+                                          kernel_size=self.hparams.kernel_size,
+                                          bias=self.hparams.bias))
 
         self.cell_list = nn.ModuleList(cell_list)
+      
+      
+        
+    @staticmethod
+    def add_model_specific_args(parent_parser: Optional[Union[argparse.ArgumentParser,list]] = None):
+        if parent_parser is None:
+            parent_parser = []
+        elif not isinstance(parent_parser, list):
+            parent_parser = [parent_parser]
+        
+        parser = argparse.ArgumentParser(parents = parent_parser, add_help = False)
+        
+        parser.add_argument("--input_dim", type=int, default=28)
+        parser.add_argument("--hidden_dim", type=ast.literal_eval, default=[64, 64,128])  # TODO find a better type ? list(int)
+        parser.add_argument("--kernel_size", type=int, default=3)
+        parser.add_argument("--num_layers", type=int, default=3)
+        parser.add_argument("--bias", type=str2bool, default=True)
+        parser.add_argument("--return_all_layers", type=str2bool, default=False)
+        parser.add_argument("--state_encoder_name", type = str, default = "FPN")
+        parser.add_argument("--state_encoder_args", type = ast.literal_eval, default = '{"encoder_name": "timm-efficientnet-b4", "encoder_weights": "noisy-student", "in_channels": 191, "classes": 256}')
+        parser.add_argument("--update_encoder_name", type = str, default = "efficientnet_b1")
+        parser.add_argument("--update_encoder_inchannels", type = int, default = 28)
+        parser.add_argument("--update_encoder_nclasses", type = int, default = 128)
+        parser.add_argument("--train_lstm_npixels", type = int, default = 256)
+        parser.add_argument("--setting", type = str, default = "en21x")
+        parser.add_argument("--context_length", type = int, default = 9)
+        parser.add_argument("--target_length", type = int, default = 36)
+        parser.add_argument("--use_dem", type = str2bool, default = True)
+        parser.add_argument("--use_soilgrids", type = str2bool, default = True)
+        parser.add_argument("--lc_min", type = int, default = 82)
+        parser.add_argument("--lc_max", type = int, default = 104)
+        parser.add_argument("--val_n_splits", type = int, default = 20)
+        # TODO add argument in the base.yaml
+        return parser
+    
 
-    def forward(self, input_tensor, hidden_state=None):
-        """
-        Parameters
-        ----------
-        input_tensor: todo
-            5-D Tensor either of shape (t, b, c, h, w) or (b, t, c, h, w)
-        hidden_state: todo
-            None. todo implement stateful
-        Returns
-        -------
-        last_state_list, layer_output
-        """
-        if not self.batch_first:
-            # (t, b, c, h, w) -> (b, t, c, h, w)
-            input_tensor = input_tensor.permute(1, 0, 2, 3, 4)
+    def forward(self, data, pred_start: int = 0, n_preds: Optional[int] = None):
+        
+        print(data["dynamic"][0].shape)
+        print(data["dynamic"][1].shape)
+        print(data["static"][0].shape)
+        print(data["landcover"].shape)
+        
+        n_preds = 0 if n_preds is None else n_preds
+        
+        c_l = self.hparams.context_length if self.training else pred_start   # first element to predict
+        
+         # High resolution [0] dynamic inputs only to be used from t 0 to t context_lenght
+        hr_dynamic_inputs = data["dynamic"][0][:,(c_l - self.hparams.context_length):c_l,...]   # [0] for kndvi, [1] for eobs
 
-        b, _, _, h, w = input_tensor.size()
+        last_dynamic_input = hr_dynamic_inputs[:,-1,...]
+
+        # batch, time, channels, height, width 
+        b, t, c, h, w = hr_dynamic_inputs.shape
+
+        hr_dynamic_inputs = hr_dynamic_inputs.reshape(b, t*c, h, w)  # why reshape t and c ?
+
+        static_inputs = data["static"][0]
+                
+        # Concatenates DEM and Soil to High-res dynamic
+        if self.hparams.use_dem and self.hparams.use_soilgrids:  
+            state_inputs = torch.cat((hr_dynamic_inputs, static_inputs), dim = 1)
+        elif self.hparams.use_dem:
+            state_inputs = torch.cat((hr_dynamic_inputs, static_inputs[:,0,...][:,None,...]), dim = 1)
+        elif self.hparams.use_soilgrids:
+            state_inputs = torch.cat((hr_dynamic_inputs, static_inputs[:,1:,...]), dim = 1)
+        else:
+            state_inputs = hr_dynamic_inputs 
+
+        meso_dynamic_inputs = data["dynamic"][1][:,c_l:,...]  # eobs data
+       
+        # Determine whether the dataset low-res dynamic variables [1] *meteo* are spatial (5 dims) or scalar (3 dims)
+        if len(meso_dynamic_inputs.shape) == 5:
+            _, t_m, c_m, h_m, w_m = meso_dynamic_inputs.shape
+        else:
+            _, t_m, c_m = meso_dynamic_inputs.shape
+            
+        meso_dynamic_inputs = meso_dynamic_inputs.reshape(b*t_m, c_m, h_m, w_m)
+
+        _, c_u = update.shape
+
+        update = update.reshape(b,t_m,c_u).unsqueeze(1).repeat(1,h*w, 1, 1).reshape(b*h*w,t_m,c_u)
+
+        state = state.reshape(b, c_s, h * w).transpose(1,2).reshape(1, b*h*w, c_s)
 
         # Implement stateful ConvLSTM
         if hidden_state is not None:
@@ -140,7 +203,8 @@ class ConvLSTM(nn.Module):
         else:
             # Since the init is done in forward. Can send image size here
             hidden_state = self._init_hidden(batch_size=b,
-                                             image_size=(h, w))
+        
+                                         image_size=(h, w))
 
         layer_output_list = []
         last_state_list = []
@@ -174,16 +238,26 @@ class ConvLSTM(nn.Module):
         for i in range(self.num_layers):
             init_states.append(self.cell_list[i].init_hidden(batch_size, image_size))
         return init_states
+    
+    def is_vegetation():
+        '''
+        if self.training:
+            idxs = torch.randperm(b*h*w).type_as(update).long()
+                lc = data["landcover"].reshape(-1)  #flatten the landcover data
+                idxs = idxs[(lc >= self.hparams.lc_min).byte() & (lc <= self.hparams.lc_max).byte()][:self.hparams.train_lstm_npixels*b]
+                # idxs = torch.randint(low = 0, high = b*h*w, size = (self.hparams.train_lstm_npixels*b, )).type_as(update).long()
+                if len(idxs) == 0:
+                    print(f"Detected cube without vegetation: {data['cubename']}")
+                    idxs = [1,2,3,4]
 
-    @staticmethod
-    def _check_kernel_size_consistency(kernel_size):
-        if not (isinstance(kernel_size, tuple) or
-                (isinstance(kernel_size, list) and all([isinstance(elem, tuple) for elem in kernel_size]))):
-            raise ValueError('`kernel_size` must be tuple or list of tuples')
+                state = state[:,idxs,:]
+                update = update[idxs,:,:]
+        '''
+        # TODO
+        return
+    
+    def input_data():
+        # TODO
+        return
 
-    @staticmethod
-    def _extend_for_multilayer(param, num_layers):
-        if not isinstance(param, list):
-            param = [param] * num_layers
-        return param
-
+    

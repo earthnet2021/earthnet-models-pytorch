@@ -108,7 +108,7 @@ def parse_setting(setting_file, track = None):
         if "pred_dir" not in setting_dict["Task"]:
             setting_dict["Task"]["pred_dir"] = Path(setting_dict["Logger"]["save_dir"])/setting_dict["Logger"]["name"]/setting_dict["Logger"]["version"]/"preds"/track
 
-    if setting_dict["Architecture"] in ["channel-u-net", "local-rnn","rnn"]:  # add context-conv-lstm
+    if setting_dict["Architecture"] in ["channel-u-net", "local-rnn","rnn", "context-convlstm"]:  
         setting_dict["Model"]["setting"] = setting_dict["Setting"]
 
     return setting_dict

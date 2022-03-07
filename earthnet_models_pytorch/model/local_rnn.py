@@ -73,11 +73,11 @@ class LocalRNN(nn.Module):
 
 
     def forward(self, data, pred_start: int = 0, n_preds: Optional[int] = None):
-        
+
         # Number of predictions, by default 1.
         n_preds = 0 if n_preds is None else n_preds
 
-        c_l = self.hparams.context_length if self.training else pred_start  
+        c_l = self.hparams.context_length if self.training else pred_start # what is pred_start ?  
 
         # High resolution [0] dynamic inputs only to be used from t 0 to t context_lenght
         hr_dynamic_inputs = data["dynamic"][0][:,(c_l - self.hparams.context_length):c_l,...]
@@ -92,7 +92,7 @@ class LocalRNN(nn.Module):
         static_inputs = data["static"][0]
 
         # Concatenates DEM and Soil to High-res dynamic
-        if self.hparams.use_dem and self.hparams.use_soilgrids:  # ???
+        if self.hparams.use_dem and self.hparams.use_soilgrids:  
             state_inputs = torch.cat((hr_dynamic_inputs, static_inputs), dim = 1)
         elif self.hparams.use_dem:
             state_inputs = torch.cat((hr_dynamic_inputs, static_inputs[:,0,...][:,None,...]), dim = 1)
@@ -109,7 +109,7 @@ class LocalRNN(nn.Module):
 
         _, c_s, _, _ = state.shape
 
-        meso_dynamic_inputs = data["dynamic"][1][:,c_l:,...]  
+        meso_dynamic_inputs = data["dynamic"][1][:,c_l:,...]  # eobs data
         
         # Determine whether the dataset low-res dynamic variables [1] *meteo* are spatial (5 dims) or scalar (3 dims)
         if len(meso_dynamic_inputs.shape) == 5:
@@ -121,18 +121,19 @@ class LocalRNN(nn.Module):
         if self.hparams.update_encoder_name == "MLP":
             # If meso_dynamics has spatial dims, reduces to center value in height and width
             if len(meso_dynamic_inputs.shape) == 5:
-                meso_dynamic_inputs = meso_dynamic_inputs[:,:,:,(h_m//2- 1):(h_m//2),(w_m//2- 1):(w_m//2)].mean((3,4))  # why mean ?
+                meso_dynamic_inputs = meso_dynamic_inputs[:,:,:,(h_m//2- 1):(h_m//2),(w_m//2- 1):(w_m//2)].mean((3,4))  
             # meso_dynamic variables are spatially expanded&repeated to match high-res variables
             meso_dynamic_inputs = meso_dynamic_inputs.reshape(b, 1, 1, t_m, c_m).repeat(1, h, w, 1, 1).reshape(b*h*w,t_m, c_m)
-            # location_input is spatio-temporal_context_input, limited to 64 features (why ???), repeated for temporal lenght of mesodynamics, reshaped to batch*height*width, time
+            # location_input is spatio-temporal_context_input, 64 features, repeated for temporal lenght of mesodynamics, reshaped to batch*height*width, time
             location_input = state[:,None,:64,:,:].repeat(1,t_m, 1, 1,1).permute(0,3,4,1,2).reshape(b*h*w, t_m, 64)
 
             update_inputs = torch.cat([meso_dynamic_inputs,location_input], dim = -1)
 
             state = state.reshape(b, c_s, h * w).transpose(1,2).reshape(1, b*h*w, c_s)[:,:,64:]
 
+            # Hein ?
             if self.training:
-                idxs = torch.randperm(b*h*w).type_as(state).long()
+                idxs = torch.randperm(b*h*w).type_as(state).long()  #random
                 lc = data["landcover"].reshape(-1)
                 idxs = idxs[(lc >= self.hparams.lc_min).byte() & (lc <= self.hparams.lc_max).byte()][:self.hparams.train_lstm_npixels*b]
                 # idxs = torch.randint(low = 0, high = b*h*w, size = (self.hparams.train_lstm_npixels*b, )).type_as(update).long()
@@ -163,7 +164,8 @@ class LocalRNN(nn.Module):
 
             if self.training:
                 idxs = torch.randperm(b*h*w).type_as(update).long()
-                lc = data["landcover"].reshape(-1)
+
+                lc = data["landcover"].reshape(-1)  #flatten the landcover data
                 idxs = idxs[(lc >= self.hparams.lc_min).byte() & (lc <= self.hparams.lc_max).byte()][:self.hparams.train_lstm_npixels*b]
                 # idxs = torch.randint(low = 0, high = b*h*w, size = (self.hparams.train_lstm_npixels*b, )).type_as(update).long()
                 if len(idxs) == 0:
