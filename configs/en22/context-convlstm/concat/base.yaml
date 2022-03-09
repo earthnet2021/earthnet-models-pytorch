@@ -1,4 +1,4 @@
-Architecture: "local-rnn"
+Architecture: "context-convlstm"
 
 Seed: 42
 
@@ -13,7 +13,7 @@ Checkpointer:
     period: 1
 
 Trainer:
-    gpus: 0 #6
+    gpus: 0 #4 #6
     strategy: 'ddp'
     #deterministic: True
     log_every_n_steps: 32
@@ -25,15 +25,16 @@ Trainer:
     #limit_train_batches: 128
     #limit_val_batches: 64
     gradient_clip_val: 1
-    val_check_interval: 1.0
+    val_check_interval: 0.125
   
 Data:
     base_dir: "/workspace/data/UC1/L2_minicubes/" 
     test_track: "iid"
-    train_batch_size: 8 #96
+    # val_pct: 0.01
+    train_batch_size: 1 #96
     val_batch_size: 1
     test_batch_size: 1 #96
-    num_workers: 0 # 16 #2
+    num_workers: 0 #2
 
 Task:
     loss:
@@ -73,7 +74,7 @@ Task:
                 name: Adam
                 args: 
                     betas: [0.9, 0.999]
-                lr_per_sample: 0.000005
+                lr_per_sample: 0.00002
         lr_shedule:
             -
                 name: MultiStepLR
@@ -84,6 +85,12 @@ Task:
     compute_metric_on_test: True
 
 Model:
+    input_dim: 28
+    hidden_dim: [64, 64, 64, 64]
+    kernel_size: 3
+    num_layers: 3
+    bias: True
+    return_all_layers: False
     state_encoder_name: FPN
     state_encoder_args: 
         encoder_name: timm-efficientnet-b3

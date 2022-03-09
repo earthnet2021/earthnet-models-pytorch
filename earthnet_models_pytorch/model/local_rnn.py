@@ -110,14 +110,14 @@ class LocalRNN(nn.Module):
         _, c_s, _, _ = state.shape
 
         meso_dynamic_inputs = data["dynamic"][1][:,c_l:,...]  # eobs data
-        
+
         # Determine whether the dataset low-res dynamic variables [1] *meteo* are spatial (5 dims) or scalar (3 dims)
         if len(meso_dynamic_inputs.shape) == 5:
             _, t_m, c_m, h_m, w_m = meso_dynamic_inputs.shape
         else:
             _, t_m, c_m = meso_dynamic_inputs.shape
 
-
+        
         if self.hparams.update_encoder_name == "MLP":
             # If meso_dynamics has spatial dims, reduces to center value in height and width
             if len(meso_dynamic_inputs.shape) == 5:
@@ -131,7 +131,6 @@ class LocalRNN(nn.Module):
 
             state = state.reshape(b, c_s, h * w).transpose(1,2).reshape(1, b*h*w, c_s)[:,:,64:]
 
-            # Hein ?
             if self.training:
                 idxs = torch.randperm(b*h*w).type_as(state).long()  #random
                 lc = data["landcover"].reshape(-1)
@@ -149,58 +148,53 @@ class LocalRNN(nn.Module):
 
 
         else:
-
             meso_dynamic_inputs = meso_dynamic_inputs.reshape(b*t_m, c_m, h_m, w_m)
-
-            update = self.update_encoder(meso_dynamic_inputs)
-
-            update = torch.cat([update, meso_dynamic_inputs[:,:,(h_m//2- 1):(h_m//2),(w_m//2- 1):(w_m//2)].mean((2,3))], dim = 1)
-
+            
+            update = self.update_encoder(meso_dynamic_inputs)  #shape [36, 68] 36: t, 68: nb class ?
+            update = torch.cat([update, meso_dynamic_inputs[:,:,(h_m//2- 1):(h_m//2),(w_m//2- 1):(w_m//2)].mean((2,3))], dim = 1)  # output encoder + dynamic  [36, 96]
             _, c_u = update.shape
 
-            update = update.reshape(b,t_m,c_u).unsqueeze(1).repeat(1,h*w, 1, 1).reshape(b*h*w,t_m,c_u)
+            update = update.reshape(b,t_m,c_u).unsqueeze(1).repeat(1,h*w, 1, 1).reshape(b*h*w,t_m,c_u)  # shape [16384, 36, 96]
 
-            state = state.reshape(b, c_s, h * w).transpose(1,2).reshape(1, b*h*w, c_s)
+            state = state.reshape(b, c_s, h * w).transpose(1,2).reshape(1, b*h*w, c_s)  # [1, 192, 128, 128] --> [1, 16384, 192]
 
             if self.training:
-                idxs = torch.randperm(b*h*w).type_as(update).long()
-
+                idxs = torch.randperm(b*h*w).type_as(update).long()  # [36, 96]
                 lc = data["landcover"].reshape(-1)  #flatten the landcover data
-                idxs = idxs[(lc >= self.hparams.lc_min).byte() & (lc <= self.hparams.lc_max).byte()][:self.hparams.train_lstm_npixels*b]
+                idxs = idxs[(lc >= self.hparams.lc_min).byte() & (lc <= self.hparams.lc_max).byte()][:self.hparams.train_lstm_npixels*b]  #mask [16384]
                 # idxs = torch.randint(low = 0, high = b*h*w, size = (self.hparams.train_lstm_npixels*b, )).type_as(update).long()
                 if len(idxs) == 0:
                     print(f"Detected cube without vegetation: {data['cubename']}")
                     idxs = [1,2,3,4]
 
-                state = state[:,idxs,:]
-                update = update[idxs,:,:]
+                state = state[:,idxs,:]  # with the mask
+                update = update[idxs,:,:]  # with the mask 
 
         if self.training:
-            out, _ = self.rnn(update.contiguous(), state.contiguous())
+            out, _ = self.rnn(update.contiguous(), state.contiguous())  # Returns a contiguous in memory tensor containing the same data  update [4096, 36, 96], state [1, 4096, 192]
+        
         else:
             out_arr = []
-            states = torch.chunk(state, self.hparams.val_n_splits, dim = 1)
+            states = torch.chunk(state, self.hparams.val_n_splits, dim = 1)  # split in van_n_split chunch
             updates = torch.chunk(update, self.hparams.val_n_splits, dim = 0)
             for i in range(self.hparams.val_n_splits):
-                out_arr.append(self.rnn(updates[i].contiguous(),states[i].contiguous())[0])
+                out_arr.append(self.rnn(updates[i].contiguous(),states[i].contiguous())[0]) # why ?
             out = torch.cat(out_arr, dim = 0)
 
         if not self.hparams.update_encoder_name == "MLP":
-            out = torch.cat([out,state.repeat(t_m,1,1).permute(1,0,2)], dim = -1)
-
+            out = torch.cat([out,state.repeat(t_m,1,1).permute(1,0,2)], dim = -1)  # [4096, 36, 192] -> [4096, 36, 384]
+ 
         out = self.sigmoid(self.head(out))
 
         _, _, c_o = out.shape
 
         if self.training:
 
-            tmp_out = -torch.ones((b*h*w, t_m, c_o)).type_as(out)
+            tmp_out = -torch.ones((b*h*w, t_m, c_o)).type_as(out)  # [16384, 36, 1] -
             tmp_out[idxs, :, :] = out
-
             out = tmp_out
 
-        out = out.reshape(b,h*w,t_m,c_o).reshape(b,h,w,t_m,c_o).permute(0,3,4,1,2)
-
+        out = out.reshape(b,h*w,t_m,c_o).reshape(b,h,w,t_m,c_o).permute(0,3,4,1,2)  # [1, 36, 1, 128, 128]
         return out, {}
 
 

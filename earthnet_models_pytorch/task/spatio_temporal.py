@@ -51,7 +51,8 @@ class SpatioTemporalTask(pl.LightningModule):
         self.current_filepaths = []
 
         self.metric = METRICS[self.hparams.setting]()
-        self.ndvi_pred = (self.hparams.setting == "en21-veg") #TODO: Legacy, remove this...  # what means ndvi_pred
+        self.ndvi_pred = (self.hparams.setting == "en21-veg") #TODO: Legacy, remove this...  
+        print(self.ndvi_pred)
         self.pred_mode = {"en21-veg": "ndvi", "en21-std": "rgb", "en21x": "kndvi", "en21x-px": "kndvi", "en22": "kndvi"}[self.hparams.setting]
 
         self.model_shedules = []
@@ -114,13 +115,11 @@ class SpatioTemporalTask(pl.LightningModule):
 
     
     def training_step(self, batch, batch_idx):
-        
         kwargs = {}
         for (shedule_name, shedule) in self.model_shedules:
             kwargs[shedule_name] = shedule(self.global_step)  
-
-        preds, aux = self(batch, n_preds = self.context_length+self.target_length, kwargs = kwargs)  # what is aux ? How is it define ?
-        
+            
+        preds, aux = self(batch, n_preds = self.context_length+self.target_length, kwargs = kwargs)  # call forward of SpatioTemporalTask
         loss, logs = self.loss(preds, batch, aux, current_step = self.global_step)
 
         for arg in kwargs:

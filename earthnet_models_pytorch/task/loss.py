@@ -49,6 +49,7 @@ class MaskedLoss(nn.Module):
         self.rescale = rescale
 
     def forward(self, preds, targets, mask):
+        # TODO find where targets is define
         assert(preds.shape == targets.shape)
         predsmasked = preds * mask
         if self.rescale:
