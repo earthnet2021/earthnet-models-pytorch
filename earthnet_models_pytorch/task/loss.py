@@ -1,6 +1,6 @@
 
 
-
+import sys
 
 from typing import Optional, Union
 
@@ -49,7 +49,6 @@ class MaskedLoss(nn.Module):
         self.rescale = rescale
 
     def forward(self, preds, targets, mask):
-        # TODO find where targets is define
         assert(preds.shape == targets.shape)
         predsmasked = preds * mask
         if self.rescale:
@@ -100,7 +99,6 @@ class PixelwiseLoss(nn.Module):
 class BaseLoss(nn.Module):
     def __init__(self, setting: dict):
         super().__init__()
-
         self.distance = LOSSES[setting["name"]](**setting["args"])
         self.lambda_state = WeightShedule(**setting["state_shedule"]) # speed of the learning rate ? (I think)
         self.lambda_infer = WeightShedule(**setting["inference_shedule"])
@@ -113,17 +111,19 @@ class BaseLoss(nn.Module):
 
     def forward(self, preds, batch, aux, current_step = None):   
         logs = {}
-        
-        targs = batch["dynamic"][0][:,-preds.shape[1]:,...]
+
+        targs = batch["dynamic"][0][:,-preds.shape[1]:,...] 
+
         if len(batch["dynamic_mask"]) > 0:
             masks = batch["dynamic_mask"][0][:,-preds.shape[1]:,...]
         else:
             masks = None
-        
+
         if self.ndvi:
+            # NDVI computation
             if targs.shape[2] >= 3 and self.comp_ndvi:
                 targs = ((targs[:,:,3,...] - targs[:,:,2,...])/(targs[:,:,3,...] + targs[:,:,2,...] + 1e-6)).unsqueeze(2)
-            elif targs.shape[2] >= 1:
+            elif targs.shape[2] == 5:  # case kndiv, b, g, r, nr  (bug >= 1 firstly)
                 targs = targs[:,:,0,...].unsqueeze(2)
             if masks is not None:
                 masks = masks[:,:,0,...].unsqueeze(2)
@@ -134,8 +134,8 @@ class BaseLoss(nn.Module):
                 masks = torch.where(masks.byte(), ((lc >= self.min_lc).byte() & (lc <= self.max_lc).byte()).type_as(masks).unsqueeze(1).repeat(1, preds.shape[1], 1, 1, 1), masks)
             masks = torch.where(masks.byte(), (preds >= 0).type_as(masks), masks)
 
-        dist = self.distance(preds, targs, masks)
-        
+        dist = self.distance(preds, targs, masks) 
+
         logs["distance"] = dist
 
         loss = dist * self.dist_scale
@@ -170,8 +170,8 @@ class BaseLoss(nn.Module):
 
 
 def setup_loss(args):
-    if "pixelwise" in args:  # why ?
-        if args["pixelwise"]:
+    if "pixelwise" in args:  
+        if args["pixelwise"]:  # why ?
             return PixelwiseLoss(args)
-    
+        
     return BaseLoss(args)

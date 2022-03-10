@@ -51,8 +51,8 @@ class SpatioTemporalTask(pl.LightningModule):
         self.current_filepaths = []
 
         self.metric = METRICS[self.hparams.setting]()
-        self.ndvi_pred = (self.hparams.setting == "en21-veg") #TODO: Legacy, remove this...  
-        print(self.ndvi_pred)
+        self.ndvi_pred = (self.hparams.setting == "en21-veg") #TODO: Legacy, remove this...  #TODO: what is mean ?
+        
         self.pred_mode = {"en21-veg": "ndvi", "en21-std": "rgb", "en21x": "kndvi", "en21x-px": "kndvi", "en22": "kndvi"}[self.hparams.setting]
 
         self.model_shedules = []

@@ -176,8 +176,8 @@ class ContextConvLSTM(nn.Module):
             pred = self.conv(h_t2)
             output += [pred]
             
-        output = torch.cat(output, dim=0)
-        # TODO add conv 1x1 layer ?
+        output = torch.cat(output, dim=0).unsqueeze(0)
+        
         return output, {}
 
 
