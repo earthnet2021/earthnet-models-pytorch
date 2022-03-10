@@ -67,21 +67,6 @@ class ContextConvLSTMCell(nn.Module):
 
 class ContextConvLSTM(nn.Module):
 
-    """
-    Parameters:
-        input_dim: Number of channels in input
-        hidden_dim: Number of hidden channels
-        kernel_size: Size of kernel in convolutions
-        num_layers: Number of LSTM layers stacked on each other
-        bias: Bias or no bias in Convolution
-        return_all_layers: Return the list of computations for all layers
-        Note: Will do same padding.
-    Input:
-        A tensor of size B, T, C, H, W
-    Output:
-
-    """
-
     def __init__(self, hparams: argparse.Namespace):
         super().__init__()
 
@@ -144,7 +129,6 @@ class ContextConvLSTM(nn.Module):
         parser.add_argument("--lc_min", type = int, default = 82)
         parser.add_argument("--lc_max", type = int, default = 104)
         parser.add_argument("--val_n_splits", type = int, default = 20)
-        # TODO add argument in the base.yaml
         return parser
     
 
@@ -198,7 +182,6 @@ class ContextConvLSTM(nn.Module):
 
         # TODO select the data with a sufficient quantity of interesting landcover (not building, not cloud)
         # lc = data["landcover"][(lc >= self.hparams.lc_min).byte() & (lc <= self.hparams.lc_max).byte()]  # [1, 1, 128, 128]
-
 
         state_inputs = torch.cat((hr_dynamic_inputs, static_inputs), dim = 2)
         return state_inputs, meso_dynamic_inputs
