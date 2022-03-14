@@ -51,10 +51,11 @@ class MaskedLoss(nn.Module):
     def forward(self, preds, targets, mask):
         assert(preds.shape == targets.shape)
         predsmasked = preds * mask
+
         if self.rescale:
-            targetsmasked = (targets * 0.6 + 0.2) * mask   # ???
+            targetsmasked = (targets * 0.6 + 0.2) * mask   
         else:
-            targetsmasked = targets * mask  # ???
+            targetsmasked = targets * mask  
 
         if self.distance_type == "L2":
             return F.mse_loss(predsmasked,targetsmasked, reduction='sum')/ ((mask > 0).sum() + 1)  # (input, target, reduction: Specifies the reduction to apply to the output)
@@ -110,8 +111,8 @@ class BaseLoss(nn.Module):
         self.comp_ndvi = True if "comp_ndvi" not in setting else setting["comp_ndvi"]
 
     def forward(self, preds, batch, aux, current_step = None):   
+        
         logs = {}
-
         targs = batch["dynamic"][0][:,-preds.shape[1]:,...] 
 
         if len(batch["dynamic_mask"]) > 0:
@@ -123,7 +124,8 @@ class BaseLoss(nn.Module):
             # NDVI computation
             if targs.shape[2] >= 3 and self.comp_ndvi:
                 targs = ((targs[:,:,3,...] - targs[:,:,2,...])/(targs[:,:,3,...] + targs[:,:,2,...] + 1e-6)).unsqueeze(2)
-            elif targs.shape[2] == 5:  # case kndiv, b, g, r, nr  (bug >= 1 firstly)
+            # kNDVI
+            elif targs.shape[2] >= 1:  # case kndiv, b, g, r, nr  (bug >= 1 firstly)
                 targs = targs[:,:,0,...].unsqueeze(2)
             if masks is not None:
                 masks = masks[:,:,0,...].unsqueeze(2)
@@ -133,6 +135,7 @@ class BaseLoss(nn.Module):
             else:
                 masks = torch.where(masks.byte(), ((lc >= self.min_lc).byte() & (lc <= self.max_lc).byte()).type_as(masks).unsqueeze(1).repeat(1, preds.shape[1], 1, 1, 1), masks)
             masks = torch.where(masks.byte(), (preds >= 0).type_as(masks), masks)
+
 
         dist = self.distance(preds, targs, masks) 
 

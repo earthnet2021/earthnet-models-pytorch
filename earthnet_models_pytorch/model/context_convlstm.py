@@ -1,5 +1,6 @@
 """ContextConvLSTM
 """
+
 from typing import Optional, Union, List
 
 import argparse
@@ -8,6 +9,7 @@ from grpc import dynamic_ssl_server_credentials
 from pip import main
 import torch.nn as nn
 import torch
+import timm 
 import sys
 from earthnet_models_pytorch.utils import str2bool
 
@@ -41,7 +43,7 @@ class ContextConvLSTMCell(nn.Module):
                               kernel_size=self.kernel_size,
                               padding=self.padding,
                               bias=self.bias)
-        
+   
         
     def forward(self, input_tensor, cur_state):
         h_cur, c_cur = cur_state
@@ -97,6 +99,24 @@ class ContextConvLSTM(nn.Module):
                               kernel_size=self.hparams.kernel_size,
                               padding=padding,
                               bias=self.hparams.bias)
+
+        self.conditionnal_encoder = nn.Sequential(
+                            nn.Conv2d(1, 16, 3, stride=3, padding=1),  
+                            nn.ReLU(True),
+                            nn.MaxPool2d(2, stride=2),  
+                            nn.Conv2d(16, 8, 3, stride=2, padding=1),
+                            nn.ReLU(True),
+                            nn.MaxPool2d(2, stride=1) 
+                            )
+
+        self.conditionnal_decoder = nn.Sequential(
+                            nn.ConvTranspose2d(8, 16, 3, stride=2),
+                            nn.ReLU(True),
+                            nn.ConvTranspose2d(16, 8, 5, stride=3, padding=1),
+                            nn.ReLU(True),
+                            nn.ConvTranspose2d(8, 1, 2, stride=2, padding=1),  
+                            nn.Tanh()
+                            )
     
         
     @staticmethod
@@ -133,11 +153,11 @@ class ContextConvLSTM(nn.Module):
     
 
     def forward(self, data, pred_start: int = 0, n_preds: Optional[int] = None):
-        # TODO concat meteo with hidden
-        input_tensor, meteo = self.input_data(data, pred_start, n_preds)
         
+        input_tensor, topology, meteo = self.input_data(data, pred_start, n_preds)
+
         b, t, c, h, w = input_tensor.shape
-        
+
         # initialize hidden states
         h_t, c_t = self.encoder_1_convlstm.init_hidden(batch_size=b, height=h, width=w)
         h_t2, c_t2 = self.encoder_2_convlstm.init_hidden(batch_size=b, height=h, width=w)
@@ -159,9 +179,8 @@ class ContextConvLSTM(nn.Module):
                                                  cur_state=[h_t2, c_t2])
             pred = self.conv(h_t2)
             output += [pred]
-            
-        output = torch.cat(output, dim=0).unsqueeze(0)
-        
+               
+        output = torch.cat(output, dim=1).unsqueeze(2)
         return output, {}
 
 
@@ -177,13 +196,13 @@ class ContextConvLSTM(nn.Module):
         # batch, time, channels, height, width
         _, t, _, _, _ = hr_dynamic_inputs.shape
         
-        meso_dynamic_inputs = data["dynamic"][1][:,c_l:,...].repeat(1, 1, 1, 128, 128)  # meteo  [1, 45, 33] -> [1, 45, 33, 128, 128] ?
+        meso_dynamic_inputs = data["dynamic"][1][:,c_l:,...] #.repeat(1, 1, 1, 128, 128)  # meteo  [1, 45, 33] -> [1, 45, 33, 128, 128] ?
         static_inputs = data["static"][0].unsqueeze(1).repeat(1, t, 1, 1, 1)  # dem [1, 9, 1, 128, 128]
 
         # TODO select the data with a sufficient quantity of interesting landcover (not building, not cloud)
         # lc = data["landcover"][(lc >= self.hparams.lc_min).byte() & (lc <= self.hparams.lc_max).byte()]  # [1, 1, 128, 128]
 
-        state_inputs = torch.cat((hr_dynamic_inputs, static_inputs), dim = 2)
-        return state_inputs, meso_dynamic_inputs
+        # state_inputs = torch.cat((hr_dynamic_inputs, static_inputs), dim = 2)
+        return hr_dynamic_inputs, static_inputs, meso_dynamic_inputs
 
     

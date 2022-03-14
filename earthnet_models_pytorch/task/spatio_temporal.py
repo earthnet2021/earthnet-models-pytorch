@@ -5,6 +5,7 @@ import argparse
 import ast
 import copy
 import json
+import sys
 
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
@@ -130,7 +131,6 @@ class SpatioTemporalTask(pl.LightningModule):
         return loss
 
     def validation_step(self, batch, batch_idx):
-
         data = copy.deepcopy(batch)
 
         data["dynamic"][0] =  data["dynamic"][0][:,:self.context_length,...]  # selection only the context data
@@ -139,14 +139,15 @@ class SpatioTemporalTask(pl.LightningModule):
 
         all_logs = []
         all_viz = []
-        for i in range(self.n_stochastic_preds):
+        for i in range(self.n_stochastic_preds):  # several predictions 
             preds, aux = self(data, pred_start = self.context_length, n_preds = self.target_length)
             all_logs.append(self.loss(preds, batch, aux)[1])
             if self.loss.distance.rescale:
-                preds = ((preds - 0.2)/0.6)
+                preds = ((preds - 0.2)/0.6)  # why ?
+
             if batch_idx < self.hparams.n_log_batches:
                 self.metric.compute_on_step = True
-                scores = self.metric(preds, batch)
+                scores = self.metric(preds, batch)  # Returns the metric value over inputs if ``compute_on_step`` is True
                 self.metric.compute_on_step = False
                 all_viz.append((preds, scores))
             else:

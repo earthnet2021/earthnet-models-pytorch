@@ -35,18 +35,17 @@ class RootMeanSquaredError(Metric):
         """
         # add current step
         with torch.no_grad():
-            self.update(*args, **kwargs)
+            self.update(*args, **kwargs)  # accumulate the metrics
         self._forward_cache = None
 
         if self.compute_on_step:
             kwargs["just_return"] = True
-            out_cache = self.update(*args, **kwargs)
+            out_cache = self.update(*args, **kwargs)  # compute and return the rmse
             kwargs.pop("just_return", None)
             return out_cache
         
     def update(self, preds, targs, just_return = False):  
         '''Any code needed to update the state given any inputs to the metric.'''
-
         lc = targs["landcover"]
 
         if len(targs["dynamic_mask"]) > 0:
@@ -54,14 +53,14 @@ class RootMeanSquaredError(Metric):
             masks = torch.where(masks.byte(), ((lc >= self.lc_min).byte() & (lc <= self.lc_max).byte()).type_as(masks).unsqueeze(1).repeat(1, preds.shape[1], 1, 1, 1), masks)
         else:
             masks = ((lc >= self.lc_min).byte() & (lc <= self.lc_max).byte()).type_as(preds).unsqueeze(1)
-            if len(masks.shape) == 5:  # spacial dimention ?
+            if len(masks.shape) == 5:  # spacial dimentions
                 masks = masks.repeat(1, preds.shape[1], 1, 1, 1)
             else:
                 masks = masks.repeat(1, preds.shape[1], 1)
         
         targets = targs["dynamic"][0][:,-preds.shape[1]:,...]
         if targets.shape[2] >= 3 and self.comp_ndvi:
-            targets = ((targets[:,:,3,...] - targets[:,:,2,...])/(targets[:,:,3,...] + targets[:,:,2,...] + 1e-6)).unsqueeze(2)
+            targets = ((targets[:,:,3,...] - targets[:,:,2,...])/(targets[:,:,3,...] + targets[:,:,2,...] + 1e-6)).unsqueeze(2)  # NDVI computation
         elif targets.shape[2] >= 3:
             targets = targets[:,:,0,...].unsqueeze(2)
         
@@ -79,7 +78,7 @@ class RootMeanSquaredError(Metric):
             self.sum_squared_error += sum_squared_error.sum()
             self.total += n_obs.sum()
 
-    def compute(self):
+    def compute(self):  
         """
         Computes a final value from the state of the metric.
         Computes mean squared error over state.

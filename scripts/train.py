@@ -21,7 +21,7 @@ def train_model(setting_dict: dict, setting_file: str = None):
 
     pl.seed_everything(setting_dict["Seed"])
     # Data
-
+    print('data')
     data_args = ["--{}={}".format(key,value) for key, value in setting_dict["Data"].items()]
     data_parser = ArgumentParser()
     data_parser = DATASETS[setting_dict["Setting"]].add_data_specific_args(data_parser)

@@ -10,7 +10,7 @@ Logger:
 Checkpointer:
     save_top_k: 1
     save_last: True
-    period: 1
+    every_n_epochs: 5 #period: 1
 
 Trainer:
     gpus: 0 #6
