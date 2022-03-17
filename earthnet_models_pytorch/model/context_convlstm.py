@@ -76,7 +76,7 @@ class ContextConvLSTM(nn.Module):
         
         self.ndvi_pred = (hparams.setting in ["en21-veg", "europe-veg", "en21x", "en22"])
 
-        self.encoder_1_convlstm = ContextConvLSTMCell(input_dim=6,  # TODO find a better solution
+        self.encoder_1_convlstm = ContextConvLSTMCell(input_dim=39,  # TODO find a better solution nb of channel 39 = 5 r,b,g, nr, ndvi + 1 dem + 33 meteo
                                                hidden_dim=self.hparams.hidden_dim[0],
                                                kernel_size=self.hparams.kernel_size,
                                                bias=self.hparams.bias)
@@ -85,7 +85,7 @@ class ContextConvLSTM(nn.Module):
                                                hidden_dim=self.hparams.hidden_dim[1],
                                                kernel_size=self.hparams.kernel_size,
                                                bias=self.hparams.bias)
-        self.decoder_1_convlstm = ContextConvLSTMCell(input_dim=self.hparams.hidden_dim[1],
+        self.decoder_1_convlstm = ContextConvLSTMCell(input_dim=self.hparams.hidden_dim[1] + 33,  # 33 meteo
                                                hidden_dim=self.hparams.hidden_dim[2],
                                                kernel_size=self.hparams.kernel_size,
                                                bias=self.hparams.bias)
@@ -99,7 +99,7 @@ class ContextConvLSTM(nn.Module):
                               kernel_size=self.hparams.kernel_size,
                               padding=padding,
                               bias=self.hparams.bias)
-
+        '''
         self.conditionnal_encoder = nn.Sequential(
                             nn.Conv2d(1, 16, 3, stride=3, padding=1),  
                             nn.ReLU(True),
@@ -117,6 +117,7 @@ class ContextConvLSTM(nn.Module):
                             nn.ConvTranspose2d(8, 1, 2, stride=2, padding=1),  
                             nn.Tanh()
                             )
+        '''
     
         
     @staticmethod
@@ -128,8 +129,8 @@ class ContextConvLSTM(nn.Module):
             parent_parser = [parent_parser]
         
         parser = argparse.ArgumentParser(parents = parent_parser, add_help = False)
-        
-        parser.add_argument("--input_dim", type=int, default=6)
+        # TODO checker than each element is in the yaml file !
+        # parser.add_argument("--input_dim", type=int, default=6)
         parser.add_argument("--hidden_dim", type=ast.literal_eval, default=[64, 64, 64, 64])  # TODO find a better type ? list(int)
         parser.add_argument("--kernel_size", type=int, default=3)
         parser.add_argument("--num_layers", type=int, default=4)
@@ -153,8 +154,13 @@ class ContextConvLSTM(nn.Module):
     
 
     def forward(self, data, pred_start: int = 0, n_preds: Optional[int] = None):
-        
-        input_tensor, topology, meteo = self.input_data(data, pred_start, n_preds)
+
+        c_l = self.hparams.context_length if self.training else pred_start
+        # TODO vérifier kndvi/ndvi pour le context, et pour le target. 
+        hr_dynamics, topology, meteo = self.input_data(data, pred_start, n_preds)
+
+        input_tensor = torch.cat((hr_dynamics, topology), dim = 2)
+        input_tensor = torch.cat((input_tensor, meteo[:,(c_l - self.hparams.context_length):c_l,...]), dim = 2) 
 
         b, t, c, h, w = input_tensor.shape
 
@@ -164,8 +170,17 @@ class ContextConvLSTM(nn.Module):
         
         output = []
         
+        # fusion of topology and meteo information
+
         # encoding network
         for t in range(self.hparams.context_length):
+            '''print("autoencoder")
+            state = self.conditionnal_encoder(topology[:, t,...])
+            print(state.shape)
+            state = torch.cat((state, meteo[:, t,...]), dim = 2)
+            print(state.shape)
+            state = self.conditionnal_decoder(state)
+            print(state.shape)'''
             h_t, c_t = self.encoder_1_convlstm(input_tensor=input_tensor[:, t, :, :],
                                                cur_state=[h_t, c_t])  
             h_t2, c_t2 = self.encoder_2_convlstm(input_tensor=h_t,
@@ -173,7 +188,11 @@ class ContextConvLSTM(nn.Module):
             
         # forecasting network
         for t in range(self.hparams.target_length):
-            h_t, c_t = self.decoder_1_convlstm(input_tensor=h_t2,
+
+            meteo_t = meteo[:,c_l + t,...]
+            weather = torch.cat((h_t2, meteo_t), dim=1) 
+
+            h_t, c_t = self.decoder_1_convlstm(input_tensor=weather,
                                                  cur_state=[h_t, c_t]) 
             h_t2, c_t2 = self.decoder_2_convlstm(input_tensor=h_t,
                                                  cur_state=[h_t2, c_t2])
@@ -196,11 +215,11 @@ class ContextConvLSTM(nn.Module):
         # batch, time, channels, height, width
         _, t, _, _, _ = hr_dynamic_inputs.shape
         
-        meso_dynamic_inputs = data["dynamic"][1][:,c_l:,...] #.repeat(1, 1, 1, 128, 128)  # meteo  [1, 45, 33] -> [1, 45, 33, 128, 128] ?
+        meso_dynamic_inputs = data["dynamic"][1].unsqueeze(3).unsqueeze(4).repeat(1, 1, 1, 128, 128)  # meteo  [1, 45, 33] -> [1, 45, 33, 128, 128] ?
         static_inputs = data["static"][0].unsqueeze(1).repeat(1, t, 1, 1, 1)  # dem [1, 9, 1, 128, 128]
 
         # TODO select the data with a sufficient quantity of interesting landcover (not building, not cloud)
-        # lc = data["landcover"][(lc >= self.hparams.lc_min).byte() & (lc <= self.hparams.lc_max).byte()]  # [1, 1, 128, 128]
+        # lc = data["landcover"][(lc >= self.hparams.lc_min).bool() & (lc <= self.hparams.lc_max).bool()]  # [1, 1, 128, 128]
 
         # state_inputs = torch.cat((hr_dynamic_inputs, static_inputs), dim = 2)
         return hr_dynamic_inputs, static_inputs, meso_dynamic_inputs

@@ -13,7 +13,7 @@ Checkpointer:
     every_n_epochs: 5
 
 Trainer:
-    gpus: 2 #6
+    gpus: 1 # 2
     strategy: 'ddp'
     #deterministic: True
     log_every_n_steps: 32
@@ -30,7 +30,6 @@ Trainer:
 Data:
     base_dir: "/workspace/data/scratch/L2_minicubes/" 
     test_track: "iid"
-    # val_pct: 0.01
     train_batch_size: 4 #96
     val_batch_size: 1
     test_batch_size: 1 #96
@@ -82,9 +81,14 @@ Task:
                     milestones: [40,70,90] #[2, 20, 50, 90]
                     gamma: 0.1
     n_log_batches: 8
+    train_batch_size: 4 #96
+    val_batch_size: 1
+    test_batch_size: 1 #96
     compute_metric_on_test: True
 
 Model:
+    context_length: 9
+    target_length: 36
     input_dim: 28
     hidden_dim: [64, 64, 64, 64]
     kernel_size: 3

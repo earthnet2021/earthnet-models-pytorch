@@ -80,6 +80,10 @@ class SpatioTemporalTask(pl.LightningModule):
 
         parser.add_argument('--n_log_batches', type = int, default = 2)
 
+        parser.add_argument('--train_batch_size', type = int, default = 1)
+        parser.add_argument('--val_batch_size', type = int, default = 1)
+        parser.add_argument('--test_batch_size', type = int, default = 1)
+
         parser.add_argument('--optimization', type = ast.literal_eval, default = '{"optimizer": [{"name": "Adam", "args:" {"lr": 0.0001, "betas": (0.9, 0.999)} }], "lr_shedule": [{"name": "multistep", "args": {"milestones": [25, 40], "gamma": 0.1} }]}')
 
         parser.add_argument('--model_shedules', type = ast.literal_eval, default = '[]')
@@ -125,7 +129,7 @@ class SpatioTemporalTask(pl.LightningModule):
 
         for arg in kwargs:
             logs[arg] = kwargs[arg]
-
+        logs['batch_size'] = torch.tensor(self.hparams.train_batch_size, dtype=torch.float32)
         self.log_dict(logs)  
 
         return loss
@@ -154,7 +158,8 @@ class SpatioTemporalTask(pl.LightningModule):
                 self.metric(preds, batch)
         
         mean_logs = {l: torch.tensor([log[l] for log in all_logs], dtype=torch.float32, device = self.device).mean() for l in all_logs[0]}
-        self.log_dict({l+"_val": mean_logs[l] for l in mean_logs}, sync_dist=True)
+        batch_size = torch.tensor(self.hparams.val_batch_size, dtype=torch.float32)
+        self.log_dict({l+"_val": mean_logs[l] for l in mean_logs}, sync_dist=True, batch_size=batch_size)
 
         if batch_idx < self.hparams.n_log_batches and len(preds.shape) == 5:
             if self.logger is not None:

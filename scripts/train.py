@@ -21,7 +21,6 @@ def train_model(setting_dict: dict, setting_file: str = None):
 
     pl.seed_everything(setting_dict["Seed"])
     # Data
-    print('data')
     data_args = ["--{}={}".format(key,value) for key, value in setting_dict["Data"].items()]
     data_parser = ArgumentParser()
     data_parser = DATASETS[setting_dict["Setting"]].add_data_specific_args(data_parser)
@@ -60,9 +59,10 @@ def train_model(setting_dict: dict, setting_file: str = None):
         trainer_dict["profiler"] = pl.profiler.AdvancedProfiler(output_filename="curr_profile")
 
     trainer = pl.Trainer(logger = logger, callbacks = [checkpoint_callback], **trainer_dict)
-
-    dm.setup("fit")
+    
+    # dm.setup("fit") LightningDeprecationWarning: DataModule.setup has already been called, so it will not be called again. In v1.6 this behavior will change to always call DataModule.setup.
     trainer.fit(task, dm)
+    
     print(f"Best model {checkpoint_callback.best_model_path} with score {checkpoint_callback.best_model_score}")
 
     end = time.time()

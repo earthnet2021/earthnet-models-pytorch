@@ -68,7 +68,7 @@ def log_viz(tensorboard_logger, viz_data, batch, batch_idx, current_epoch, mode 
         for j in range(preds.shape[0]):
             if mode == "rgb":
                 rgb = torch.cat([preds[j,:,2,...].unsqueeze(1)*10000,preds[j,:,1,...].unsqueeze(1)*10000,preds[j,:,0,...].unsqueeze(1)*10000],dim = 1)
-                grid = torchvision.utils.make_grid(rgb, nrow = nrow, normalize = True, range = (0,5000))
+                grid = torchvision.utils.make_grid(rgb, nrow = nrow, normalize = True, value_range = (0,5000))
                 text = f"Cube: {scores[j]['name']} ENS: {scores[j]['ENS']:.4f} MAD: {scores[j]['MAD']:.4f} OLS: {scores[j]['OLS']:.4f} EMD: {scores[j]['EMD']:.4f} SSIM: {scores[j]['SSIM']:.4f}"
                 text = torch.tensor(text_phantom(text, width = grid.shape[-1]), dtype=torch.float32, device = targs.device).type_as(grid).permute(2,0,1)
                 grid = torch.cat([grid, text], dim = -2)
@@ -91,7 +91,7 @@ def log_viz(tensorboard_logger, viz_data, batch, batch_idx, current_epoch, mode 
             if i == 0:
                 if targs.shape[2] >= 3:
                     rgb = torch.cat([targs[j,:,2,...].unsqueeze(1)*10000,targs[j,:,1,...].unsqueeze(1)*10000,targs[j,:,0,...].unsqueeze(1)*10000],dim = 1)
-                    grid = torchvision.utils.make_grid(rgb, nrow = nrow, normalize = True, range = (0,5000))
+                    grid = torchvision.utils.make_grid(rgb, nrow = nrow, normalize = True, value_range = (0,5000))
                     tensorboard_logger.add_image(f"Cube: {batch_idx*preds.shape[0] + j} RGB Targets", grid, current_epoch)
                     ndvi = veg_colorize((targs[j,:,3,...] - targs[j,:,2,...])/(targs[j,:,3,...] + targs[j,:,2,...]+1e-6), mask = None if "landcover" not in batch else lc[j,...].repeat(targs.shape[1],1,1), clouds = masks[j,:,0,...] if masks is not None else None, mode = "ndvi")
                 else:

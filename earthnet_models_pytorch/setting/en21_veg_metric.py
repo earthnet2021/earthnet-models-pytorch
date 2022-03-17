@@ -50,9 +50,9 @@ class RootMeanSquaredError(Metric):
 
         if len(targs["dynamic_mask"]) > 0:
             masks = targs["dynamic_mask"][0][:,-preds.shape[1]:,0,...].unsqueeze(2)
-            masks = torch.where(masks.byte(), ((lc >= self.lc_min).byte() & (lc <= self.lc_max).byte()).type_as(masks).unsqueeze(1).repeat(1, preds.shape[1], 1, 1, 1), masks)
+            masks = torch.where(masks.bool(), ((lc >= self.lc_min).bool() & (lc <= self.lc_max).bool()).type_as(masks).unsqueeze(1).repeat(1, preds.shape[1], 1, 1, 1), masks)  # if error change bool by byte
         else:
-            masks = ((lc >= self.lc_min).byte() & (lc <= self.lc_max).byte()).type_as(preds).unsqueeze(1)
+            masks = ((lc >= self.lc_min).bool() & (lc <= self.lc_max).bool()).type_as(preds).unsqueeze(1) # if error change bool by byte
             if len(masks.shape) == 5:  # spacial dimentions
                 masks = masks.repeat(1, preds.shape[1], 1, 1, 1)
             else:

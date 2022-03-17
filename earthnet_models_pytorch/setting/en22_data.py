@@ -41,7 +41,8 @@ class EarthNet2022Dataset(Dataset):
 
         minicube = xr.open_dataset(filepath)
 
-        minicube["kndvi"] = np.tanh(((minicube.nir - minicube.red)/(minicube.nir+minicube.red+1e-6))**2) / np.tanh(1)
+        #minicube["kndvi"] = np.tanh(((minicube.nir - minicube.red)/(minicube.nir+minicube.red+1e-6))**2) / np.tanh(1)
+        minicube["ndvi"] = (minicube.nir - minicube.red)/(minicube.nir+minicube.red+1e-6)
 
         hr_cube = minicube[self.bands].to_array()
         hr = hr_cube.values.transpose((3,0,1,2)).astype(self.type) # t c h w

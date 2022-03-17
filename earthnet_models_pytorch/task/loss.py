@@ -80,9 +80,9 @@ class PixelwiseLoss(nn.Module):
 
         lc = batch["landcover"] 
 
-        masks = ((lc >= self.min_lc).byte() & (lc <= self.max_lc).byte()).type_as(preds).unsqueeze(1).repeat(1, preds.shape[1], 1, 1, 1)  # mask for outlayers using lc threshold 
+        masks = ((lc >= self.min_lc).bool() & (lc <= self.max_lc).bool()).type_as(preds).unsqueeze(1).repeat(1, preds.shape[1], 1, 1, 1)  # mask for outlayers using lc threshold 
 
-        masks = torch.where(masks.byte(), (preds >= 0).type_as(masks), masks)
+        masks = torch.where(masks.bool(), (preds >= 0).type_as(masks), masks)
 
         dist = self.distance(preds, targs, masks)
         
@@ -125,16 +125,16 @@ class BaseLoss(nn.Module):
             if targs.shape[2] >= 3 and self.comp_ndvi:
                 targs = ((targs[:,:,3,...] - targs[:,:,2,...])/(targs[:,:,3,...] + targs[:,:,2,...] + 1e-6)).unsqueeze(2)
             # kNDVI
-            elif targs.shape[2] >= 1:  # case kndiv, b, g, r, nr  (bug >= 1 firstly)
+            elif targs.shape[2] >= 1:  # case kndiv, b, g, r, nr
                 targs = targs[:,:,0,...].unsqueeze(2)
             if masks is not None:
                 masks = masks[:,:,0,...].unsqueeze(2)
             lc = batch["landcover"]
             if masks is None:
-                masks = ((lc >= self.min_lc).byte() & (lc <= self.max_lc).byte()).type_as(preds).unsqueeze(1).repeat(1, preds.shape[1], 1, 1, 1)
+                masks = ((lc >= self.min_lc).bool() & (lc <= self.max_lc).bool()).type_as(preds).unsqueeze(1).repeat(1, preds.shape[1], 1, 1, 1)
             else:
-                masks = torch.where(masks.byte(), ((lc >= self.min_lc).byte() & (lc <= self.max_lc).byte()).type_as(masks).unsqueeze(1).repeat(1, preds.shape[1], 1, 1, 1), masks)
-            masks = torch.where(masks.byte(), (preds >= 0).type_as(masks), masks)
+                masks = torch.where(masks.bool(), ((lc >= self.min_lc).bool() & (lc <= self.max_lc).bool()).type_as(masks).unsqueeze(1).repeat(1, preds.shape[1], 1, 1, 1), masks)
+            masks = torch.where(masks.bool(), (preds >= 0).type_as(masks), masks)
 
 
         dist = self.distance(preds, targs, masks) 

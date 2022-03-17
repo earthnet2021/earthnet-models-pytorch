@@ -111,4 +111,6 @@ def parse_setting(setting_file, track = None):
     if setting_dict["Architecture"] in ["channel-u-net", "local-rnn","rnn", "context-convlstm"]:  
         setting_dict["Model"]["setting"] = setting_dict["Setting"]
 
+    
+
     return setting_dict

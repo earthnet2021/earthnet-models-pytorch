@@ -51,13 +51,12 @@ def fast_dev_run(setting_dict: dict):
     trainer_dict["logger"] = False
     trainer_dict["fast_dev_run"] = 2  # number of batch
     trainer_dict["log_gpu_memory"] = 'all'
-    # trainer_dict["callbacks"] = [pl.callbacks.DeviceStatsMonitor()]
     if "profiler" in trainer_dict:
         trainer_dict["profiler"] = pl.profiler.AdvancedProfiler(output_filename="curr_profile") #TODO better output filename...  # performance analysis
 
     trainer = pl.Trainer(**trainer_dict)  # Customize every aspect of training via flags
 
-    dm.setup("fit")
+    # dm.setup("fit") LightningDeprecationWarning: DataModule.setup has already been called, so it will not be called again. In v1.6 this behavior will change to always call DataModule.setup.
     trainer.fit(task, dm)  # (model, train_dataloader, val_dataloader)
 
     end = time.time()
