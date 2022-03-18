@@ -6,6 +6,19 @@ with open("README.md", "r") as fh:
 
 
 install_requires = [
+    "pytorch",
+    "torchvision",
+    "cudatoolkit",
+    "tensorboard",
+    "numpy",
+    "matplotlib",
+    "pillow",
+    "xarray",
+    "zarr",
+    "netcdf4",
+    "pytorch-lightning",
+    "earthnet",
+    "segmentation-models-pytorch"
     ]
 
 scripts = [
