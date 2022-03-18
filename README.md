@@ -39,6 +39,12 @@ git clone https://github.com/vitusbenson/earthnet-models-pytorch.git
 cd earthnet-models-pytorch
 pip install -e .
 ```
+or:
+```
+pip install earthnet-models-pytorch
+```
+
+Note, the latter is only recommended if all you plan to do is use existing code from earthnet-models-pytorch. For developing, the best is to clone the repository locally and install as editable with `pip install -e`.
 
 ## Debug
 
