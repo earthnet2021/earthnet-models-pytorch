@@ -6,9 +6,6 @@ with open("README.md", "r") as fh:
 
 
 install_requires = [
-    "pytorch",
-    "torchvision",
-    "cudatoolkit",
     "tensorboard",
     "numpy",
     "matplotlib",
