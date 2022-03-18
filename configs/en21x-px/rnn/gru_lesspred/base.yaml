@@ -28,7 +28,7 @@ Trainer:
     #val_check_interval: 0.125
   
 Data:
-    base_dir: "/Net/Groups/BGI/work_1/scratch/EarthNet2021/data/datacubes/minicubes_xs/" #"/scratch/vbenson/minicubes_xs/"
+    base_dir: "path/to/data"
     test_track: "iid"
     val_pct: 0.01
     train_batch_size: 512 #96

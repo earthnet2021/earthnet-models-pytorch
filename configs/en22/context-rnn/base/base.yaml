@@ -10,7 +10,7 @@ Logger:
 Checkpointer:
     save_top_k: 1
     save_last: True
-    period: 1
+    every_n_val_epochs: 1
 
 Trainer:
     gpus: 4 #6
@@ -28,7 +28,7 @@ Trainer:
     val_check_interval: 1.0
   
 Data:
-    base_dir: "/Net/Groups/BGI/scratch/DeepCube/UC1/L2_minicubes/" 
+    base_dir: "path/to/data"
     test_track: "iid"
     train_batch_size: 8 #96
     val_batch_size: 1
@@ -39,7 +39,8 @@ Task:
     loss:
         name: "masked"
         args: {
-            distance_type: "L2"
+            distance_type: "L2",
+            rescale: True
         }
         dist_scale: 1
         state_shedule: {
@@ -78,7 +79,7 @@ Task:
             -
                 name: MultiStepLR
                 args:
-                    milestones: [40,70,90] #[2, 20, 50, 90]
+                    milestones: [60,90] #[2, 20, 50, 90]
                     gamma: 0.1
     n_log_batches: 8
     compute_metric_on_test: True
@@ -93,7 +94,7 @@ Model:
         decoder_merge_policy: cat
         decoder_dropout: 0
     update_encoder_name: MLP
-    update_encoder_inchannels: 94
+    update_encoder_inchannels: 97
     update_encoder_nclasses: 96
     train_lstm_npixels: 512
     lc_min: 2

@@ -13,7 +13,7 @@ Checkpointer:
     period: 1
 
 Trainer:
-    gpus: 6
+    gpus: 4 #6
     accelerator: 'ddp'
     #deterministic: True
     log_every_n_steps: 32
@@ -21,21 +21,20 @@ Trainer:
     #fast_dev_run: True
     #log_gpu_memory: 'all'
     #weights_summary: 'full'
-    max_epochs: 20
+    max_epochs: 100
     #limit_train_batches: 128
     #limit_val_batches: 64
   
 Data:
-    base_dir: /tmp/data/  #"/scratch/EarthNet2021/" #"/workspace/EarthNet2021/earthnet-model-intercomparison-suite/data/datasets/release/" #"/tmp/data/release/" #"/workspace/EarthNet2021/earthnet-model-intercomparison-suite/data/datasets/release/"
-    #landcover_folder: /tmp/data/landcover/ # "/BGI/scratch/EarthNet2021/data/datasets/release/landcover/" #"/tmp/data/release/landcover/"
+    base_dir: "path/to/data"
     test_track: "iid"
     noisy_masked_pixels: False
     use_meso_static_as_dynamic: True
     val_pct: 0.01
-    train_batch_size: 96
+    train_batch_size: 48 #96
     val_batch_size: 16
-    test_batch_size: 96
-    num_workers: 2
+    test_batch_size: 48 #96
+    num_workers: 4 #2
 
 Task:
     loss:
@@ -72,7 +71,7 @@ Task:
                 name: 'Adam'
                 args: 
                     betas: [0.9, 0.999]
-                lr_per_sample: 0.0002
+                lr_per_sample: 0.00002
         lr_shedule:
             -
                 name: 'MultiStepLR'
@@ -85,11 +84,11 @@ Task:
 Model:
     name: "Unet"
     args: 
-        encoder_name: "densenet161"
-        encoder_weights: "imagenet"
+        encoder_name: timm-efficientnet-b5 #efficientnet-b4 #"timm-efficientnet-b4" #resnet50 # #"densenet161"
+        encoder_weights: noisy-student #imagenet #Null #advprop #"imagenet"
         in_channels: 191
         classes: 80
         activation: "sigmoid"
-    noisy_pixel_mask: True
+    noisy_pixel_mask: False
     predictors: True
-    hr_head: False
+    hr_head: True
