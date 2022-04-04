@@ -15,6 +15,8 @@ Checkpointer:
 Trainer:
     gpus: 2
     strategy: 'ddp'
+    accumulate_grad_batches: 8
+    precision: 16
     #deterministic: True
     log_every_n_steps: 32
     #profiler: 'advanced'
@@ -30,7 +32,7 @@ Trainer:
 Data:
     base_dir: "/workspace/data/scratch/L2_minicubes/" 
     test_track: "iid"
-    train_batch_size: 4 #96
+    train_batch_size: 2 #96
     val_batch_size: 1
     test_batch_size: 1 #96
     num_workers: 8 #2
@@ -39,7 +41,8 @@ Task:
     loss:
         name: "masked"
         args: {
-            distance_type: "L2"
+            distance_type: "L2",
+            rescale: True
         }
         dist_scale: 1
         state_shedule: {
@@ -51,7 +54,7 @@ Task:
         inference_shedule: {
             initial_weight: 0,
             increase_from_step: 3000,
-            weight_step: 0.0000000001,
+            weight_step: 0.0000001,
             max_weight: 1
         }
         residuals_shedule: {
@@ -73,15 +76,15 @@ Task:
                 name: Adam
                 args: 
                     betas: [0.9, 0.999]
-                lr_per_sample: 0.000001
+                lr_per_sample: 0.0000001
         lr_shedule:
             -
                 name: MultiStepLR
                 args:
-                    milestones: [10,20, 30] #[2, 20, 50, 90]
+                    milestones: [15,25, 35] #[2, 20, 50, 90]
                     gamma: 0.1
     n_log_batches: 8
-    train_batch_size: 4 #96
+    train_batch_size: 2 #96
     val_batch_size: 1
     test_batch_size: 1 #96
     compute_metric_on_test: True
@@ -89,25 +92,11 @@ Task:
 Model:
     context_length: 9
     target_length: 36
-    input_dim: 28
     hidden_dim: [64, 64, 64, 64]
     kernel_size: 3
     num_layers: 3
     bias: True
     return_all_layers: False
-    state_encoder_name: FPN
-    state_encoder_args: 
-        encoder_name: timm-efficientnet-b3
-        encoder_weights: noisy-student
-        in_channels: 46
-        classes: 256
-        decoder_merge_policy: cat
-        decoder_dropout: 0
-    update_encoder_name: MLP
-    update_encoder_inchannels: 94
-    update_encoder_nclasses: 96
-    train_lstm_npixels: 512
     lc_min: 2
     lc_max: 6
-    val_n_splits: 20
     method: concat

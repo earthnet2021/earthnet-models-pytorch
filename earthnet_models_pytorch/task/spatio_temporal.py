@@ -109,17 +109,8 @@ class SpatioTemporalTask(pl.LightningModule):
         return optimizers, shedulers
 
     
-#     def tbptt_split_batch(self, batch, split_size):
-#         splits = []
-
-#         split_times = [0,15,21,27,33,39,45]
-
-#         for i in range(6):
-#             splits.append({k: batch[k] if "dynamic" not in k else [v[:, split_times[i]:split_times[i+1],...] for v in batch[k]] for k in batch})
-# ˇ        return splits
-
-    
     def training_step(self, batch, batch_idx):
+        '''compute and return the training loss and some additional metrics for e.g. the progress bar or logger'''
         kwargs = {}
         for (shedule_name, shedule) in self.model_shedules:
             kwargs[shedule_name] = shedule(self.global_step)  
@@ -131,10 +122,10 @@ class SpatioTemporalTask(pl.LightningModule):
             logs[arg] = kwargs[arg]
         logs['batch_size'] = torch.tensor(self.hparams.train_batch_size, dtype=torch.float32)
         self.log_dict(logs)  
-
         return loss
 
     def validation_step(self, batch, batch_idx):
+        '''Operates on a single batch of data from the validation set. In this step you d might generate examples or calculate anything of interest like accuracy.'''
         data = copy.deepcopy(batch)
 
         data["dynamic"][0] =  data["dynamic"][0][:,:self.context_length,...]  # selection only the context data
@@ -143,12 +134,14 @@ class SpatioTemporalTask(pl.LightningModule):
 
         all_logs = []
         all_viz = []
+        
         for i in range(self.n_stochastic_preds):  # several predictions 
-            preds, aux = self(data, pred_start = self.context_length, n_preds = self.target_length)
+            preds, aux = self(data, pred_start = self.context_length, n_preds = self.target_length)  # output model
             all_logs.append(self.loss(preds, batch, aux)[1])
             if self.loss.distance.rescale:
-                preds = ((preds - 0.2)/0.6)  # why ?
-
+                preds = ((preds - 0.2)/0.6)  
+   
+            # what's happen ?
             if batch_idx < self.hparams.n_log_batches:
                 self.metric.compute_on_step = True
                 scores = self.metric(preds, batch)  # Returns the metric value over inputs if ``compute_on_step`` is True
@@ -157,9 +150,11 @@ class SpatioTemporalTask(pl.LightningModule):
             else:
                 self.metric(preds, batch)
         
-        mean_logs = {l: torch.tensor([log[l] for log in all_logs], dtype=torch.float32, device = self.device).mean() for l in all_logs[0]}
+        mean_logs = {l: torch.tensor([log[l] for log in all_logs], dtype=torch.float32, device = self.device).mean() for l in all_logs[0]} 
         batch_size = torch.tensor(self.hparams.val_batch_size, dtype=torch.float32)
-        self.log_dict({l+"_val": mean_logs[l] for l in mean_logs}, sync_dist=True, batch_size=batch_size)
+        
+        # loss_val
+        self.log_dict({l+"_val": mean_logs[l] for l in mean_logs}, sync_dist=True, batch_size=batch_size)  
 
         if batch_idx < self.hparams.n_log_batches and len(preds.shape) == 5:
             if self.logger is not None:
@@ -186,6 +181,7 @@ class SpatioTemporalTask(pl.LightningModule):
 
 
     def test_step(self, batch, batch_idx):
+        '''Operates on a single batch of data from the test set. In this step you’d normally generate examples or calculate anything of interest such as accuracy.'''
         scores = []
         for i in range(self.n_stochastic_preds):
             preds, aux = self(batch, pred_start = self.context_length, n_preds = self.target_length)
@@ -236,6 +232,7 @@ class SpatioTemporalTask(pl.LightningModule):
         return scores
     
     def test_epoch_end(self, test_step_outputs):
+        '''Called at the end of a test epoch with the output of all test steps.'''
         if self.hparams.compute_metric_on_test:
             self.pred_dir.mkdir(parents = True, exist_ok = True)
             with open(self.pred_dir/f"individual_scores_{self.global_rank}.json", "w") as fp:
@@ -265,76 +262,4 @@ class SpatioTemporalTask(pl.LightningModule):
                 with open(self.pred_dir/f"individual_scores.json", "w") as fp:
                     json.dump(out, fp)
         return
-
-    # def log_viz(self, viz_data, batch, batch_idx): #TODO factor functionality out, remove duplicity
-    #     tensorboard_logger = self.logger.experiment
-    #     targs = batch["dynamic"][0]
-    #     if "landcover" in batch:
-    #         lc = batch["landcover"]
-    #         lc = 1 - (lc > 63).byte() & (lc < 105).byte()
-    #     masks = batch["dynamic_mask"][0].byte()
-    #     for i, (preds, scores) in enumerate(viz_data):
-    #         for j in range(preds.shape[0]):
-    #             # Predictions RGB
-                
-    #             if not self.ndvi_pred:
-    #                 rgb = torch.cat([preds[j,:,2,...].unsqueeze(1)*10000,preds[j,:,1,...].unsqueeze(1)*10000,preds[j,:,0,...].unsqueeze(1)*10000],dim = 1)
-    #                 grid = torchvision.utils.make_grid(rgb, nrow = 10, normalize = True, range = (0,5000))
-    #                 text = f"Cube: {scores[j]['name']} ENS: {scores[j]['ENS']:.4f} MAD: {scores[j]['MAD']:.4f} OLS: {scores[j]['OLS']:.4f} EMD: {scores[j]['EMD']:.4f} SSIM: {scores[j]['SSIM']:.4f}"
-    #                 text = torch.tensor(self.text_phantom(text, width = grid.shape[-1]), dtype=torch.float32, device = self.device).type_as(grid).permute(2,0,1)
-    #                 grid = torch.cat([grid, text], dim = -2)
-    #                 tensorboard_logger.add_image(f"Cube: {batch_idx*preds.shape[0] + j} RGB Preds, Sample: {i}", grid, self.current_epoch)
-    #                 ndvi = self.ndvi_colorize((preds[j,:,3,...] - preds[j,:,2,...])/(preds[j,:,3,...] + preds[j,:,2,...]+1e-6), mask = None if "landcover" not in batch else lc[j,...].repeat(preds.shape[1],1,1))
-    #                 grid = torchvision.utils.make_grid(ndvi, nrow = 10)
-    #             else:
-    #                 ndvi = self.ndvi_colorize(preds[j,...].squeeze(), mask = None if "landcover" not in batch else lc[j,...].repeat(preds.shape[1],1,1))
-    #                 text = f"Cube: {scores[j]['name']} RMSE: {scores[j]['rmse']:.4f}"
-    #                 grid = torchvision.utils.make_grid(ndvi, nrow = 10)
-    #                 text = torch.tensor(self.text_phantom(text, width = grid.shape[-1]), dtype=torch.float32, device = self.device).type_as(grid).permute(2,0,1)
-    #             grid = torch.cat([grid, text], dim = -2)
-    #             tensorboard_logger.add_image(f"Cube: {batch_idx*preds.shape[0] + j} NDVI Preds, Sample: {i}", grid, self.current_epoch)
-    #             ndvi = (preds[j,:,3,...] - preds[j,:,2,...])/(preds[j,:,3,...] + preds[j,:,2,...]+1e-6) if not self.ndvi_pred else preds[j,...].squeeze()
-    #             ndvi_chg = (ndvi[1:,...]-ndvi[:-1,...]+1)/2
-    #             grid = torchvision.utils.make_grid(ndvi_chg.unsqueeze(1), nrow = 10)
-    #             grid = torch.cat([grid, text], dim = -2)
-    #             tensorboard_logger.add_image(f"Cube: {batch_idx*preds.shape[0] + j} NDVI Change, Sample: {i}", grid, self.current_epoch)
-    #             # Images
-    #             rgb = torch.cat([targs[j,:,2,...].unsqueeze(1)*10000,targs[j,:,1,...].unsqueeze(1)*10000,targs[j,:,0,...].unsqueeze(1)*10000],dim = 1)
-    #             if i == 0:
-    #                 grid = torchvision.utils.make_grid(rgb, nrow = 10, normalize = True, range = (0,5000))
-    #                 self.logger.experiment.add_image(f"Cube: {batch_idx*preds.shape[0] + j} RGB Targets", grid, self.current_epoch)
-    #                 ndvi = self.ndvi_colorize((targs[j,:,3,...] - targs[j,:,2,...])/(targs[j,:,3,...] + targs[j,:,2,...]+1e-6), mask = None if "landcover" not in batch else lc[j,...].repeat(targs.shape[1],1,1), clouds = masks[j,:,0,...])
-    #                 grid = torchvision.utils.make_grid(ndvi, nrow = 10)
-    #                 self.logger.experiment.add_image(f"Cube: {batch_idx*preds.shape[0] + j} NDVI Targets", grid, self.current_epoch)
-
-    # def text_phantom(self, text, width): #TODO move to generic function
-    #     # Create font
-    #     pil_font = ImageFont.load_default()#
-    #     text_width, text_height = pil_font.getsize(text)
-
-    #     # create a blank canvas with extra space between lines
-    #     canvas = Image.new('RGB', [width, text_height], (255, 255, 255))
-
-    #     # draw the text onto the canvas
-    #     draw = ImageDraw.Draw(canvas)
-    #     offset = ((width - text_width) // 2 , 0)
-    #     white = "#000000"
-    #     draw.text(offset, text, font=pil_font, fill=white)
-
-    #     # Convert the canvas into an array with values in [0, 1]
-    #     return (255 - np.asarray(canvas)) / 255.0
-
-    # def ndvi_colorize(self, data, mask = None, clouds = None): #TODO move to generic function or take from earthnet.tk
-    #     # mask has 1 channel
-    #     # clouds has 0 channel
-    #     t,h,w = data.shape
-    #     in_data = copy.deepcopy(data.reshape(-1)).detach().cpu().numpy()
-    #     if mask is not None:
-    #         in_data = np.ma.array(in_data, mask = copy.deepcopy(mask.reshape(-1)).detach().cpu().numpy())            
-    #     cmap = clr.LinearSegmentedColormap.from_list('custom blue', ["#cbbe9a","#fffde4","#bccea5","#66985b","#2e6a32","#123f1e","#0e371a","#01140f","#000d0a"], N=256)
-    #     cmap.set_bad(color='red')
-    #     if clouds is None:
-    #         return torch.as_tensor(cmap(in_data)[:,:3], dtype = data.dtype, device = data.device).reshape(t,h,w,3).permute(0,3,1,2)
-    #     else:
-    #         out = torch.as_tensor(cmap(in_data)[:,:3], dtype = data.dtype, device = data.device).reshape(t,h,w,3).permute(0,3,1,2)
-    #         return torch.stack([torch.where(clouds, out[:,0,...],torch.zeros_like(out[:,0,...], dtype = data.dtype, device = data.device)), torch.where(clouds, out[:,1,...],torch.zeros_like(out[:,1,...], dtype = data.dtype, device = data.device)), torch.where(clouds, out[:,2,...],0.1*torch.ones_like(out[:,2,...], dtype = data.dtype, device = data.device))], dim = 1)
+   

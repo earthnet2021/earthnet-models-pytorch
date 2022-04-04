@@ -13,7 +13,7 @@ Checkpointer:
     every_n_epochs: 5
 
 Trainer:
-    gpus: 2 #6
+    gpus: [4] #6
     strategy: 'ddp'
     #deterministic: True
     log_every_n_steps: 32
@@ -93,20 +93,7 @@ Model:
     hidden_dim: [64, 64, 64, 64]
     kernel_size: 3
     num_layers: 3
-    bias: True
-    return_all_layers: False
-    state_encoder_name: FPN
-    state_encoder_args: 
-        encoder_name: timm-efficientnet-b3
-        encoder_weights: noisy-student
-        in_channels: 46
-        classes: 256
-        decoder_merge_policy: cat
-        decoder_dropout: 0
-    update_encoder_name: MLP
-    update_encoder_inchannels: 94
-    update_encoder_nclasses: 96
-    train_lstm_npixels: 512
     lc_min: 2
     lc_max: 6
     val_n_splits: 20
+    method: 'ablation'

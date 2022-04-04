@@ -73,7 +73,6 @@ class PixelwiseLoss(nn.Module):
         self.max_lc = 104 if "max_lc" not in setting else setting["max_lc"]  
 
     def forward(self, preds, batch, aux, current_step = None):
-
         logs = {}
 
         targs = batch["dynamic"][0][:,-preds.shape[1]:,...]  # the number of sample to predict
@@ -90,8 +89,7 @@ class PixelwiseLoss(nn.Module):
 
         loss = dist
 
-        logs["loss"] = loss  # ??? difference whith distance ? 
-
+        logs["loss"] = loss  
         return loss, logs
 
 
@@ -111,7 +109,6 @@ class BaseLoss(nn.Module):
         self.comp_ndvi = True if "comp_ndvi" not in setting else setting["comp_ndvi"]
 
     def forward(self, preds, batch, aux, current_step = None):   
-        
         logs = {}
         targs = batch["dynamic"][0][:,-preds.shape[1]:,...] 
 
@@ -142,7 +139,7 @@ class BaseLoss(nn.Module):
         logs["distance"] = dist
 
         loss = dist * self.dist_scale
-        
+        '''
         if "state_params" in aux:  # What's happen ?
             state_normal = make_normal_from_raw_params(aux["state_params"])  # create a normal distribution from the given parametres
             kld_state = distrib.kl_divergence(state_normal, distrib.Normal(0,1)).mean()
@@ -166,9 +163,8 @@ class BaseLoss(nn.Module):
             loss += lambda_l2_res * l2_res
             logs["l2_res"] = l2_res
             logs["lambda_l2_res"] = lambda_l2_res
-
+        '''
         logs["loss"] = loss
-
         return loss, logs
 
 
@@ -176,5 +172,5 @@ def setup_loss(args):
     if "pixelwise" in args:  
         if args["pixelwise"]:  # why ?
             return PixelwiseLoss(args)
-        
+
     return BaseLoss(args)

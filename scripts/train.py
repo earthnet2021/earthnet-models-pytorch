@@ -10,6 +10,7 @@ import yaml
 
 import torch
 import pytorch_lightning as pl
+from pytorch_lightning.plugins import DDPPlugin
 
 from earthnet_models_pytorch.model import MODELS, MODELTASKS
 from earthnet_models_pytorch.setting import DATASETS

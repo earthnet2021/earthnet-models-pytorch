@@ -94,7 +94,7 @@ def log_viz(tensorboard_logger, viz_data, batch, batch_idx, current_epoch, mode 
                     grid = torchvision.utils.make_grid(rgb, nrow = nrow, normalize = True, value_range = (0,5000))
                     tensorboard_logger.add_image(f"Cube: {batch_idx*preds.shape[0] + j} RGB Targets", grid, current_epoch)
                     ndvi = veg_colorize((targs[j,:,3,...] - targs[j,:,2,...])/(targs[j,:,3,...] + targs[j,:,2,...]+1e-6), mask = None if "landcover" not in batch else lc[j,...].repeat(targs.shape[1],1,1), clouds = masks[j,:,0,...] if masks is not None else None, mode = "ndvi")
-                else:
+                else: # kndvi               
                     ndvi = veg_colorize(targs[j,:,0,...], mask = None if "landcover" not in batch else lc[j,...].repeat(targs.shape[1],1,1), clouds = None, mode = mode)
                 grid = torchvision.utils.make_grid(ndvi, nrow = nrow)
                 tensorboard_logger.add_image(f"Cube: {batch_idx*preds.shape[0] + j} NDVI Targets", grid, current_epoch)

@@ -47,9 +47,7 @@ class ContextConvLSTMCell(nn.Module):
         
     def forward(self, input_tensor, cur_state):
         h_cur, c_cur = cur_state
-
         combined = torch.cat([input_tensor, h_cur], dim=1)  # concatenate along channel axis
-        
         combined_conv = self.conv(combined)
         cc_i, cc_f, cc_o, cc_g = torch.split(combined_conv, self.hidden_dim, dim=1)
         i = torch.sigmoid(cc_i)
@@ -76,7 +74,15 @@ class ContextConvLSTM(nn.Module):
         
         self.ndvi_pred = (hparams.setting in ["en21-veg", "europe-veg", "en21x", "en22"])
 
-        self.encoder_1_convlstm = ContextConvLSTMCell(input_dim=39,  # TODO find a better solution nb of channel 39 = 5 r,b,g, nr, ndvi + 1 dem + 33 meteo
+        if self.hparams.method == 'concat':
+            input_dim = 39  # # TODO find a better solution nb of channel 39 = 5 r,b,g, nr, ndvi + 1 dem + 33 meteo
+            input_decoder = self.hparams.hidden_dim[1] + 33  # 33 meteo
+        else:
+            input_dim = 6
+            input_decoder = self.hparams.hidden_dim[1] 
+
+
+        self.encoder_1_convlstm = ContextConvLSTMCell(input_dim=input_dim,  
                                                hidden_dim=self.hparams.hidden_dim[0],
                                                kernel_size=self.hparams.kernel_size,
                                                bias=self.hparams.bias)
@@ -85,7 +91,8 @@ class ContextConvLSTM(nn.Module):
                                                hidden_dim=self.hparams.hidden_dim[1],
                                                kernel_size=self.hparams.kernel_size,
                                                bias=self.hparams.bias)
-        self.decoder_1_convlstm = ContextConvLSTMCell(input_dim=self.hparams.hidden_dim[1] + 33,  # 33 meteo
+
+        self.decoder_1_convlstm = ContextConvLSTMCell(input_dim= input_decoder, 
                                                hidden_dim=self.hparams.hidden_dim[2],
                                                kernel_size=self.hparams.kernel_size,
                                                bias=self.hparams.bias)
@@ -93,31 +100,13 @@ class ContextConvLSTM(nn.Module):
                                                hidden_dim=self.hparams.hidden_dim[3],
                                                kernel_size=self.hparams.kernel_size,
                                                bias=self.hparams.bias)
+
         padding = self.hparams.kernel_size // 2, self.hparams.kernel_size // 2
         self.conv = nn.Conv2d(in_channels=self.hparams.hidden_dim[3],
                               out_channels=1,     
                               kernel_size=self.hparams.kernel_size,
                               padding=padding,
                               bias=self.hparams.bias)
-        '''
-        self.conditionnal_encoder = nn.Sequential(
-                            nn.Conv2d(1, 16, 3, stride=3, padding=1),  
-                            nn.ReLU(True),
-                            nn.MaxPool2d(2, stride=2),  
-                            nn.Conv2d(16, 8, 3, stride=2, padding=1),
-                            nn.ReLU(True),
-                            nn.MaxPool2d(2, stride=1) 
-                            )
-
-        self.conditionnal_decoder = nn.Sequential(
-                            nn.ConvTranspose2d(8, 16, 3, stride=2),
-                            nn.ReLU(True),
-                            nn.ConvTranspose2d(16, 8, 5, stride=3, padding=1),
-                            nn.ReLU(True),
-                            nn.ConvTranspose2d(8, 1, 2, stride=2, padding=1),  
-                            nn.Tanh()
-                            )
-        '''
     
         
     @staticmethod
@@ -129,58 +118,47 @@ class ContextConvLSTM(nn.Module):
             parent_parser = [parent_parser]
         
         parser = argparse.ArgumentParser(parents = parent_parser, add_help = False)
-        # TODO checker than each element is in the yaml file !
+
         # parser.add_argument("--input_dim", type=int, default=6)
         parser.add_argument("--hidden_dim", type=ast.literal_eval, default=[64, 64, 64, 64])  # TODO find a better type ? list(int)
         parser.add_argument("--kernel_size", type=int, default=3)
         parser.add_argument("--num_layers", type=int, default=4)
         parser.add_argument("--bias", type=str2bool, default=True)
         parser.add_argument("--return_all_layers", type=str2bool, default=False)
-        parser.add_argument("--state_encoder_name", type = str, default = "FPN")
-        parser.add_argument("--state_encoder_args", type = ast.literal_eval, default = '{"encoder_name": "timm-efficientnet-b4", "encoder_weights": "noisy-student", "in_channels": 191, "classes": 256}')
-        parser.add_argument("--update_encoder_name", type = str, default = "efficientnet_b1")
-        parser.add_argument("--update_encoder_inchannels", type = int, default = 28)
-        parser.add_argument("--update_encoder_nclasses", type = int, default = 128)
-        parser.add_argument("--train_lstm_npixels", type = int, default = 256)
-        parser.add_argument("--setting", type = str, default = "en21x")
+        parser.add_argument("--setting", type = str, default = "en22")
         parser.add_argument("--context_length", type = int, default = 9)
         parser.add_argument("--target_length", type = int, default = 36)
-        parser.add_argument("--use_dem", type = str2bool, default = True)
-        parser.add_argument("--use_soilgrids", type = str2bool, default = True)
         parser.add_argument("--lc_min", type = int, default = 82)
         parser.add_argument("--lc_max", type = int, default = 104)
-        parser.add_argument("--val_n_splits", type = int, default = 20)
+        parser.add_argument("--method", type = str, default = None)
         return parser
     
 
     def forward(self, data, pred_start: int = 0, n_preds: Optional[int] = None):
 
         c_l = self.hparams.context_length if self.training else pred_start
-        # TODO vérifier kndvi/ndvi pour le context, et pour le target. 
-        hr_dynamics, topology, meteo = self.input_data(data, pred_start, n_preds)
+         
+        hr_dynamics, topology, meteo = self.input_data(data, pred_start, n_preds) 
 
-        input_tensor = torch.cat((hr_dynamics, topology), dim = 2)
-        input_tensor = torch.cat((input_tensor, meteo[:,(c_l - self.hparams.context_length):c_l,...]), dim = 2) 
-
+        # Context data
+        if self.hparams.method == 'concat': # concatenation study
+            input_tensor = torch.cat((hr_dynamics, topology), dim = 2)
+            input_tensor = torch.cat((input_tensor, meteo[:,(c_l - self.hparams.context_length):c_l,...]), dim = 2) 
+        else:
+            input_tensor = torch.cat((hr_dynamics, topology), dim = 2)
+        
         b, t, c, h, w = input_tensor.shape
 
         # initialize hidden states
         h_t, c_t = self.encoder_1_convlstm.init_hidden(batch_size=b, height=h, width=w)
         h_t2, c_t2 = self.encoder_2_convlstm.init_hidden(batch_size=b, height=h, width=w)
         
-        output = []
+        # todo weather
         
-        # fusion of topology and meteo information
+        output = []
 
         # encoding network
         for t in range(self.hparams.context_length):
-            '''print("autoencoder")
-            state = self.conditionnal_encoder(topology[:, t,...])
-            print(state.shape)
-            state = torch.cat((state, meteo[:, t,...]), dim = 2)
-            print(state.shape)
-            state = self.conditionnal_decoder(state)
-            print(state.shape)'''
             h_t, c_t = self.encoder_1_convlstm(input_tensor=input_tensor[:, t, :, :],
                                                cur_state=[h_t, c_t])  
             h_t2, c_t2 = self.encoder_2_convlstm(input_tensor=h_t,
@@ -188,11 +166,16 @@ class ContextConvLSTM(nn.Module):
             
         # forecasting network
         for t in range(self.hparams.target_length):
-
             meteo_t = meteo[:,c_l + t,...]
-            weather = torch.cat((h_t2, meteo_t), dim=1) 
+            if self.hparams.method == 'concat':
+                input = torch.cat((h_t2, meteo_t), dim=1) 
+            elif self.hparams.method == 'ablation':
+                input = h_t2
+            elif self.hparams.method == 'pointwise':
+                meteo_t = meteo_t.repeat(1, 1, 2, 1, 1)
+                input = (h_t2 * meteo_t).squeeze(0)
 
-            h_t, c_t = self.decoder_1_convlstm(input_tensor=weather,
+            h_t, c_t = self.decoder_1_convlstm(input_tensor=input,
                                                  cur_state=[h_t, c_t]) 
             h_t2, c_t2 = self.decoder_2_convlstm(input_tensor=h_t,
                                                  cur_state=[h_t2, c_t2])

@@ -63,7 +63,6 @@ class RootMeanSquaredError(Metric):
             targets = ((targets[:,:,3,...] - targets[:,:,2,...])/(targets[:,:,3,...] + targets[:,:,2,...] + 1e-6)).unsqueeze(2)  # NDVI computation
         elif targets.shape[2] >= 3:
             targets = targets[:,:,0,...].unsqueeze(2)
-        
         if len(masks.shape) == 5:
             sum_squared_error = torch.pow(preds * masks - targets * masks, 2).sum((1,2,3,4))  #torch.pow Takes the power of each element in input with exponent and returns a tensor with the result
             n_obs = (masks != 0).sum((1,2,3,4))
