@@ -13,7 +13,7 @@ Checkpointer:
     every_n_epochs: 5
 
 Trainer:
-    gpus: [0, 1]
+    gpus: [2, 3]
     strategy: 'ddp'
     #plugins: 'ddp_find_unused_parameters_false'
     accumulate_grad_batches: 8
@@ -34,7 +34,7 @@ Data:
     base_dir: "/workspace/data/scratch/L2_minicubes/" 
     test_track: "iid"
     train_batch_size: 4 #96
-    val_batch_size: 8
+    val_batch_size: 4
     test_batch_size: 1 #96
     num_workers: 8 #2
 
@@ -77,23 +77,23 @@ Task:
                 name: Adam
                 args: 
                     betas: [0.9, 0.999]
-                lr_per_sample: 0.000001
+                lr_per_sample: 0.0000001
         lr_shedule:
             -
                 name: MultiStepLR
                 args:
-                    milestones: [15,25] #[2, 20, 50, 90]
+                    milestones: [5,15] #[2, 20, 50, 90]
                     gamma: 0.1
     n_log_batches: 8
     train_batch_size: 4 #96
-    val_batch_size: 1
+    val_batch_size: 4
     test_batch_size: 1 #96
     compute_metric_on_test: True
 
 Model:
     context_length: 9
     target_length: 36
-    hidden_dim: [32, 32, 32, 32]
+    hidden_dim: [64, 64, 64, 64]
     kernel_size: 3
     num_layers: 3
     bias: True
@@ -101,3 +101,4 @@ Model:
     lc_min: 2
     lc_max: 6
     method: 'ablation'
+    input: 'RGBN'

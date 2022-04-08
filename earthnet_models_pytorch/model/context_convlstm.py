@@ -1,6 +1,7 @@
 """ContextConvLSTM
 """
 
+from turtle import forward
 from typing import Optional, Union, List
 
 import argparse
@@ -65,6 +66,59 @@ class ContextConvLSTMCell(nn.Module):
                 torch.zeros(batch_size, self.hidden_dim, height, width, device=self.conv.weight.device))
 
 
+class MLP(nn.Module):
+
+    def __init__(self, kernel_size, bias):
+        super().__init__()
+
+        self.kernel_size = kernel_size
+        self.padding = kernel_size // 2, kernel_size // 2
+        self.bias =  bias
+        self.conv1 = nn.Sequential(
+            nn.Conv2d(in_channels=1,
+                              out_channels=33,     # TODO nb of weather variables
+                              kernel_size=self.kernel_size,
+                              padding=self.padding,
+                              bias=self.bias),
+            # nn.Linear(128 * 128, (128 * 128 * 11)), 
+            nn.ReLU()
+            )
+        #self.weather = nn.Sequential(
+        #    nn.Linear(11, 11),
+        #    nn.ReLU()
+        #    )
+        self.norm = torch.nn.BatchNorm2d(33)
+        self.conv2 = nn.Sequential(
+            nn.Conv2d(in_channels=33,
+                              out_channels=11,     # TODO nb of weather variables
+                              kernel_size=self.kernel_size,
+                              padding=self.padding,
+                              bias=self.bias),
+            # nn.Linear(128 * 128, (128 * 128 * 11)), 
+            nn.ReLU()
+            )
+
+        self.conv3 = nn.Sequential(
+            nn.Conv2d(in_channels=11,
+                              out_channels=3,     # TODO nb of weather variables
+                              kernel_size=self.kernel_size,
+                              padding=self.padding,
+                              bias=self.bias),
+            # nn.Linear(128 * 128, (128 * 128 * 11)), 
+            nn.ReLU()
+            )
+
+    def forward(self, topology, weather):
+        x = self.conv1(topology)
+        x = self.norm(x)
+        x = x * weather
+        x = self.conv2(x)
+        x = self.conv3(x)
+        return x
+
+
+
+
 class ContextConvLSTM(nn.Module):
 
     def __init__(self, hparams: argparse.Namespace):
@@ -75,11 +129,23 @@ class ContextConvLSTM(nn.Module):
         self.ndvi_pred = (hparams.setting in ["en21-veg", "europe-veg", "en21x", "en22"])
 
         if self.hparams.method == 'concat':
-            input_dim = 39  # # TODO find a better solution nb of channel 39 = 5 r,b,g, nr, ndvi + 1 dem + 33 meteo
-            input_decoder = self.hparams.hidden_dim[1] + 33  # 33 meteo
+            input_dim = 39  # # TODO find a better solution nb of channel 39 = 5 r,b,g, nr, ndvi + 1 dem + 33 weather
+            input_decoder = self.hparams.hidden_dim[1] + 33  # 33 weather
+        elif self.hparams.method == 'MLP':
+            input_dim = 5 + 3
+            input_decoder = self.hparams.hidden_dim[1]
+        elif self.hparams.input == 'NDVI':
+            input_dim = 1
+            input_decoder = self.hparams.hidden_dim[1]
+        elif self.hparams.input == 'RGBN': # or self.hparams.method == 'MLP':
+            input_dim = 5
+            input_decoder = self.hparams.hidden_dim[1]
         else:
             input_dim = 6
-            input_decoder = self.hparams.hidden_dim[1] 
+            input_decoder = self.hparams.hidden_dim[1]
+
+        if self.hparams.method == 'MLP':
+            self.MLP=MLP(kernel_size=self.hparams.kernel_size, bias=self.hparams.bias)
 
 
         self.encoder_1_convlstm = ContextConvLSTMCell(input_dim=input_dim,  
@@ -131,50 +197,80 @@ class ContextConvLSTM(nn.Module):
         parser.add_argument("--lc_min", type = int, default = 82)
         parser.add_argument("--lc_max", type = int, default = 104)
         parser.add_argument("--method", type = str, default = None)
+        parser.add_argument("--input", type = str, default = None)
         return parser
     
 
     def forward(self, data, pred_start: int = 0, n_preds: Optional[int] = None):
 
+        assert(self.hparams.method in ['ablation', 'concat', 'pointwise', 'MLP'])
+
         c_l = self.hparams.context_length if self.training else pred_start
-         
-        hr_dynamics, topology, meteo = self.input_data(data, pred_start, n_preds) 
+        hr_dynamics, topology, weather = self.input_data(data, pred_start, n_preds) 
 
         # Context data
         if self.hparams.method == 'concat': # concatenation study
             input_tensor = torch.cat((hr_dynamics, topology), dim = 2)
-            input_tensor = torch.cat((input_tensor, meteo[:,(c_l - self.hparams.context_length):c_l,...]), dim = 2) 
+            input_tensor = torch.cat((input_tensor, weather[:,(c_l - self.hparams.context_length):c_l,...]), dim = 2) 
+        elif self.hparams.method == 'MLP':
+            input_tensor = hr_dynamics
         else:
-            input_tensor = torch.cat((hr_dynamics, topology), dim = 2)
-        
-        b, t, c, h, w = input_tensor.shape
+            if self.hparams.input == None:
+                input_tensor = torch.cat((hr_dynamics, topology), dim = 2)
+            elif self.hparams.input == 'NDVI':
+                input_tensor = hr_dynamics[:,:,0,...].unsqueeze(2)
+            elif self.hparams.input == 'RGBN':
+                input_tensor = hr_dynamics
+
+        b, t, _, h, w = input_tensor.shape
 
         # initialize hidden states
         h_t, c_t = self.encoder_1_convlstm.init_hidden(batch_size=b, height=h, width=w)
         h_t2, c_t2 = self.encoder_2_convlstm.init_hidden(batch_size=b, height=h, width=w)
         
-        # todo weather
-        
         output = []
 
         # encoding network
         for t in range(self.hparams.context_length):
-            h_t, c_t = self.encoder_1_convlstm(input_tensor=input_tensor[:, t, :, :],
+            
+            if self.hparams.method == 'MLP':
+                weather_t = weather[:,t,...]
+                weather_representation = self.MLP(topology.squeeze(1), weather_t)
+                input = torch.cat((hr_dynamics[:, t, :, :], weather_representation), dim=1)
+            
+            elif self.hparams.method == 'pointwise':
+                weather_t = weather[:,t,...]
+                if self.hparams.hidden_dim[0] // weather.shape[2] == 2:
+                    weather_t = weather_t.repeat(1, 1, 2, 1, 1)
+                    input = (input_tensor[:, t, :, :] * weather_t).squeeze(0)
+                else:
+                    input = input_tensor[:, t, :, :] * weather_t
+            else:
+                input = input_tensor[:, t, :, :]
+
+            h_t, c_t = self.encoder_1_convlstm(input_tensor=input,
                                                cur_state=[h_t, c_t])  
             h_t2, c_t2 = self.encoder_2_convlstm(input_tensor=h_t,
                                                  cur_state=[h_t2, c_t2])  
             
         # forecasting network
         for t in range(self.hparams.target_length):
-            meteo_t = meteo[:,c_l + t,...]
+            weather_t = weather[:,c_l + t,...]
             if self.hparams.method == 'concat':
-                input = torch.cat((h_t2, meteo_t), dim=1) 
-            elif self.hparams.method == 'ablation':
+                input = torch.cat((h_t2, weather_t), dim=1) 
+            elif self.hparams.method == 'ablation' or 'MLP':
                 input = h_t2
+            elif self.hparams.method == 'MLP':
+                weather_t = weather[:,c_l + t,...]
+                weather_representation = self.MLP(topology.squeeze(1), weather_t)
+                input = torch.cat((h_t2, weather_representation), dim=1)
             elif self.hparams.method == 'pointwise':
-                meteo_t = meteo_t.repeat(1, 1, 2, 1, 1)
-                input = (h_t2 * meteo_t).squeeze(0)
-
+                if self.hparams.hidden_dim[0] // weather.shape[2] == 2:
+                    weather_t = weather_t.repeat(1, 1, 2, 1, 1)
+                    input = (h_t2 * weather_t).squeeze(0)
+                else:
+                    input = h_t2 * weather_t
+                
             h_t, c_t = self.decoder_1_convlstm(input_tensor=input,
                                                  cur_state=[h_t, c_t]) 
             h_t2, c_t2 = self.decoder_2_convlstm(input_tensor=h_t,
@@ -197,9 +293,12 @@ class ContextConvLSTM(nn.Module):
         
         # batch, time, channels, height, width
         _, t, _, _, _ = hr_dynamic_inputs.shape
-        
-        meso_dynamic_inputs = data["dynamic"][1].unsqueeze(3).unsqueeze(4).repeat(1, 1, 1, 128, 128)  # meteo  [1, 45, 33] -> [1, 45, 33, 128, 128] ?
-        static_inputs = data["static"][0].unsqueeze(1).repeat(1, t, 1, 1, 1)  # dem [1, 9, 1, 128, 128]
+        if self.hparams.method == 'MLP':
+            meso_dynamic_inputs = data["dynamic"][1].unsqueeze(3).unsqueeze(4)
+            static_inputs = data["static"][0].unsqueeze(1) # dem [1, 9, 1, 128, 128]
+        else:
+            meso_dynamic_inputs = data["dynamic"][1].unsqueeze(3).unsqueeze(4).repeat(1, 1, 1, 128, 128)  # weather  [1, 45, 33] -> [1, 45, 33, 128, 128] ?
+            static_inputs = data["static"][0].unsqueeze(1).repeat(1, t, 1, 1, 1)  # dem [1, 9, 1, 128, 128]
 
         # TODO select the data with a sufficient quantity of interesting landcover (not building, not cloud)
         # lc = data["landcover"][(lc >= self.hparams.lc_min).bool() & (lc <= self.hparams.lc_max).bool()]  # [1, 1, 128, 128]

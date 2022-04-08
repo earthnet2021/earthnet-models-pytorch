@@ -145,6 +145,8 @@ notebooks/*
 notebooks
 experiments
 experiments/*
+experiments_1
+experiments_1/*
 plots
 plots/*
 checkpoints 

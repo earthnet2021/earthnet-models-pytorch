@@ -34,7 +34,7 @@ Data:
     base_dir: "/workspace/data/scratch/L2_minicubes/" 
     test_track: "iid"
     train_batch_size: 4 #96
-    val_batch_size: 8
+    val_batch_size: 1
     test_batch_size: 1 #96
     num_workers: 8 #2
 
@@ -55,7 +55,7 @@ Task:
         inference_shedule: {
             initial_weight: 0,
             increase_from_step: 3000,
-            weight_step: 0.0000001,
+            weight_step: 0.0000000001,
             max_weight: 1
         }
         residuals_shedule: {
@@ -77,12 +77,12 @@ Task:
                 name: Adam
                 args: 
                     betas: [0.9, 0.999]
-                lr_per_sample: 0.000001
+                lr_per_sample: 0.0000001 
         lr_shedule:
             -
                 name: MultiStepLR
                 args:
-                    milestones: [15,25] #[2, 20, 50, 90]
+                    milestones: [5,10] #[2, 20, 50, 90]
                     gamma: 0.1
     n_log_batches: 8
     train_batch_size: 4 #96
@@ -93,11 +93,11 @@ Task:
 Model:
     context_length: 9
     target_length: 36
-    hidden_dim: [32, 32, 32, 32]
+    hidden_dim: [66, 66, 66, 66]
     kernel_size: 3
     num_layers: 3
     bias: True
     return_all_layers: False
     lc_min: 2
     lc_max: 6
-    method: 'ablation'
+    method: 'MLP'
