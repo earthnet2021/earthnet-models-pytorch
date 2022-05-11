@@ -7,6 +7,7 @@ import torchvision
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 import matplotlib.colors as clr
+import sys
 
 CMAP_NDVI = clr.LinearSegmentedColormap.from_list('ndvi', ["#cbbe9a","#fffde4","#bccea5","#66985b","#2e6a32","#123f1e","#0e371a","#01140f","#000d0a"], N=256)
 CMAP_NDVI.set_bad(color='white')
@@ -89,12 +90,12 @@ def log_viz(tensorboard_logger, viz_data, batch, batch_idx, current_epoch, mode 
             tensorboard_logger.add_image(f"Cube: {batch_idx*preds.shape[0] + j} NDVI Change, Sample: {i}", grid, current_epoch)
             # Images
             if i == 0:
-                if targs.shape[2] >= 3:
+                if mode == 'rgb':
                     rgb = torch.cat([targs[j,:,2,...].unsqueeze(1)*10000,targs[j,:,1,...].unsqueeze(1)*10000,targs[j,:,0,...].unsqueeze(1)*10000],dim = 1)
                     grid = torchvision.utils.make_grid(rgb, nrow = nrow, normalize = True, value_range = (0,5000))
                     tensorboard_logger.add_image(f"Cube: {batch_idx*preds.shape[0] + j} RGB Targets", grid, current_epoch)
                     ndvi = veg_colorize((targs[j,:,3,...] - targs[j,:,2,...])/(targs[j,:,3,...] + targs[j,:,2,...]+1e-6), mask = None if "landcover" not in batch else lc[j,...].repeat(targs.shape[1],1,1), clouds = masks[j,:,0,...] if masks is not None else None, mode = "ndvi")
-                else: # kndvi               
+                else: # kndvi      
                     ndvi = veg_colorize(targs[j,:,0,...], mask = None if "landcover" not in batch else lc[j,...].repeat(targs.shape[1],1,1), clouds = None, mode = mode)
                 grid = torchvision.utils.make_grid(ndvi, nrow = nrow)
                 tensorboard_logger.add_image(f"Cube: {batch_idx*preds.shape[0] + j} NDVI Targets", grid, current_epoch)

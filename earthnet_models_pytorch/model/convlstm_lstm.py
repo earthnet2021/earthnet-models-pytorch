@@ -1,4 +1,4 @@
-"""ContextConvLSTM
+"""ConvLSTM_LSTM
 """
 
 from turtle import forward
@@ -64,52 +64,6 @@ class ContextConvLSTMCell(nn.Module):
         return (torch.zeros(batch_size, self.hidden_dim, height, width, device=self.conv.weight.device),
                 torch.zeros(batch_size, self.hidden_dim, height, width, device=self.conv.weight.device))
 
-
-class CNN(nn.Module):
-
-    def __init__(self, kernel_size, bias):
-        super().__init__()
-
-        self.kernel_size = kernel_size
-        self.padding = kernel_size // 2, kernel_size // 2
-        self.bias =  bias
-
-        self.conv1 = nn.Sequential(
-            nn.Conv2d(in_channels=1,
-                              out_channels=24,     # TODO nb of weather variables
-                              kernel_size=self.kernel_size,
-                              padding=self.padding,
-                              bias=self.bias),
-            nn.Sigmoid()
-            )
-        self.norm = torch.nn.BatchNorm2d(24)
-        self.conv2 = nn.Sequential(
-            nn.Conv2d(in_channels=24,
-                              out_channels=12,     # TODO nb of weather variables
-                              kernel_size=self.kernel_size,
-                              padding=self.padding,
-                              bias=self.bias),
-            nn.ReLU()
-            )
-
-        self.conv3 = nn.Sequential(
-            nn.Conv2d(in_channels=12,
-                              out_channels=2,     # TODO nb of weather variables
-                              kernel_size=self.kernel_size,
-                              padding=self.padding,
-                              bias=self.bias), 
-            nn.ReLU()
-            )
-
-    def forward(self, topology, weather):
-        #weather = self.norm(weather)
-        x = self.conv1(topology)
-        x = self.norm(x)
-        #x = x * weather
-        x = self.conv2(x)
-        x = self.conv3(x)
-        return x
-
 class MLP(nn.Module):
     def __init__(self, dim_features):
         super().__init__()
@@ -127,7 +81,6 @@ class MLP(nn.Module):
         return self.model(weather)
 
 
-
 class ContextConvLSTM(nn.Module):
 
     def __init__(self, hparams: argparse.Namespace):
@@ -141,12 +94,7 @@ class ContextConvLSTM(nn.Module):
         input_encoder = 1  # # TODO find a better solution nb of channel 39 = 5 r,b,g, nr, ndvi + 1 dem + 33 weather
         input_decoder = 1  # 33 weather
 
-        if self.hparams.method == 'CNN':
-            self.CNN=CNN(kernel_size=self.hparams.kernel_size, bias=self.hparams.bias)
-            input_encoder = 3
-            input_decoder = 3 
-
-        elif hparams.method == 'MLP':
+        if hparams.method == 'MLP':
             dim_features = [24, 24, 10, 1]
             self.MLP = MLP(dim_features)
             input_encoder = 2
@@ -185,45 +133,15 @@ class ContextConvLSTM(nn.Module):
 
         padding = self.hparams.kernel_size // 2, self.hparams.kernel_size // 2
 
-        if self.hparams.input == 'RGBNR':        
-            self.conv = nn.Conv2d(in_channels=self.hparams.hidden_dim[1],
-                              out_channels=4,     
-                              kernel_size=self.hparams.kernel_size,
-                              padding=padding,
-                              bias=self.hparams.bias)
-        else:
-            self.conv = nn.Conv2d(in_channels=self.hparams.hidden_dim[1],
-                              out_channels=1,     
-                              kernel_size=self.hparams.kernel_size,
-                              padding=padding,
-                              bias=self.hparams.bias)
+
+        self.conv = nn.Conv2d(in_channels=self.hparams.hidden_dim[1],
+                            out_channels=1,     
+                            kernel_size=self.hparams.kernel_size,
+                            padding=padding,
+                            bias=self.hparams.bias)
 
         self.activation_output = nn.Sigmoid()
 
-        if hparams.method == 'bigger':
-            self.encoder_3_convlstm = ContextConvLSTMCell(input_dim=self.hparams.hidden_dim[1],
-                                               hidden_dim=self.hparams.hidden_dim[2],
-                                               kernel_size=self.hparams.kernel_size,
-                                               bias=self.hparams.bias)
-            self.encoder_4_convlstm = ContextConvLSTMCell(input_dim=self.hparams.hidden_dim[2],
-                                               hidden_dim=self.hparams.hidden_dim[3],
-                                               kernel_size=self.hparams.kernel_size,
-                                               bias=self.hparams.bias)
-
-            self.decoder_3_convlstm = ContextConvLSTMCell(input_dim=self.hparams.hidden_dim[1],
-                                               hidden_dim=self.hparams.hidden_dim[2],
-                                               kernel_size=self.hparams.kernel_size,
-                                               bias=self.hparams.bias)
-            self.decoder_4_convlstm = ContextConvLSTMCell(input_dim=self.hparams.hidden_dim[2],
-                                               hidden_dim=self.hparams.hidden_dim[3],
-                                               kernel_size=self.hparams.kernel_size,
-                                               bias=self.hparams.bias)
-
-            self.conv = nn.Conv2d(in_channels=self.hparams.hidden_dim[3],
-                              out_channels=1,     
-                              kernel_size=self.hparams.kernel_size,
-                              padding=padding,
-                              bias=self.hparams.bias)
         
     @staticmethod
     def add_model_specific_args(parent_parser: Optional[Union[argparse.ArgumentParser,list]] = None):
@@ -256,7 +174,6 @@ class ContextConvLSTM(nn.Module):
     def forward(self, data, pred_start: int = 0, n_preds: Optional[int] = None):
 
         c_l = self.hparams.context_length if self.training else pred_start
-
         # Data
         hr_dynamics = data["dynamic"][0][:,(c_l - self.hparams.context_length):c_l,...]
         target = hr_dynamics[:,:,0,...].unsqueeze(2)
@@ -282,8 +199,6 @@ class ContextConvLSTM(nn.Module):
                 weather_t = weather[:,t,...].repeat(1, 1, 128, 128)  
                 input = torch.cat((target[:,t,...], topology), dim = 1)
                 input= torch.cat((input, weather_t), dim = 1)
-            elif self.hparams.input == 'RGBNR':
-                input = hr_dynamics[:, t, 1:, ...]
 
             else:
                 input = target[:, t, :, :]
@@ -296,17 +211,9 @@ class ContextConvLSTM(nn.Module):
             h_t2, c_t2 = self.encoder_2_convlstm(input_tensor=h_t,
                                                  cur_state=[h_t2, c_t2])  
 
-            if self.hparams.method == 'bigger':
-                h_t3, c_t3 = self.encoder_3_convlstm(input_tensor=h_t2,
-                                                 cur_state=[h_t3, c_t3]) 
-                h_t4, c_t4 = self.encoder_4_convlstm(input_tensor=h_t3,
-                                                 cur_state=[h_t4, c_t4]) 
         
         # First prediction        
-        if self.hparams.method == 'bigger':
-            pred = self.conv(h_t4)
-        else:
-            pred = self.conv(h_t2)
+        pred = self.conv(h_t2)
 
         if self.hparams.skip_connections:
             pred = pred + target[:,-1,...]
@@ -366,4 +273,3 @@ class ContextConvLSTM(nn.Module):
             
         output = torch.cat(output, dim=1).unsqueeze(2)
         return output, {}
-

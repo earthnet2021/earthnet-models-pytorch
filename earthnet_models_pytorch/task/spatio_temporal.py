@@ -113,15 +113,18 @@ class SpatioTemporalTask(pl.LightningModule):
         '''compute and return the training loss and some additional metrics for e.g. the progress bar or logger'''
         kwargs = {}
         for (shedule_name, shedule) in self.model_shedules:
-            kwargs[shedule_name] = shedule(self.global_step)  
-            
-        preds, aux = self(batch, n_preds = self.context_length+self.target_length, kwargs = kwargs)  # call forward of SpatioTemporalTask
+            kwargs[shedule_name] = shedule(self.global_step)  # adjust the learning rate
+        
+        # Predictions generation
+        preds, aux = self(batch, n_preds = self.context_length+self.target_length, kwargs = kwargs) 
         loss, logs = self.loss(preds, batch, aux, current_step = self.global_step)
 
-        for arg in kwargs:
-            logs[arg] = kwargs[arg]
+        # Logs
+        for shedule_name in kwargs:
+            logs[shedule_name] = kwargs[shedule_name]
         logs['batch_size'] = torch.tensor(self.hparams.train_batch_size, dtype=torch.float32)
         self.log_dict(logs)  
+        
         return loss
 
     def validation_step(self, batch, batch_idx):
@@ -138,8 +141,8 @@ class SpatioTemporalTask(pl.LightningModule):
         for i in range(self.n_stochastic_preds):  # several predictions 
             preds, aux = self(data, pred_start = self.context_length, n_preds = self.target_length)  # output model
             all_logs.append(self.loss(preds, batch, aux)[1])
-            if self.loss.distance.rescale:
-                preds = ((preds - 0.2)/0.6)  
+            # if self.loss.distance.rescale:
+            #    preds = ((preds - 0.2)/0.6)  
    
             # what's happen ?
             if batch_idx < self.hparams.n_log_batches:
@@ -181,20 +184,35 @@ class SpatioTemporalTask(pl.LightningModule):
 
 
     def test_step(self, batch, batch_idx):
-        '''Operates on a single batch of data from the test set. In this step you’d normally generate examples or calculate anything of interest such as accuracy.'''
+        '''Operates on a single batch of data from the test set. In this step you d normally generate examples or calculate anything of interest such as accuracy.'''
         scores = []
         for i in range(self.n_stochastic_preds):
+            # Prediction
             preds, aux = self(batch, pred_start = self.context_length, n_preds = self.target_length)
-            if self.loss.distance.rescale:
-                preds = ((preds - 0.2)/0.6)
+
+            lc = batch["landcover"]
+            
+            static = batch["static"][0]
+
             for j in range(preds.shape[0]):
                 if self.hparams.setting in ["en21x", "en22"]:
+                    # Targets
                     targ_path = Path(batch["filepath"][j])
                     targ_cube = xr.open_dataset(targ_path)
                     tile = targ_path.name[:5]
-                    hrd = preds[j,...].permute(2,3,1,0).detach().cpu().numpy() if "full" not in aux else aux["full"][j,...].permute(2,3,1,0).detach().cpu().numpy()
+
+                    hrd = preds[j,...].permute(2,3,1,0).detach().cpu().numpy() if "full" not in aux else aux["full"][j,...].permute(2,3,1,0).detach().cpu().numpy()  # h, w, c, t
+                    
+                    # Masks
+                    masks = ((lc >= self.min_lc).bool() & (lc <= self.max_lc).bool()).type_as(preds)  # mask for outlayers using lc threshold   # mask for outlayers using lc threshold           
+                    masks = masks[j,...].permute(2,1,0).detach().cpu().numpy() 
+                    landcover = lc[j,...].permute(1,2,0).detach().cpu().numpy() 
+                    static = static[j,...].permute(1,2,0).detach().cpu().numpy()
+                    geom = targ_cube.geom
+                 
+                    # Paths
                     if self.n_stochastic_preds == 1:
-                        if targ_path.parents[1].name == "sim_extremes":
+                        if targ_path.parents[1].name == "sim_extremes": 
                             pred_dir = self.pred_dir/targ_path.parents[0].name
                         else:
                             pred_dir = self.pred_dir
@@ -205,18 +223,36 @@ class SpatioTemporalTask(pl.LightningModule):
                         else:
                             pred_dir = self.pred_dir/tile
                         pred_path = pred_dir/f"pred_{i+1}_{targ_path.name}"
+
                     # TODO save all preds for one cube in same file....
                     pred_dir.mkdir(parents = True, exist_ok = True)
+
+                    # Axis
+                    
                     y = targ_cube["y"].values
-                    y[0] = y[1] + 20
-                    y[-1] = y[-2] - 20
                     x = targ_cube["x"].values
-                    x[0] = x[1] - 20
-                    x[-1] = x[-2] + 20
-                    pred_cube = xr.Dataset({"kndvi_pred": xr.DataArray(data = (np.tanh(1) * hrd[:,:,0,:]).clip(0, np.tanh(1)), coords = {"time": targ_cube.time.isel(time = slice(9,45)), "y": y, "x": x}, dims = ["y", "x", "time"])})
-                    pred_cube["kndvi"] = xr.DataArray(data = targ_cube["kndvi"].isel(time = slice(9,45)).values, coords = {"time": targ_cube.time.isel(time = slice(9,45)), "y": y, "x": x}, dims = ["y", "x", "time"])
+
+
+                    # Saving
+                    targ_cube["ndvi_target"] = (targ_cube.nir - targ_cube.red)/(targ_cube.nir+targ_cube.red+1e-6)
+                    pred_cube = xr.Dataset({"ndvi_pred": xr.DataArray(data = hrd[:,:,0,:], coords = {"time": targ_cube.time.isel(time = slice(9,45)), "latitude": y, "longitude": x}, dims = ["latitude", "longitude", "time"])})
+                    pred_cube["ndvi_target"] = xr.DataArray(data = targ_cube["ndvi_target"].isel(time = slice(9,45)).values, coords = {"time": targ_cube.time.isel(time = slice(9,45)), "y": y, "longitude": x}, dims = ["y", "longitude", "time"])
+                    pred_cube["mask"] = xr.DataArray(data = masks[:,:,0], coords = {"latitude": y, "longitude": x}, dims = ["latitude", "longitude"])
+                    pred_cube["landcover"] = xr.DataArray(data = landcover[:,:,0], coords = {"latitude": y, "longitude": x}, dims = ["latitude", "longitude"])
+                    pred_cube["geomorphons"] = xr.DataArray(data = geom, coords = {"latitude": y, "longitude": x}, dims = ["latitude", "longitude"])
+                    pred_cube["SRTM"] = xr.DataArray(data = static[:,:,0], coords = {"latitude": y, "longitude": x}, dims = ["latitude", "longitude"])
+                    
                     if not pred_path.is_file():
-                        pred_cube.to_netcdf(pred_path)
+                        pred_cube.to_netcdf(pred_path, encoding={"ndvi_pred":{"dtype": "float32"}, "ndvi_target":{"dtype": "float32"}, "mask":{"dtype": "float32"}, "landcover":{"dtype": "float32"}, "geomorphons":{"dtype": "float32"}, "SRTM":{"dtype": "float32"}})
+                    
+                    
+                    # Vitus code
+                    # pred_cube = xr.Dataset({"kndvi_pred": xr.DataArray(data = (np.tanh(1) * hrd[:,:,0,:]).clip(0, np.tanh(1)), coords = {"time": targ_cube.time.isel(time = slice(9,45)), "y": y, "x": x}, dims = ["y", "x", "time"])})
+                    # pred_cube["kndvi"] = xr.DataArray(data = targ_cube["kndvi"].isel(time = slice(9,45)).values, coords = {"time": targ_cube.time.isel(time = slice(9,45)), "y": y, "x": x}, dims = ["y", "x", "time"])
+
+                    # if not pred_path.is_file():
+                       # pred_cube.to_netcdf(pred_path)
+                                       
                 else:
                     cubename = batch["cubename"][j]
                     cube_dir = self.pred_dir/cubename[:5]

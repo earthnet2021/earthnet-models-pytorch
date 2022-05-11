@@ -147,6 +147,8 @@ experiments
 experiments/*
 experiments_1
 experiments_1/*
+experiments_old
+experiments_old/*
 plots
 plots/*
 checkpoints 

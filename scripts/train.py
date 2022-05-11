@@ -7,12 +7,14 @@ import shutil
 import os
 import time
 import yaml
-
+import sys
+from torchsummary import summary
 import torch
 import pytorch_lightning as pl
 from pytorch_lightning.plugins import DDPPlugin
 
 from earthnet_models_pytorch.model import MODELS, MODELTASKS
+
 from earthnet_models_pytorch.setting import DATASETS
 from earthnet_models_pytorch.utils import parse_setting
 
@@ -61,7 +63,8 @@ def train_model(setting_dict: dict, setting_file: str = None):
 
     trainer = pl.Trainer(logger = logger, callbacks = [checkpoint_callback], **trainer_dict)
     
-    # dm.setup("fit") LightningDeprecationWarning: DataModule.setup has already been called, so it will not be called again. In v1.6 this behavior will change to always call DataModule.setup.
+    # print(model)
+    # sys.exit()
     trainer.fit(task, dm)
     
     print(f"Best model {checkpoint_callback.best_model_path} with score {checkpoint_callback.best_model_score}")
@@ -70,8 +73,6 @@ def train_model(setting_dict: dict, setting_file: str = None):
 
     print(f"Calculation done in {end - start} seconds.")
     
-
-
 
 
 if __name__ == "__main__":

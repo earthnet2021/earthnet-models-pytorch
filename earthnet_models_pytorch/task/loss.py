@@ -4,8 +4,6 @@ import sys
 
 from typing import Optional, Union
 
-import abc
-
 import torch
 
 from torch import nn
@@ -46,21 +44,21 @@ class MaskedLoss(nn.Module):
     def __init__(self, distance_type = "L2", rescale = False):
         super(MaskedLoss, self).__init__()
         self.distance_type = distance_type
-        self.rescale = rescale
+        # self.rescale = rescale
 
     def forward(self, preds, targets, mask):
         assert(preds.shape == targets.shape)
         predsmasked = preds * mask
-
-        if self.rescale:
-            targetsmasked = (targets * 0.6 + 0.2) * mask   
-        else:
-            targetsmasked = targets * mask  
+        # if self.rescale:
+        #    targetsmasked = (targets * 0.6 + 0.2) * mask   
+        # else:
+        targetsmasked = targets * mask  
 
         if self.distance_type == "L2":
-            return F.mse_loss(predsmasked,targetsmasked, reduction='sum')/ ((mask > 0).sum() + 1)  # (input, target, reduction: Specifies the reduction to apply to the output)
+           return F.mse_loss(predsmasked,targetsmasked, reduction='sum')/ ((mask > 0).sum() + 1)  # (input, target, reduction: Specifies the reduction to apply to the output)
         elif self.distance_type == "L1":
-            return F.l1_loss(predsmasked,targetsmasked, reduction='sum')/ ((mask > 0).sum() + 1)
+           return F.l1_loss(predsmasked,targetsmasked, reduction='sum')/ ((mask > 0).sum() + 1)
+        
 
 LOSSES = {"masked": MaskedLoss}
 
@@ -78,6 +76,7 @@ class PixelwiseLoss(nn.Module):
         targs = batch["dynamic"][0][:,-preds.shape[1]:,...]  # the number of sample to predict
 
         lc = batch["landcover"] 
+        
 
         masks = ((lc >= self.min_lc).bool() & (lc <= self.max_lc).bool()).type_as(preds).unsqueeze(1).repeat(1, preds.shape[1], 1, 1, 1)  # mask for outlayers using lc threshold 
 
@@ -111,19 +110,19 @@ class BaseLoss(nn.Module):
     def forward(self, preds, batch, aux, current_step = None):   
         logs = {}
         targs = batch["dynamic"][0][:,-preds.shape[1]:,...] 
-
         if len(batch["dynamic_mask"]) > 0:
             masks = batch["dynamic_mask"][0][:,-preds.shape[1]:,...]
         else:
             masks = None
-
         if self.ndvi:
             # NDVI computation
-            if targs.shape[2] >= 3 and self.comp_ndvi:
-                targs = ((targs[:,:,3,...] - targs[:,:,2,...])/(targs[:,:,3,...] + targs[:,:,2,...] + 1e-6)).unsqueeze(2)
+            #if targs.shape[2] >= 3 and self.comp_ndvi:
+            #    print('NDVI')
+            #    targs = ((targs[:,:,3,...] - targs[:,:,2,...])/(targs[:,:,3,...] + targs[:,:,2,...] + 1e-6)).unsqueeze(2)
             # kNDVI
-            elif targs.shape[2] >= 1:  # case kndiv, b, g, r, nr
-                targs = targs[:,:,0,...].unsqueeze(2)
+            #elif targs.shape[2] >= 1:  # case kndiv, b, g, r, nr
+            #    print('kNDVI')
+            targs = targs[:,:,0,...].unsqueeze(2)
             if masks is not None:
                 masks = masks[:,:,0,...].unsqueeze(2)
             lc = batch["landcover"]
@@ -131,7 +130,10 @@ class BaseLoss(nn.Module):
                 masks = ((lc >= self.min_lc).bool() & (lc <= self.max_lc).bool()).type_as(preds).unsqueeze(1).repeat(1, preds.shape[1], 1, 1, 1)
             else:
                 masks = torch.where(masks.bool(), ((lc >= self.min_lc).bool() & (lc <= self.max_lc).bool()).type_as(masks).unsqueeze(1).repeat(1, preds.shape[1], 1, 1, 1), masks)
+            
             masks = torch.where(masks.bool(), (preds >= 0).type_as(masks), masks)
+
+
 
 
         dist = self.distance(preds, targs, masks) 

@@ -13,25 +13,25 @@ Checkpointer:
     every_n_epochs: 5
 
 Trainer:
-    gpus: [0]
+    gpus: [6, 7]
     strategy: 'ddp'
     #plugins: 'ddp_find_unused_parameters_false'
-    accumulate_grad_batches: 2
-    precision: 16
+    accumulate_grad_batches: 8
+    # precision: 16
     #deterministic: True
     log_every_n_steps: 32
     #profiler: 'advanced'
     #fast_dev_run: True
     #log_gpu_memory: 'all'
     #weights_summary: 'full'
-    max_epochs: 30
+    max_epochs: 20
     #limit_train_batches: 128
     #limit_val_batches: 64
     gradient_clip_val: 1
     val_check_interval: 0.1
   
 Data:
-    base_dir: "/workspace/data/UC1/L2_minicubes/" 
+    base_dir: "/workspace/data/scratch/L2_minicubes/" 
     test_track: "iid"
     train_batch_size: 4 #96
     val_batch_size: 1
@@ -55,7 +55,7 @@ Task:
         inference_shedule: {
             initial_weight: 0,
             increase_from_step: 3000,
-            weight_step: 0.0000000001,
+            weight_step: 0.0000001,
             max_weight: 1
         }
         residuals_shedule: {
@@ -77,7 +77,7 @@ Task:
                 name: Adam
                 args: 
                     betas: [0.9, 0.999]
-                lr_per_sample: 0.000001
+                lr_per_sample: 0.0000001
         lr_shedule:
             -
                 name: MultiStepLR
@@ -93,7 +93,7 @@ Task:
 Model:
     context_length: 9
     target_length: 36
-    hidden_dim: [66, 66, 66, 66]
+    hidden_dim: [64, 64, 64, 64]
     kernel_size: 3
     num_layers: 3
     bias: True
@@ -101,4 +101,4 @@ Model:
     lc_min: 2
     lc_max: 6
     method: 'ablation'
-    Function: 'neg_ndvi'
+    input: 'NDVI'

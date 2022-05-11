@@ -3,6 +3,7 @@ from typing import Tuple, Optional, Sequence, Union
 
 import copy
 import multiprocessing
+import sys
 
 from torchmetrics import Metric
 import numpy as np
@@ -46,8 +47,10 @@ class RootMeanSquaredError(Metric):
         
     def update(self, preds, targs, just_return = False):  
         '''Any code needed to update the state given any inputs to the metric.'''
+        
         lc = targs["landcover"]
 
+        # Masks
         if len(targs["dynamic_mask"]) > 0:
             masks = targs["dynamic_mask"][0][:,-preds.shape[1]:,0,...].unsqueeze(2)
             masks = torch.where(masks.bool(), ((lc >= self.lc_min).bool() & (lc <= self.lc_max).bool()).type_as(masks).unsqueeze(1).repeat(1, preds.shape[1], 1, 1, 1), masks)  # if error change bool by byte
@@ -58,17 +61,21 @@ class RootMeanSquaredError(Metric):
             else:
                 masks = masks.repeat(1, preds.shape[1], 1)
         
+        # Targets
         targets = targs["dynamic"][0][:,-preds.shape[1]:,...]
         if targets.shape[2] >= 3 and self.comp_ndvi:
             targets = ((targets[:,:,3,...] - targets[:,:,2,...])/(targets[:,:,3,...] + targets[:,:,2,...] + 1e-6)).unsqueeze(2)  # NDVI computation
         elif targets.shape[2] >= 3:
             targets = targets[:,:,0,...].unsqueeze(2)
+        
+        # MSE computation    
         if len(masks.shape) == 5:
-            sum_squared_error = torch.pow(preds * masks - targets * masks, 2).sum((1,2,3,4))  #torch.pow Takes the power of each element in input with exponent and returns a tensor with the result
+            sum_squared_error = torch.pow(preds * masks - targets * masks, 2).sum((1,2,3,4))  
             n_obs = (masks != 0).sum((1,2,3,4))
         else:
             sum_squared_error = torch.pow(preds * masks - targets * masks, 2).sum((1,2))
             n_obs = (masks != 0).sum((1,2))
+            
         if just_return:
             cubenames = targs["cubename"]
             rmse = torch.sqrt(sum_squared_error / n_obs)

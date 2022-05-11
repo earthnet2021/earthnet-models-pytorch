@@ -1,3 +1,4 @@
+
 Architecture: "context-convlstm"
 
 Seed: 42
@@ -24,7 +25,7 @@ Trainer:
     #fast_dev_run: True
     #log_gpu_memory: 'all'
     #weights_summary: 'full'
-    max_epochs: 30
+    max_epochs: 200
     #limit_train_batches: 128
     #limit_val_batches: 64
     gradient_clip_val: 1
@@ -68,8 +69,8 @@ Task:
         min_lc: 2
         max_lc: 6
         comp_ndvi: True
-    context_length: 9
-    target_length: 36
+    context_length: 10
+    target_length: 35
     n_stochastic_preds: 1
     optimization:
         optimizer:
@@ -77,12 +78,12 @@ Task:
                 name: Adam
                 args: 
                     betas: [0.9, 0.999]
-                lr_per_sample: 0.00000001
+                lr_per_sample: 0.000001
         lr_shedule:
             -
                 name: MultiStepLR
                 args:
-                    milestones: [15,25] #[2, 20, 50, 90]
+                    milestones: [1500] #[2, 20, 50, 90]
                     gamma: 0.1
     n_log_batches: 8
     train_batch_size: 4 #96
@@ -91,8 +92,8 @@ Task:
     compute_metric_on_test: True
 
 Model:
-    context_length: 9
-    target_length: 36
+    context_length: 10
+    target_length: 35
     hidden_dim: [64, 64, 64, 64]
     kernel_size: 3
     num_layers: 3
@@ -100,4 +101,5 @@ Model:
     return_all_layers: False
     lc_min: 2
     lc_max: 6
-    method: 'ablation'
+    input: 'NDVI+T+W'
+    skip_connections: True

@@ -1,4 +1,5 @@
-Architecture: "context-convlstm"
+
+Architecture: "dumby-mlp"
 
 Seed: 42
 
@@ -13,10 +14,10 @@ Checkpointer:
     every_n_epochs: 5
 
 Trainer:
-    gpus: [0]
+    gpus: [4, 5]
     strategy: 'ddp'
     #plugins: 'ddp_find_unused_parameters_false'
-    accumulate_grad_batches: 2
+    accumulate_grad_batches: 8
     precision: 16
     #deterministic: True
     log_every_n_steps: 32
@@ -24,14 +25,14 @@ Trainer:
     #fast_dev_run: True
     #log_gpu_memory: 'all'
     #weights_summary: 'full'
-    max_epochs: 30
+    max_epochs: 100
     #limit_train_batches: 128
     #limit_val_batches: 64
     gradient_clip_val: 1
     val_check_interval: 0.1
   
 Data:
-    base_dir: "/workspace/data/UC1/L2_minicubes/" 
+    base_dir: "/workspace/data/scratch/L2_minicubes/" 
     test_track: "iid"
     train_batch_size: 4 #96
     val_batch_size: 1
@@ -55,7 +56,7 @@ Task:
         inference_shedule: {
             initial_weight: 0,
             increase_from_step: 3000,
-            weight_step: 0.0000000001,
+            weight_step: 0.0000001,
             max_weight: 1
         }
         residuals_shedule: {
@@ -68,8 +69,8 @@ Task:
         min_lc: 2
         max_lc: 6
         comp_ndvi: True
-    context_length: 9
-    target_length: 36
+    context_length: 35
+    target_length: 10
     n_stochastic_preds: 1
     optimization:
         optimizer:
@@ -82,7 +83,7 @@ Task:
             -
                 name: MultiStepLR
                 args:
-                    milestones: [15,25] #[2, 20, 50, 90]
+                    milestones: [150] #[2, 20, 50, 90]
                     gamma: 0.1
     n_log_batches: 8
     train_batch_size: 4 #96
@@ -91,14 +92,13 @@ Task:
     compute_metric_on_test: True
 
 Model:
-    context_length: 9
-    target_length: 36
-    hidden_dim: [66, 66, 66, 66]
+    context_length: 35
+    target_length: 10
+    hidden_dim: [64, 64, 64, 64]
     kernel_size: 3
     num_layers: 3
     bias: True
     return_all_layers: False
     lc_min: 2
     lc_max: 6
-    method: 'ablation'
-    Function: 'neg_ndvi'
+    input: 'NDVI+T+W'

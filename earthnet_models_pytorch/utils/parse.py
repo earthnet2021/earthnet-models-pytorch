@@ -92,7 +92,7 @@ def parse_setting(setting_file, track = None):
     bs = setting_dict["Data"]["train_batch_size"]
     gpus = setting_dict["Trainer"]["gpus"]
     ddp = (setting_dict["Trainer"]["strategy"] == "ddp")
-    print(ddp)
+    
     optimizers = setting_dict["Task"]["optimization"]["optimizer"]
     for optimizer in optimizers:  
         if "lr_per_sample" in optimizer:
@@ -114,7 +114,7 @@ def parse_setting(setting_file, track = None):
         if "pred_dir" not in setting_dict["Task"]:
             setting_dict["Task"]["pred_dir"] = Path(setting_dict["Logger"]["save_dir"])/setting_dict["Logger"]["name"]/setting_dict["Logger"]["version"]/"preds"/track
 
-    if setting_dict["Architecture"] in ["channel-u-net", "local-rnn","rnn", "context-convlstm"]:  
+    if setting_dict["Architecture"] in ["channel-u-net", "local-rnn","rnn", "context-convlstm", "u-net-convlstm", "dumby-mlp"]:  
         setting_dict["Model"]["setting"] = setting_dict["Setting"]
 
     

@@ -10,10 +10,10 @@ Logger:
 Checkpointer:
     save_top_k: 1
     save_last: True
-    every_n_epochs: 5 #period: 1
+    every_n_val_epochs: 1
 
 Trainer:
-    gpus: 0 #6
+    gpus: [6, 7]
     strategy: 'ddp'
     #deterministic: True
     log_every_n_steps: 32
@@ -28,18 +28,19 @@ Trainer:
     val_check_interval: 1.0
   
 Data:
-    base_dir: "/workspace/data/UC1/L2_minicubes/" 
+    base_dir: "/workspace/data/UC1/L2_minicubes/"
     test_track: "iid"
-    train_batch_size: 8 #96
+    train_batch_size: 4 #96
     val_batch_size: 1
     test_batch_size: 1 #96
-    num_workers: 0 # 16 #2
+    num_workers: 8 #2
 
 Task:
     loss:
         name: "masked"
         args: {
-            distance_type: "L2"
+            distance_type: "L2",
+            rescale: False
         }
         dist_scale: 1
         state_shedule: {
@@ -64,6 +65,7 @@ Task:
         min_lc: 2
         max_lc: 6
         comp_ndvi: False
+
     context_length: 9
     target_length: 36
     n_stochastic_preds: 1
@@ -78,9 +80,12 @@ Task:
             -
                 name: MultiStepLR
                 args:
-                    milestones: [40,70,90] #[2, 20, 50, 90]
+                    milestones: [60,90] #[2, 20, 50, 90]
                     gamma: 0.1
     n_log_batches: 8
+    train_batch_size: 4 #96
+    val_batch_size: 1
+    test_batch_size: 1 #96
     compute_metric_on_test: True
 
 Model:
@@ -89,13 +94,10 @@ Model:
         encoder_name: timm-efficientnet-b3
         encoder_weights: noisy-student
         in_channels: 46
-        classes: 256
+        classes: 192
         decoder_merge_policy: cat
         decoder_dropout: 0
-    update_encoder_name: MLP
-    update_encoder_inchannels: 94
+    update_encoder_name: efficientnet_b1
     update_encoder_nclasses: 96
-    train_lstm_npixels: 512
-    lc_min: 2
-    lc_max: 6
-    val_n_splits: 20
+    update_encoder_inchannels: 24
+    train_lstm_npixels: 4096
