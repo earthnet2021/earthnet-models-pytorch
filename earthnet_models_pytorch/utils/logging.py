@@ -55,7 +55,6 @@ def veg_colorize(data, mask = None, clouds = None, mode = "ndvi"): #TODO move to
 
 def log_viz(tensorboard_logger, viz_data, batch, batch_idx, current_epoch, mode = "rgb"):
     targs = batch["dynamic"][0]
-
     nrow = 9 if targs.shape[1]%9 == 0 else 10
 
     if "landcover" in batch:

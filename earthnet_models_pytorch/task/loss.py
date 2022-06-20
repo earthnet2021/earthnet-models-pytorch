@@ -49,15 +49,18 @@ class MaskedLoss(nn.Module):
     def forward(self, preds, targets, mask):
         assert(preds.shape == targets.shape)
         predsmasked = preds * mask
-        # if self.rescale:
-        #    targetsmasked = (targets * 0.6 + 0.2) * mask   
-        # else:
         targetsmasked = targets * mask  
 
         if self.distance_type == "L2":
-           return F.mse_loss(predsmasked,targetsmasked, reduction='sum')/ ((mask > 0).sum() + 1)  # (input, target, reduction: Specifies the reduction to apply to the output)
+            #if preds.shape[2] == 5:
+            #    return torch.sum(F.mse_loss(predsmasked,targetsmasked, reduction='none'), dim=[0,1,3,4])/ ((mask > 0).sum() + 1)
+            #else:
+            return F.mse_loss(predsmasked,targetsmasked, reduction='sum')/ ((mask > 0).sum() + 1)  # (input, target, reduction: Specifies the reduction to apply to the output)
         elif self.distance_type == "L1":
-           return F.l1_loss(predsmasked,targetsmasked, reduction='sum')/ ((mask > 0).sum() + 1)
+            #if preds.shape[2] == 5:
+            #return torch.sum(F.l1_loss(predsmasked,targetsmasked, reduction='none'), dim=[0,1,3,4])/ ((mask > 0).sum() + 1)
+            #else:
+            return F.l1_loss(predsmasked,targetsmasked, reduction='sum')/ ((mask > 0).sum() + 1)
         
 
 LOSSES = {"masked": MaskedLoss}
@@ -98,9 +101,9 @@ class BaseLoss(nn.Module):
     def __init__(self, setting: dict):
         super().__init__()
         self.distance = LOSSES[setting["name"]](**setting["args"])
-        self.lambda_state = WeightShedule(**setting["state_shedule"]) # speed of the learning rate ? (I think)
-        self.lambda_infer = WeightShedule(**setting["inference_shedule"])
-        self.lambda_l2_res =  WeightShedule(**setting["residuals_shedule"])
+        #self.lambda_state = WeightShedule(**setting["state_shedule"]) # speed of the learning rate ? (I think)
+        #self.lambda_infer = WeightShedule(**setting["inference_shedule"])
+        #self.lambda_l2_res =  WeightShedule(**setting["residuals_shedule"])
         self.dist_scale = 1 if "dist_scale" not in setting else setting["dist_scale"]
         self.ndvi = False if "ndvi" not in setting else setting["ndvi"]
         self.min_lc = 82 if "min_lc" not in setting else setting["min_lc"]
@@ -116,13 +119,8 @@ class BaseLoss(nn.Module):
             masks = None
         if self.ndvi:
             # NDVI computation
-            #if targs.shape[2] >= 3 and self.comp_ndvi:
-            #    print('NDVI')
-            #    targs = ((targs[:,:,3,...] - targs[:,:,2,...])/(targs[:,:,3,...] + targs[:,:,2,...] + 1e-6)).unsqueeze(2)
-            # kNDVI
-            #elif targs.shape[2] >= 1:  # case kndiv, b, g, r, nr
-            #    print('kNDVI')
-            targs = targs[:,:,0,...].unsqueeze(2)
+            if preds.shape[2] == 1:
+                targs = targs[:,:,0,...].unsqueeze(2)
             if masks is not None:
                 masks = masks[:,:,0,...].unsqueeze(2)
             lc = batch["landcover"]

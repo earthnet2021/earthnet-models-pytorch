@@ -44,6 +44,9 @@ def train_model(setting_dict: dict, setting_file: str = None):
     task_params = task_parser.parse_args(task_args)
     task = MODELTASKS[setting_dict["Architecture"]](model = model, hparams = task_params)
     
+    #task.load_from_checkpoint(checkpoint_path = "experiments/en22/context-convlstm/baseline_convlstm_bigger/full_train/checkpoints/last.ckpt", context_length = setting_dict["Task"]["context_length"], target_length = setting_dict["Task"]["target_length"], model = model, hparams = task_params)
+
+
     # Logger
     logger = pl.loggers.TensorBoardLogger(**setting_dict["Logger"])
 
@@ -54,6 +57,7 @@ def train_model(setting_dict: dict, setting_file: str = None):
             yaml.dump(setting_dict, fp)
 
     # Checkpointing
+    
     checkpoint_callback = pl.callbacks.ModelCheckpoint(**setting_dict["Checkpointer"])
 
     # Trainer

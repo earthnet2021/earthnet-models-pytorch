@@ -84,28 +84,27 @@ def negative_ndvi(dataloader: DataLoader):
     num_batches, total_neg = 0, 0
     min_lc = 2
     max_lc = 6
-    targ_cube["ndvi_target"] = (targ_cube.nir - targ_cube.red)/(targ_cube.nir+targ_cube.red+1e-6)
-    
-    for data in dataloader:
-        targ_path = Path(data["filepath"][j])
-        targ_cube = xr.open_dataset(targ_path)
-        targ_cube["ndvi_target"] = (targ_cube.nir - targ_cube.red)/(targ_cube.nir+targ_cube.red+1e-6)
+    for j in range(45):
+        for data in dataloader:
+            targ_path = Path(data["filepath"][j])
+            targ_cube = xr.open_dataset(targ_path)
+            targ_cube["ndvi_target"] = (targ_cube.nir - targ_cube.red)/(targ_cube.nir+targ_cube.red+1e-6)
 
-        ndvi = data['dynamic'][0][:,:,0,...]
-        lc = data["landcover"]
+            ndvi = data['dynamic'][0][:,:,0,...]
+            lc = data["landcover"]
 
-        masks = ((lc >= min_lc).bool() & (lc <= max_lc).bool()).type_as(ndvi).repeat(1, 45, 1, 1)
+            masks = ((lc >= min_lc).bool() & (lc <= max_lc).bool()).type_as(ndvi).repeat(1, 45, 1, 1)
 
-        masks = torch.where(masks.bool(), (ndvi >= 0).type_as(masks), masks)
+            masks = torch.where(masks.bool(), (ndvi >= 0).type_as(masks), masks)
 
-        ndvi = ndvi * masks
+            ndvi = ndvi * masks
 
-        neg_ndvi = torch.sum(ndvi < 0, dim=[1,2,3])
-        print(neg_ndvi)
-        total_neg += torch.sum(ndvi < 0)
-        
-        #if num_batches % 100 == 0:
-        num_batches += 1
+            neg_ndvi = torch.sum(ndvi < 0, dim=[1,2,3])
+            print(neg_ndvi)
+            total_neg += torch.sum(ndvi < 0)
+            
+            #if num_batches % 100 == 0:
+            num_batches += 1
 
     return total_neg/(4*num_batches)
 

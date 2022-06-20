@@ -156,11 +156,19 @@ class ContextConvLSTM(nn.Module):
             input_encoder = 2
             input_decoder = 2
         elif self.hparams.input == 'NDVI+T+W':
+            #input_encoder = 1 + 1 + 15
+            #input_decoder = 1 + 1 + 15
             input_encoder = 1 + 1 + 24
             input_decoder = 1 + 1 + 24
+        elif self.hparams.input == 'NDVI+T+W+lc':
+            input_encoder = 1 + 1 + 24 + 1
+            input_decoder = 1 + 1 + 24 + 1
         elif self.hparams.input == 'RGBNR':  
-            input_encoder = 4
-            input_decoder = 4
+            input_encoder = 5 + 25
+            input_decoder = 5 + 25
+        else:
+            input_encoder = 1
+            input_decoder = 1
 
 
         self.encoder_1_convlstm = ContextConvLSTMCell(input_dim=input_encoder,  
@@ -187,7 +195,7 @@ class ContextConvLSTM(nn.Module):
 
         if self.hparams.input == 'RGBNR':        
             self.conv = nn.Conv2d(in_channels=self.hparams.hidden_dim[1],
-                              out_channels=4,     
+                              out_channels=5,     
                               kernel_size=self.hparams.kernel_size,
                               padding=padding,
                               bias=self.hparams.bias)
@@ -259,9 +267,13 @@ class ContextConvLSTM(nn.Module):
 
         # Data
         hr_dynamics = data["dynamic"][0][:,(c_l - self.hparams.context_length):c_l,...]
-        target = hr_dynamics[:,:,0,...].unsqueeze(2)
+        if self.hparams.input == 'RGBNR':
+            target = hr_dynamics[:,:,:,...]
+        else:
+            target = hr_dynamics[:,:,0,...].unsqueeze(2)
         weather = data["dynamic"][1].unsqueeze(3).unsqueeze(4)
         topology = data["static"][0]
+        landcover = data["landcover"]
 
         # Shape
         b, t, _, h, w = data["dynamic"][0].shape
@@ -276,14 +288,22 @@ class ContextConvLSTM(nn.Module):
 
         # encoding network
         for t in range(self.hparams.context_length):
+
             if self.hparams.input =='NDVI+T':
                 input = torch.cat((target[:, t,...], topology), dim=1)
             elif self.hparams.input == 'NDVI+T+W':
                 weather_t = weather[:,t,...].repeat(1, 1, 128, 128)  
                 input = torch.cat((target[:,t,...], topology), dim = 1)
                 input= torch.cat((input, weather_t), dim = 1)
+            elif self.hparams.input == 'NDVI+T+W+lc':
+                weather_t = weather[:,t,...].repeat(1, 1, 128, 128)  
+                input = torch.cat((target[:,t,...], topology), dim = 1)
+                input = torch.cat((input, landcover), dim = 1)
+                input= torch.cat((input, weather_t), dim = 1)
             elif self.hparams.input == 'RGBNR':
-                input = hr_dynamics[:, t, 1:, ...]
+                weather_t = weather[:,t,...].repeat(1, 1, 128, 128)  
+                input = torch.cat((target[:,t,...], topology), dim = 1)
+                input= torch.cat((input, weather_t), dim = 1)
 
             else:
                 input = target[:, t, :, :]
@@ -312,7 +332,7 @@ class ContextConvLSTM(nn.Module):
             pred = pred + target[:,-1,...]
 
         if self.hparams.method == 'MLP':
-            pred = pred + self.MLP(weather[:,c_l + t,...].squeeze(3).squeeze(2)).unsqueeze(2).unsqueeze(3).repeat(1, 1, 128, 128) 
+            pred = pred + self.MLP(weather[:,t,...].squeeze(3).squeeze(2)).unsqueeze(2).unsqueeze(3).repeat(1, 1, 128, 128) 
                             
         pred = self.activation_output(pred)
 
@@ -329,14 +349,31 @@ class ContextConvLSTM(nn.Module):
                 weather_t = weather[:,c_l + t,...].repeat(1, 1, 128, 128)  
                 pred = torch.cat((pred, topology), dim = 1)
                 pred = torch.cat((pred, weather_t), dim = 1)
+            elif self.hparams.input == 'NDVI+T+W+lc':
+                weather_t = weather[:,c_l + t,...].repeat(1, 1, 128, 128)  
+                pred = torch.cat((pred, landcover), dim = 1)
+                pred = torch.cat((pred, topology), dim = 1)
+                pred = torch.cat((pred, weather_t), dim = 1)
+            elif self.hparams.input == 'RGBNR':
+                weather_t = weather[:,c_l + t,...].repeat(1, 1, 128, 128)  
+                pred = torch.cat((pred, topology), dim = 1)
+                pred = torch.cat((pred, weather_t), dim = 1)
 
             #first block
-            h_t, c_t = self.decoder_1_convlstm(input_tensor=pred,
+            if self.hparams.method == 'stack':
+                h_t, c_t = self.encoder_1_convlstm(input_tensor=pred,
                                                  cur_state=[h_t, c_t]) 
 
-            # Second block
-            h_t2, c_t2 = self.decoder_2_convlstm(input_tensor=h_t,
-                                                 cur_state=[h_t2, c_t2])
+                # Second block
+                h_t2, c_t2 = self.encoder_2_convlstm(input_tensor=h_t,
+                                                    cur_state=[h_t2, c_t2])
+            else:
+                h_t, c_t = self.decoder_1_convlstm(input_tensor=pred,
+                                                    cur_state=[h_t, c_t]) 
+
+                # Second block
+                h_t2, c_t2 = self.decoder_2_convlstm(input_tensor=h_t,
+                                                    cur_state=[h_t2, c_t2])
 
             pred = h_t2
 
@@ -356,14 +393,9 @@ class ContextConvLSTM(nn.Module):
                 pred = pred + self.MLP(weather[:,c_l + t,...].squeeze(3).squeeze(2)).unsqueeze(2).unsqueeze(3).repeat(1, 1, 128, 128)
 
             # Output
-            if self.hparams.input == 'RGBNR':
-                targ = ((pred[:,3,...] - pred[:,2,...])/(pred[:,3,...] + pred[:,2,...] + 1e-6)).unsqueeze(1)
-                targ = self.activation_output(targ)
-                output += [targ]
-            else:
-                pred = self.activation_output(pred)
-                output += [pred]
-            
-        output = torch.cat(output, dim=1).unsqueeze(2)
+            pred = self.activation_output(pred)
+            output += [pred.unsqueeze(1)]
+
+        output = torch.cat(output, dim=1) #.unsqueeze(2)
         return output, {}
 

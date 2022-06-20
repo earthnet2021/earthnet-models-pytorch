@@ -13,7 +13,7 @@ Checkpointer:
     every_n_epochs: 5
 
 Trainer:
-    gpus: [0]
+    gpus: [5]
     strategy: 'ddp'
     #plugins: 'ddp_find_unused_parameters_false'
     accumulate_grad_batches: 2
@@ -101,4 +101,4 @@ Model:
     lc_min: 2
     lc_max: 6
     method: 'ablation'
-    Function: 'neg_ndvi'
+    #Function: 'neg_ndvi'

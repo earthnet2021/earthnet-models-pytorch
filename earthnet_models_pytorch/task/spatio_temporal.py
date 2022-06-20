@@ -47,6 +47,9 @@ class SpatioTemporalTask(pl.LightningModule):
         self.context_length = hparams.context_length
         self.target_length = hparams.target_length
 
+        self.min_lc = hparams.min_lc
+        self.max_lc = hparams.max_lc
+
         self.n_stochastic_preds = hparams.n_stochastic_preds 
 
         self.current_filepaths = []
@@ -76,6 +79,10 @@ class SpatioTemporalTask(pl.LightningModule):
 
         parser.add_argument('--context_length', type = int, default = 10)
         parser.add_argument('--target_length', type = int, default = 20)
+
+        parser.add_argument('--min_lc', type = int, default = 10)
+        parser.add_argument('--max_lc', type = int, default = 20)
+
         parser.add_argument('--n_stochastic_preds', type = int, default = 10)
 
         parser.add_argument('--n_log_batches', type = int, default = 2)
@@ -141,10 +148,10 @@ class SpatioTemporalTask(pl.LightningModule):
         for i in range(self.n_stochastic_preds):  # several predictions 
             preds, aux = self(data, pred_start = self.context_length, n_preds = self.target_length)  # output model
             all_logs.append(self.loss(preds, batch, aux)[1])
+
             # if self.loss.distance.rescale:
             #    preds = ((preds - 0.2)/0.6)  
-   
-            # what's happen ?
+
             if batch_idx < self.hparams.n_log_batches:
                 self.metric.compute_on_step = True
                 scores = self.metric(preds, batch)  # Returns the metric value over inputs if ``compute_on_step`` is True
@@ -152,16 +159,16 @@ class SpatioTemporalTask(pl.LightningModule):
                 all_viz.append((preds, scores))
             else:
                 self.metric(preds, batch)
-        
-        mean_logs = {l: torch.tensor([log[l] for log in all_logs], dtype=torch.float32, device = self.device).mean() for l in all_logs[0]} 
+
+        mean_logs = {l: torch.tensor([log[l].mean() for log in all_logs], dtype=torch.float32, device = self.device).mean() for l in all_logs[0]} 
+
         batch_size = torch.tensor(self.hparams.val_batch_size, dtype=torch.float32)
         
         # loss_val
         self.log_dict({l+"_val": mean_logs[l] for l in mean_logs}, sync_dist=True, batch_size=batch_size)  
 
         if batch_idx < self.hparams.n_log_batches and len(preds.shape) == 5:
-            if self.logger is not None:
-                # Attention: error in the previous format (lc_min)
+            if self.logger is not None and preds.shape[2] == 1:
                 log_viz(self.logger.experiment, all_viz, batch, batch_idx, self.current_epoch, mode = self.pred_mode) #, lc_min = 82 if not self.hparams.setting == "en22" else 2, lc_max = 104 if not self.hparams.setting == "en22" else 6)
 
     def validation_epoch_end(self, validation_step_outputs):
@@ -186,8 +193,8 @@ class SpatioTemporalTask(pl.LightningModule):
     def test_step(self, batch, batch_idx):
         '''Operates on a single batch of data from the test set. In this step you d normally generate examples or calculate anything of interest such as accuracy.'''
         scores = []
+
         for i in range(self.n_stochastic_preds):
-            # Prediction
             preds, aux = self(batch, pred_start = self.context_length, n_preds = self.target_length)
 
             lc = batch["landcover"]
@@ -205,7 +212,8 @@ class SpatioTemporalTask(pl.LightningModule):
                     
                     # Masks
                     masks = ((lc >= self.min_lc).bool() & (lc <= self.max_lc).bool()).type_as(preds)  # mask for outlayers using lc threshold   # mask for outlayers using lc threshold           
-                    masks = masks[j,...].permute(2,1,0).detach().cpu().numpy() 
+                    masks = masks[j,...].permute(1,2,0).detach().cpu().numpy() 
+
                     landcover = lc[j,...].permute(1,2,0).detach().cpu().numpy() 
                     static = static[j,...].permute(1,2,0).detach().cpu().numpy()
                     geom = targ_cube.geom
@@ -228,22 +236,21 @@ class SpatioTemporalTask(pl.LightningModule):
                     pred_dir.mkdir(parents = True, exist_ok = True)
 
                     # Axis
-                    
                     y = targ_cube["y"].values
                     x = targ_cube["x"].values
 
 
                     # Saving
                     targ_cube["ndvi_target"] = (targ_cube.nir - targ_cube.red)/(targ_cube.nir+targ_cube.red+1e-6)
-                    pred_cube = xr.Dataset({"ndvi_pred": xr.DataArray(data = hrd[:,:,0,:], coords = {"time": targ_cube.time.isel(time = slice(9,45)), "latitude": y, "longitude": x}, dims = ["latitude", "longitude", "time"])})
-                    pred_cube["ndvi_target"] = xr.DataArray(data = targ_cube["ndvi_target"].isel(time = slice(9,45)).values, coords = {"time": targ_cube.time.isel(time = slice(9,45)), "y": y, "longitude": x}, dims = ["y", "longitude", "time"])
+                    pred_cube = xr.Dataset({"ndvi_pred": xr.DataArray(data = hrd, coords = {"time": targ_cube.time.isel(time = slice(self.context_length,self.context_length+self.target_length)), "latitude": y, "longitude": x}, dims = ["latitude", "longitude", "time"])})
+                    pred_cube["ndvi_target"] = xr.DataArray(data = targ_cube["ndvi_target"].isel(time = slice(self.context_length,self.context_length+self.target_length)).values, coords = {"time": targ_cube.time.isel(time = slice(self.context_length,self.context_length+self.target_length)), "latitude": y, "longitude": x}, dims = ["latitude", "longitude", "time"])
                     pred_cube["mask"] = xr.DataArray(data = masks[:,:,0], coords = {"latitude": y, "longitude": x}, dims = ["latitude", "longitude"])
                     pred_cube["landcover"] = xr.DataArray(data = landcover[:,:,0], coords = {"latitude": y, "longitude": x}, dims = ["latitude", "longitude"])
                     pred_cube["geomorphons"] = xr.DataArray(data = geom, coords = {"latitude": y, "longitude": x}, dims = ["latitude", "longitude"])
                     pred_cube["SRTM"] = xr.DataArray(data = static[:,:,0], coords = {"latitude": y, "longitude": x}, dims = ["latitude", "longitude"])
                     
                     if not pred_path.is_file():
-                        pred_cube.to_netcdf(pred_path, encoding={"ndvi_pred":{"dtype": "float32"}, "ndvi_target":{"dtype": "float32"}, "mask":{"dtype": "float32"}, "landcover":{"dtype": "float32"}, "geomorphons":{"dtype": "float32"}, "SRTM":{"dtype": "float32"}})
+                      pred_cube.to_netcdf(pred_path, encoding={"ndvi_pred":{"dtype": "float32"}, "ndvi_target":{"dtype": "float32"}, "mask":{"dtype": "float32"}, "landcover":{"dtype": "float32"}, "geomorphons":{"dtype": "float32"}, "SRTM":{"dtype": "float32"}})
                     
                     
                     # Vitus code

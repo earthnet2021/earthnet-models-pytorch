@@ -34,19 +34,35 @@ class EarthNet2022Dataset(Dataset):
         self.bands = ['ndvi', 'blue', 'green', 'red', 'nir']
 
         self.meteo_vars = ['pev_max', 'pev_mean', 'pev_min', 'sm_rootzone_max', 'sm_rootzone_mean', 'sm_rootzone_min', 'sm_surface_max', 'sm_surface_mean', 'sm_surface_min', 'sp_max', 'sp_mean', 'sp_min', 'ssr_max', 'ssr_mean', 'ssr_min', 'surface_pressure_max', 'surface_pressure_mean', 'surface_pressure_min', 't2m_max', 't2m_mean', 't2m_min', 'tp_max', 'tp_mean', 'tp_min']
-        
+
         # self.meteo_scaling_cube = xr.DataArray(data = [10, 10, 10, 3000, 3000, 3000, 3000, 3000, 3000, 1e-4, 1e-4, 1e-4, 1, 1, 1, 1, 1, 1, 1000, 1000, 1000, 50, 50, 50, 1000, 1000, 1000, 400, 400, 400, 500, 500, 500], coords = {"variable": self.meteo_vars})
         self.meteo_scaling_cube = xr.DataArray(data = [1e-4, 1e-4, 1e-4, 1, 1, 1, 1, 1, 1, 1000, 1000, 1000, 50, 50, 50, 1000, 1000, 1000, 400, 400, 400, 500, 500, 500], coords = {"variable": self.meteo_vars})
-
+        
         mean_meteo = torch.tensor([-1.3039e+00, -1.8422e+00, -2.3154e+00,  2.4223e-01,  2.3511e-01,
          2.2876e-01,  2.2300e-01,  1.9395e-01,  1.6921e-01,  8.9678e-02,
          8.9426e-02,  8.9150e-02,  3.8471e-01,  3.2978e-01,  2.4605e-01,
          7.0871e-01,  7.0676e-01,  7.0464e-01,  7.3636e-01,  7.3166e-01,
          7.2685e-01,  2.0101e-02,  6.4336e-03,  9.6704e-04])
 
+        
+
         std_meteo = torch.tensor([0.8378, 0.8577, 0.9764, 0.0883, 0.0863, 0.0846, 0.1034, 0.1033, 0.1037,
-        0.0080, 0.0079, 0.0078, 0.0842, 0.0807, 0.0988, 0.0688, 0.0681, 0.0674,
-        0.0146, 0.0144, 0.0153, 0.0294, 0.0105, 0.0029])
+         0.0080, 0.0079, 0.0078, 0.0842, 0.0807, 0.0988, 0.0688, 0.0681, 0.0674,
+         0.0146, 0.0144, 0.0153, 0.0294, 0.0105, 0.0029])
+
+        '''
+        self.meteo_vars = ['pev_max', 'pev_mean', 'pev_min', 'sp_max', 'sp_mean', 'sp_min', 'ssr_max', 'ssr_mean', 'ssr_min', 't2m_max', 't2m_mean', 't2m_min', 'tp_max', 'tp_mean', 'tp_min']
+        self.meteo_scaling_cube = xr.DataArray(data = [1e-4, 1e-4, 1e-4, 1000, 1000, 1000, 50, 50, 50, 400, 400, 400, 500, 500, 500], coords = {"variable": self.meteo_vars})
+
+        mean_meteo = torch.tensor([-1.3039e+00, -1.8422e+00, -2.3154e+00,  
+         8.9678e-02,
+         8.9426e-02,  8.9150e-02,  3.8471e-01,  3.2978e-01,  2.4605e-01,
+         7.3636e-01,  7.3166e-01,
+         7.2685e-01,  2.0101e-02,  6.4336e-03,  9.6704e-04])
+
+        std_meteo = torch.tensor([0.8378, 0.8577, 0.9764, 
+        0.0080, 0.0079, 0.0078, 0.0842, 0.0807, 0.0988,
+        0.0146, 0.0144, 0.0153, 0.0294, 0.0105, 0.0029])'''
 
         self.transform_meteo = transforms.Compose([torch.from_numpy,
                                     transforms.Lambda(lambda x: (x - mean_meteo) / std_meteo)])
@@ -124,6 +140,7 @@ class EarthNet2022DataModule(pl.LightningDataModule):
         super().__init__()
         self.save_hyperparameters(copy.deepcopy(hparams))
         self.base_dir = Path(hparams.base_dir)
+        #self.earthnet_train = EarthNet2022Dataset(self.base_dir/"train", fp16 = self.hparams.fp16)
         
     @staticmethod
     def add_data_specific_args(parent_parser: Optional[Union[argparse.ArgumentParser,list]] = None):

@@ -9,7 +9,7 @@ import yaml
 import warnings
 from earthnet_models_pytorch.setting import SETTINGS, METRIC_CHECKPOINT_INFO
 from earthnet_models_pytorch.model import MODELS, MODELTASKNAMES
-from earthnet_models_pytorch.task import TRACK_INFO
+#from earthnet_models_pytorch.task import TRACK_INFO
 
 def parse_setting(setting_file, track = None):
 
@@ -106,17 +106,26 @@ def parse_setting(setting_file, track = None):
         
     if track is not None: 
 
-        setting_dict["Task"]["context_length"] = TRACK_INFO[setting_dict["Setting"]][track]["context_length"]
-        setting_dict["Task"]["target_length"] = TRACK_INFO[setting_dict["Setting"]][track]["target_length"]
-
+        # setting_dict["Task"]["context_length"] = TRACK_INFO[setting_dict["Setting"]][track]["context_length"]
+        # setting_dict["Task"]["target_length"] =TRACK_INFO[setting_dict["Setting"]][track]["target_length"]
+        
         setting_dict["Data"]["test_track"] = track
 
         if "pred_dir" not in setting_dict["Task"]:
             setting_dict["Task"]["pred_dir"] = Path(setting_dict["Logger"]["save_dir"])/setting_dict["Logger"]["name"]/setting_dict["Logger"]["version"]/"preds"/track
 
-    if setting_dict["Architecture"] in ["channel-u-net", "local-rnn","rnn", "context-convlstm", "u-net-convlstm", "dumby-mlp"]:  
+    if setting_dict["Architecture"] in ["channel-u-net", "local-rnn","rnn", "context-convlstm", "u-net-convlstm", "dumby-mlp", "convlstm-lstm"]:  
         setting_dict["Model"]["setting"] = setting_dict["Setting"]
+   
+    setting_dict["Model"]["context_length"] = setting_dict["Task"]["context_length"]        
+    setting_dict["Model"]["target_length"] = setting_dict["Task"]["target_length"]
+        
+    setting_dict["Task"]["train_batch_size"] = setting_dict["Data"]["train_batch_size"]
+    setting_dict["Task"]["val_batch_size"] = setting_dict["Data"]["val_batch_size"]
+    setting_dict["Task"]["test_batch_size"] = setting_dict["Data"]["test_batch_size"]
 
+    setting_dict["Task"]["min_lc"] = setting_dict["Task"]["loss"]["min_lc"]
+    setting_dict["Task"]["max_lc"] = setting_dict["Task"]["loss"]["max_lc"]
     
 
     return setting_dict

@@ -1,5 +1,5 @@
 
-Architecture: "context-convlstm"
+Architecture: "convlstm-lstm"
 
 Seed: 42
 
@@ -14,12 +14,12 @@ Checkpointer:
     every_n_epochs: 5
 
 Trainer:
-    gpus: [0, 1]
+    gpus: [5]
     strategy: 'ddp'
     accumulate_grad_batches: 8
     precision: 16
     log_every_n_steps: 32
-    max_epochs: 200
+    max_epochs: 150
     gradient_clip_val: 1
     val_check_interval: 0.1
   
@@ -68,5 +68,5 @@ Model:
     num_layers: 3
     bias: True
     return_all_layers: False
-    input: 'NDVI+T+W'
+    input: 'NDVI+T'
     skip_connections: True

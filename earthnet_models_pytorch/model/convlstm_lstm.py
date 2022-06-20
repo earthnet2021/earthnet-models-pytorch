@@ -1,13 +1,10 @@
 """ConvLSTM_LSTM
 """
 
-from turtle import forward
 from typing import Optional, Union, List
 
 import argparse
 import ast
-from grpc import dynamic_ssl_server_credentials
-from pip import main
 import torch.nn as nn
 import torch 
 import sys
@@ -81,7 +78,7 @@ class MLP(nn.Module):
         return self.model(weather)
 
 
-class ContextConvLSTM(nn.Module):
+class ConvLSTMLSTM(nn.Module):
 
     def __init__(self, hparams: argparse.Namespace):
         super().__init__()
@@ -95,7 +92,7 @@ class ContextConvLSTM(nn.Module):
         input_decoder = 1  # 33 weather
 
         if hparams.method == 'MLP':
-            dim_features = [24, 24, 10, 1]
+            dim_features = [64, 24, 10, 1]
             self.MLP = MLP(dim_features)
             input_encoder = 2
             input_decoder = 2
@@ -110,7 +107,7 @@ class ContextConvLSTM(nn.Module):
             input_encoder = 4
             input_decoder = 4
 
-
+        
         self.encoder_1_convlstm = ContextConvLSTMCell(input_dim=input_encoder,  
                                                hidden_dim=self.hparams.hidden_dim[0],
                                                kernel_size=self.hparams.kernel_size,
@@ -132,6 +129,36 @@ class ContextConvLSTM(nn.Module):
                                                bias=self.hparams.bias)
 
         padding = self.hparams.kernel_size // 2, self.hparams.kernel_size // 2
+        """
+        self.conv1 = nn.Conv2d(in_channels=input_encoder,
+                            out_channels=64,     
+                            kernel_size=self.hparams.kernel_size,
+                            padding=padding,
+                            bias=self.hparams.bias)
+        self.conv2 = nn.Conv2d(in_channels=64,
+                            out_channels=64,     
+                            kernel_size=self.hparams.kernel_size,
+                            padding=padding,
+                            bias=self.hparams.bias)
+        self.conv3 = nn.Conv2d(in_channels=64,
+                            out_channels=64,     
+                            kernel_size=self.hparams.kernel_size,
+                            padding=padding,
+                            bias=self.hparams.bias)
+        self.conv4 = nn.Conv2d(in_channels=64,
+                            out_channels=64,     
+                            kernel_size=self.hparams.kernel_size,
+                            padding=padding,
+                            bias=self.hparams.bias)"""
+
+        self.conv = nn.Conv2d(in_channels=64,
+                            out_channels=1,     
+                            kernel_size=self.hparams.kernel_size,
+                            padding=padding,
+                            bias=self.hparams.bias)
+
+        self.lstm = nn.LSTM(24,64, 4, batch_first=True)
+        self.lstm2 = nn.LSTM(24, 64, 4, batch_first=True)
 
 
         self.conv = nn.Conv2d(in_channels=self.hparams.hidden_dim[1],
@@ -162,8 +189,6 @@ class ContextConvLSTM(nn.Module):
         parser.add_argument("--setting", type = str, default = "en22")
         parser.add_argument("--context_length", type = int, default = 9)
         parser.add_argument("--target_length", type = int, default = 36)
-        parser.add_argument("--lc_min", type = int, default = 82)
-        parser.add_argument("--lc_max", type = int, default = 104)
         parser.add_argument("--method", type = str, default = None)
         parser.add_argument("--input", type = str, default = None)
         parser.add_argument("--skip_connections", type = str2bool, default=False)
@@ -172,7 +197,6 @@ class ContextConvLSTM(nn.Module):
     
 
     def forward(self, data, pred_start: int = 0, n_preds: Optional[int] = None):
-
         c_l = self.hparams.context_length if self.training else pred_start
         # Data
         hr_dynamics = data["dynamic"][0][:,(c_l - self.hparams.context_length):c_l,...]
@@ -184,34 +208,51 @@ class ContextConvLSTM(nn.Module):
         b, t, _, h, w = data["dynamic"][0].shape
 
         # initialize hidden states
-        h_t, c_t = self.encoder_1_convlstm.init_hidden(batch_size=b, height=h, width=w)
-        h_t2, c_t2 = self.encoder_2_convlstm.init_hidden(batch_size=b, height=h, width=w)
-        if self.hparams.method == 'bigger':
-            h_t3, c_t3 = self.encoder_3_convlstm.init_hidden(batch_size=b, height=h, width=w)
-            h_t4, c_t4 = self.encoder_4_convlstm.init_hidden(batch_size=b, height=h, width=w)
+        if self.hparams.method != "CNN":
+            h_t, c_t = self.encoder_1_convlstm.init_hidden(batch_size=b, height=h, width=w)
+            h_t2, c_t2 = self.encoder_2_convlstm.init_hidden(batch_size=b, height=h, width=w)
+
+        h_lstm, c_lstm = torch.zeros(4, b,self.hparams.hidden_dim[1]).to(self.conv.weight.device), torch.zeros(4, b, self.hparams.hidden_dim[1]).to(self.conv.weight.device)
         output = []
 
         # encoding network
         for t in range(self.hparams.context_length):
             if self.hparams.input =='NDVI+T':
                 input = torch.cat((target[:, t,...], topology), dim=1)
-            elif self.hparams.input == 'NDVI+T+W':
-                weather_t = weather[:,t,...].repeat(1, 1, 128, 128)  
-                input = torch.cat((target[:,t,...], topology), dim = 1)
-                input= torch.cat((input, weather_t), dim = 1)
-
+                if self.hparams.method == 'forecast':
+                    weather_t = weather[:, t + 1,...].unsqueeze(1).squeeze(4).squeeze(3)
+                else:
+                    weather_t = weather[:, t,...].unsqueeze(1).squeeze(4).squeeze(3)
             else:
                 input = target[:, t, :, :]
+                
+            if self.hparams.method == "CNN":
+                pred = self.conv1(input)
+                pred = nn.ReLU()(pred)
+                pred = self.conv2(pred)
+                pred = nn.ReLU()(pred)
+                pred = self.conv3(pred)
+                pred = nn.ReLU()(pred)
+                h_t2 = self.conv4(pred)
 
-            # First block
-            h_t, c_t = self.encoder_1_convlstm(input_tensor=input,
-                                               cur_state=[h_t, c_t])  
+            else:
+                # First block
+                h_t, c_t = self.encoder_1_convlstm(input_tensor=input,
+                                                cur_state=[h_t, c_t])  
+                # out , (h_lstm, c_lstm) = self.lstm(weather_t, (h_lstm, c_lstm))
+                #if self.hparams.method != "MLP":
+                #    h_t = h_t + out.squeeze(1).unsqueeze(2).unsqueeze(3).repeat(1, 1, 128, 128)                                 
 
-            # second block
-            h_t2, c_t2 = self.encoder_2_convlstm(input_tensor=h_t,
-                                                 cur_state=[h_t2, c_t2])  
+                # second block
+                h_t2, c_t2 = self.encoder_2_convlstm(input_tensor=h_t,
+                                                    cur_state=[h_t2, c_t2]) 
 
-        
+            out , (h_lstm, c_lstm) = self.lstm(weather_t, (h_lstm, c_lstm))
+
+            #h_t2 = h_t2 + out.squeeze(1).unsqueeze(2).unsqueeze(3).repeat(1, 1, 128, 128)
+
+                
+
         # First prediction        
         pred = self.conv(h_t2)
 
@@ -219,7 +260,8 @@ class ContextConvLSTM(nn.Module):
             pred = pred + target[:,-1,...]
 
         if self.hparams.method == 'MLP':
-            pred = pred + self.MLP(weather[:,c_l + t,...].squeeze(3).squeeze(2)).unsqueeze(2).unsqueeze(3).repeat(1, 1, 128, 128) 
+            pred = pred + self.MLP(out.squeeze(1)).unsqueeze(2).unsqueeze(3).repeat(1, 1, 128, 128) 
+            # pred = pred + self.MLP(weather[:,c_l + t,...].squeeze(3).squeeze(2)).unsqueeze(2).unsqueeze(3).repeat(1, 1, 128, 128) 
                             
         pred = self.activation_output(pred)
 
@@ -232,44 +274,50 @@ class ContextConvLSTM(nn.Module):
             # Input
             if self.hparams.input =='NDVI+T':
                 pred = torch.cat((pred, topology), dim=1)
+                if self.hparams.method == 'forecast':
+                    weather_t = weather[:,c_l + t + 1,...].unsqueeze(1).squeeze(4).squeeze(3)
+                else:
+                    weather_t = weather[:,c_l + t,...].unsqueeze(1).squeeze(4).squeeze(3)
+
             elif self.hparams.input == 'NDVI+T+W':
                 weather_t = weather[:,c_l + t,...].repeat(1, 1, 128, 128)  
                 pred = torch.cat((pred, topology), dim = 1)
                 pred = torch.cat((pred, weather_t), dim = 1)
 
-            #first block
-            h_t, c_t = self.decoder_1_convlstm(input_tensor=pred,
-                                                 cur_state=[h_t, c_t]) 
+            if self.hparams.method == "CNN":
+                pred = self.conv1(input)
+                pred = nn.ReLU()(pred)
+                pred = self.conv2(pred)
+                pred = nn.ReLU()(pred)
+                pred = self.conv3(pred)
+                pred = nn.ReLU()(pred)
+                h_t2 = self.conv4(pred)
 
-            # Second block
-            h_t2, c_t2 = self.decoder_2_convlstm(input_tensor=h_t,
-                                                 cur_state=[h_t2, c_t2])
+            else:
+                #first block
+                h_t, c_t = self.decoder_1_convlstm(input_tensor=pred,
+                                                    cur_state=[h_t, c_t]) 
+                # out , (h_lstm, c_lstm) = self.lstm(weather_t, (h_lstm, c_lstm))
+                # if self.hparams.method != "MLP":
+                #    h_t = h_t + out.squeeze(1).unsqueeze(2).unsqueeze(3).repeat(1, 1, 128, 128)   
+                # Second block
+                h_t2, c_t2 = self.decoder_2_convlstm(input_tensor=h_t,
+                                                    cur_state=[h_t2, c_t2])
+                
 
-            pred = h_t2
+            out , (h_lstm, c_lstm) = self.lstm2(weather_t, (h_lstm, c_lstm))
 
-            if self.hparams.method == 'bigger':
-                h_t3, c_t3 = self.decoder_3_convlstm(input_tensor=h_t2,
-                                                 cur_state=[h_t3, c_t3]) 
-                h_t4, c_t4 = self.decoder_4_convlstm(input_tensor=h_t3,
-                                                 cur_state=[h_t4, c_t4]) 
-                pred = h_t4
+            h_t2 = h_t2 + out.squeeze(1).unsqueeze(2).unsqueeze(3).repeat(1, 1, 128, 128)
             
-            pred = self.conv(pred)
+            pred = self.conv(h_t2)
 
             if self.hparams.skip_connections:
                 pred = pred + pred_previous
-
             if self.hparams.method == 'MLP':
-                pred = pred + self.MLP(weather[:,c_l + t,...].squeeze(3).squeeze(2)).unsqueeze(2).unsqueeze(3).repeat(1, 1, 128, 128)
-
-            # Output
-            if self.hparams.input == 'RGBNR':
-                targ = ((pred[:,3,...] - pred[:,2,...])/(pred[:,3,...] + pred[:,2,...] + 1e-6)).unsqueeze(1)
-                targ = self.activation_output(targ)
-                output += [targ]
-            else:
-                pred = self.activation_output(pred)
-                output += [pred]
+                pred = pred + self.MLP(out.squeeze(1)).unsqueeze(2).unsqueeze(3).repeat(1, 1, 128, 128) 
+  
+            pred = self.activation_output(pred)
+            output += [pred]
             
         output = torch.cat(output, dim=1).unsqueeze(2)
         return output, {}

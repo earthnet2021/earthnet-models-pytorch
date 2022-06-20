@@ -15,6 +15,7 @@ def test(args):
     # Prediction for each model
     for model in args.models:
         path_setting = args.path_setting + args.architecture + model + '/full_train/setting.yaml'
+        print(args.path_setting + args.architecture + model + '/full_train/checkpoints/Epoch-epoch=*')
         path_checkpoint = glob.glob(args.path_setting + args.architecture + model + '/full_train/checkpoints/Epoch-epoch=*').pop()
         pred_dir = args.pred_dir + args.architecture + '/' + model
         setting_dict = parse_setting(path_setting, track = args.track)
@@ -32,7 +33,7 @@ def test(args):
 
 if __name__ == "__main__":
     parser = ArgumentParser()
-    parser.add_argument('--architecture', nargs = '+', type = str, default='context-convlstm/', help='architecture of the model')
+    parser.add_argument('--architecture', nargs = '+', type = str, default='dumby_mlp/', help='architecture of the model')
     parser.add_argument('--path_setting', type = str, default='experiments/en22/', help='path of yaml setting file')
     parser.add_argument('--track', type = str, default='iid', metavar='iid|ood|ex|sea', help='which track to test: either iid, ood, ex or sea')
     parser.add_argument('models', nargs='+', type = str, default=[], metavar='path/to/setting.yaml', help='list of models for the analysis')

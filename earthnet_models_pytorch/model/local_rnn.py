@@ -65,8 +65,8 @@ class LocalRNN(nn.Module):
         parser.add_argument("--update_encoder_nclasses", type = int, default = 128)
         parser.add_argument("--train_lstm_npixels", type = int, default = 256)
         parser.add_argument("--setting", type = str, default = "en22")
-        parser.add_argument("--context_length", type = int, default = 9)
-        parser.add_argument("--target_length", type = int, default = 36)
+        parser.add_argument("--context_length", type = int, default = 35)
+        parser.add_argument("--target_length", type = int, default = 10)
         parser.add_argument("--use_dem", type = str2bool, default = True)
         parser.add_argument("--use_soilgrids", type = str2bool, default = True)
         parser.add_argument("--lc_min", type = int, default = 2)
@@ -100,7 +100,7 @@ class LocalRNN(nn.Module):
             state_inputs = torch.cat((hr_dynamic_inputs, static_inputs[:,1:,...]), dim = 1)
         else:
             state_inputs = hr_dynamic_inputs
-        
+
         state = self.state_encoder(state_inputs)
 
         state[:,-1,...] = last_dynamic_input[:,0,...]

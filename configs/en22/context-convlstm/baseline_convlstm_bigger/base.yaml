@@ -13,7 +13,7 @@ Checkpointer:
     every_n_epochs: 5
 
 Trainer:
-    gpus: [4, 5]
+    gpus: [0, 1]
     strategy: 'ddp'
     #plugins: 'ddp_find_unused_parameters_false'
     accumulate_grad_batches: 16
@@ -91,8 +91,8 @@ Task:
     compute_metric_on_test: True
 
 Model:
-    context_length: 9
-    target_length: 36
+    context_length: 35
+    target_length: 10
     hidden_dim: [128, 64, 64, 32]
     kernel_size: 3
     num_layers: 3

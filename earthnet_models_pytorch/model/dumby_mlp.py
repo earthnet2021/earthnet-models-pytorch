@@ -71,6 +71,16 @@ class DumbyMLP(nn.Module):
                             kernel_size=self.hparams.kernel_size,
                             padding=padding,
                             bias=self.hparams.bias)
+        self.conv3 = nn.Conv2d(in_channels=64,
+                            out_channels=64,     
+                            kernel_size=self.hparams.kernel_size,
+                            padding=padding,
+                            bias=self.hparams.bias)
+        self.conv4 = nn.Conv2d(in_channels=64,
+                            out_channels=64,     
+                            kernel_size=self.hparams.kernel_size,
+                            padding=padding,
+                            bias=self.hparams.bias)
 
         self.conv = nn.Conv2d(in_channels=64,
                             out_channels=1,     
@@ -79,6 +89,7 @@ class DumbyMLP(nn.Module):
                             bias=self.hparams.bias)
 
         self.activation_output = nn.Sigmoid()
+
 
         
     @staticmethod
@@ -92,10 +103,8 @@ class DumbyMLP(nn.Module):
         parser = argparse.ArgumentParser(parents = parent_parser, add_help = False)
 
         # parser.add_argument("--input_dim", type=int, default=6)
-        parser.add_argument("--hidden_dim", type=ast.literal_eval, default=[64, 64, 64, 64])  # TODO find a better type ? list(int)
-        parser.add_argument("--kernel_size", type=int, default=3)
-        parser.add_argument("--num_layers", type=int, default=4)
         parser.add_argument("--bias", type=str2bool, default=True)
+        parser.add_argument("--kernel_size", type=int, default=3)
         parser.add_argument("--return_all_layers", type=str2bool, default=False)
         parser.add_argument("--setting", type = str, default = "en22")
         parser.add_argument("--context_length", type = int, default = 9)
@@ -112,6 +121,7 @@ class DumbyMLP(nn.Module):
     def forward(self, data, pred_start: int = 0, n_preds: Optional[int] = None):
 
         c_l = self.hparams.context_length if self.training else pred_start
+
         # Data
         hr_dynamics = data["dynamic"][0][:,(c_l - self.hparams.context_length):c_l,...]
         target = hr_dynamics[:,:,0,...].unsqueeze(2)
@@ -120,6 +130,7 @@ class DumbyMLP(nn.Module):
 
         # Shape
         b, t, _, h, w = data["dynamic"][0].shape
+
         pred = target[:, -1, :, :]
         output = []
         # forecasting network
@@ -134,10 +145,13 @@ class DumbyMLP(nn.Module):
                 pred = torch.cat((pred, weather_t), dim = 1)
 
             pred = self.conv1(pred)
-            pred = self.activation_output(pred)
+            pred = nn.ReLU()(pred)
             pred = self.conv2(pred)
-            pred = self.activation_output(pred)
-
+            pred = nn.ReLU()(pred)
+            pred = self.conv3(pred)
+            pred = nn.ReLU()(pred)
+            pred = self.conv4(pred)
+            pred = nn.ReLU()(pred)
             pred = self.conv(pred)
 
             pred = pred + self.MLP(weather[:,c_l + t,...].squeeze(3).squeeze(2)).unsqueeze(2).unsqueeze(3).repeat(1, 1, 128, 128)
