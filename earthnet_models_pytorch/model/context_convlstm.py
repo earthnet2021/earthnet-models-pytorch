@@ -165,7 +165,7 @@ class ContextConvLSTM(nn.Module):
             input_decoder = 1 + 1 + 24 + 1
         elif self.hparams.input == 'RGBNR':  
             input_encoder = 5 + 25
-            input_decoder = 5 + 25
+            input_decoder = 1 + 25
         else:
             input_encoder = 1
             input_decoder = 1
@@ -193,14 +193,8 @@ class ContextConvLSTM(nn.Module):
 
         padding = self.hparams.kernel_size // 2, self.hparams.kernel_size // 2
 
-        if self.hparams.input == 'RGBNR':        
-            self.conv = nn.Conv2d(in_channels=self.hparams.hidden_dim[1],
-                              out_channels=5,     
-                              kernel_size=self.hparams.kernel_size,
-                              padding=padding,
-                              bias=self.hparams.bias)
-        else:
-            self.conv = nn.Conv2d(in_channels=self.hparams.hidden_dim[1],
+
+        self.conv = nn.Conv2d(in_channels=self.hparams.hidden_dim[1],
                               out_channels=1,     
                               kernel_size=self.hparams.kernel_size,
                               padding=padding,
@@ -308,6 +302,7 @@ class ContextConvLSTM(nn.Module):
             else:
                 input = target[:, t, :, :]
 
+
             # First block
             h_t, c_t = self.encoder_1_convlstm(input_tensor=input,
                                                cur_state=[h_t, c_t])  
@@ -328,8 +323,13 @@ class ContextConvLSTM(nn.Module):
         else:
             pred = self.conv(h_t2)
 
+
         if self.hparams.skip_connections:
-            pred = pred + target[:,-1,...]
+            if self.hparams.input == 'RGBNR':
+
+                pred = pred + target[:,-1,0,...].unsqueeze(1)
+            else:
+                pred = pred + target[:,-1,...]
 
         if self.hparams.method == 'MLP':
             pred = pred + self.MLP(weather[:,t,...].squeeze(3).squeeze(2)).unsqueeze(2).unsqueeze(3).repeat(1, 1, 128, 128) 
@@ -363,7 +363,6 @@ class ContextConvLSTM(nn.Module):
             if self.hparams.method == 'stack':
                 h_t, c_t = self.encoder_1_convlstm(input_tensor=pred,
                                                  cur_state=[h_t, c_t]) 
-
                 # Second block
                 h_t2, c_t2 = self.encoder_2_convlstm(input_tensor=h_t,
                                                     cur_state=[h_t2, c_t2])
@@ -384,6 +383,7 @@ class ContextConvLSTM(nn.Module):
                                                  cur_state=[h_t4, c_t4]) 
                 pred = h_t4
             
+
             pred = self.conv(pred)
 
             if self.hparams.skip_connections:

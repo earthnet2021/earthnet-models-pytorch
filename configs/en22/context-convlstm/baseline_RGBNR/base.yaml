@@ -14,7 +14,7 @@ Checkpointer:
     every_n_epochs: 5
 
 Trainer:
-    gpus: [6]
+    gpus: [4, 5]
     strategy: 'ddp'
     accumulate_grad_batches: 8
     precision: 16

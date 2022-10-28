@@ -66,9 +66,7 @@ def train_model(setting_dict: dict, setting_file: str = None):
         trainer_dict["profiler"] = pl.profiler.AdvancedProfiler(output_filename="curr_profile")
 
     trainer = pl.Trainer(logger = logger, callbacks = [checkpoint_callback], **trainer_dict)
-    
-    # print(model)
-    # sys.exit()
+ 
     trainer.fit(task, dm)
     
     print(f"Best model {checkpoint_callback.best_model_path} with score {checkpoint_callback.best_model_score}")

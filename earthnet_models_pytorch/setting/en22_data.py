@@ -140,7 +140,7 @@ class EarthNet2022DataModule(pl.LightningDataModule):
         super().__init__()
         self.save_hyperparameters(copy.deepcopy(hparams))
         self.base_dir = Path(hparams.base_dir)
-        #self.earthnet_train = EarthNet2022Dataset(self.base_dir/"train", fp16 = self.hparams.fp16)
+        self.earthnet_train = EarthNet2022Dataset(self.base_dir/"train", fp16 = self.hparams.fp16)
         
     @staticmethod
     def add_data_specific_args(parent_parser: Optional[Union[argparse.ArgumentParser,list]] = None):

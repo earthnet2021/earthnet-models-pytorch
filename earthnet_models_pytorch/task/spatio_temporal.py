@@ -208,7 +208,7 @@ class SpatioTemporalTask(pl.LightningModule):
                     targ_cube = xr.open_dataset(targ_path)
                     tile = targ_path.name[:5]
 
-                    hrd = preds[j,...].permute(2,3,1,0).detach().cpu().numpy() if "full" not in aux else aux["full"][j,...].permute(2,3,1,0).detach().cpu().numpy()  # h, w, c, t
+                    hrd = preds[j,...].permute(2,3,1,0).squeeze(2).detach().cpu().numpy() if "full" not in aux else aux["full"][j,...].permute(2,3,1,0).detach().cpu().numpy()  # h, w, c, t
                     
                     # Masks
                     masks = ((lc >= self.min_lc).bool() & (lc <= self.max_lc).bool()).type_as(preds)  # mask for outlayers using lc threshold   # mask for outlayers using lc threshold           

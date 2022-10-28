@@ -14,7 +14,7 @@ import json, sys
 from earthnet_models_pytorch.model import MODELS, MODELTASKS, MODELTASKNAMES
 from earthnet_models_pytorch.setting import DATASETS
 from earthnet_models_pytorch.utils import parse_setting
-from torchsummary import summary
+#from torchsummary import summary
 #from earthnet_models_pytorch.task import TRACK_INFO
 
 def test_model(setting_dict: dict, checkpoint: str):
@@ -51,10 +51,10 @@ def test_model(setting_dict: dict, checkpoint: str):
 
     dm.setup("test")
     
-    
-    x = next(iter(dm.train_dataloader())) #torch.randn(4, 36, 26, 128, 128, device="cuda")
-    
-    summary(model, x.shape)
+    trainer.test(model = task, datamodule = dm, ckpt_path = None) 
+    """    x = next(iter(dm.train_dataloader())) #torch.randn(4, 36, 26, 128, 128, device="cuda")
+   
+    # summary(model, x.shape)
     torch.onnx.export(model,               # model being run
                   x,                         # model input (or a tuple for multiple inputs)
                   setting_dict["Task"]["pred_dir"] + '/' + setting_dict["Logger"]["name"] + ".onnx",   # where to save the model (can be a file or file-like object)
@@ -64,8 +64,8 @@ def test_model(setting_dict: dict, checkpoint: str):
                   input_names = ['input'],   # the model's input names
                   output_names = ['output'], # the model's output names
                   dynamic_axes={'input' : {0 : 'batch_size', 1 : 'time', 2: 'channels', 3: 'long', 4: 'lat'},    # variable length axes
-                                'output' : {0 : 'batch_size'}})
-    #trainer.test(model = task, datamodule = dm, ckpt_path = None)
+                                'output' : {0 : 'batch_size'}})"""
+
     
 if __name__ == "__main__":
     parser = ArgumentParser()

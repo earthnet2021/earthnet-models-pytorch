@@ -127,7 +127,7 @@ class ConvLSTMLSTM(nn.Module):
                                                hidden_dim=self.hparams.hidden_dim[1],
                                                kernel_size=self.hparams.kernel_size,
                                                bias=self.hparams.bias)
-
+        
         padding = self.hparams.kernel_size // 2, self.hparams.kernel_size // 2
         """
         self.conv1 = nn.Conv2d(in_channels=input_encoder,
@@ -149,16 +149,16 @@ class ConvLSTMLSTM(nn.Module):
                             out_channels=64,     
                             kernel_size=self.hparams.kernel_size,
                             padding=padding,
-                            bias=self.hparams.bias)"""
-
+                            bias=self.hparams.bias)
+        """
         self.conv = nn.Conv2d(in_channels=64,
                             out_channels=1,     
                             kernel_size=self.hparams.kernel_size,
                             padding=padding,
                             bias=self.hparams.bias)
 
-        self.lstm = nn.LSTM(24,64, 4, batch_first=True)
-        self.lstm2 = nn.LSTM(24, 64, 4, batch_first=True)
+        #self.lstm = nn.LSTM(24,64, 1, batch_first=True)
+        self.lstm2 = nn.LSTM(24, 64, 2, batch_first=True)
 
 
         self.conv = nn.Conv2d(in_channels=self.hparams.hidden_dim[1],
@@ -212,7 +212,9 @@ class ConvLSTMLSTM(nn.Module):
             h_t, c_t = self.encoder_1_convlstm.init_hidden(batch_size=b, height=h, width=w)
             h_t2, c_t2 = self.encoder_2_convlstm.init_hidden(batch_size=b, height=h, width=w)
 
-        h_lstm, c_lstm = torch.zeros(4, b,self.hparams.hidden_dim[1]).to(self.conv.weight.device), torch.zeros(4, b, self.hparams.hidden_dim[1]).to(self.conv.weight.device)
+        #h_lstm, c_lstm = torch.zeros(1, b,self.hparams.hidden_dim[1]).to(self.conv.weight.device), torch.zeros(1, b, self.hparams.hidden_dim[1]).to(self.conv.weight.device)
+        h_lstm2, c_lstm2 = torch.zeros(2, b,self.hparams.hidden_dim[1]).to(self.conv.weight.device), torch.zeros(2, b, self.hparams.hidden_dim[1]).to(self.conv.weight.device)
+
         output = []
 
         # encoding network
@@ -240,16 +242,16 @@ class ConvLSTMLSTM(nn.Module):
                 h_t, c_t = self.encoder_1_convlstm(input_tensor=input,
                                                 cur_state=[h_t, c_t])  
                 # out , (h_lstm, c_lstm) = self.lstm(weather_t, (h_lstm, c_lstm))
-                #if self.hparams.method != "MLP":
+                # if self.hparams.method != "MLP":
                 #    h_t = h_t + out.squeeze(1).unsqueeze(2).unsqueeze(3).repeat(1, 1, 128, 128)                                 
 
                 # second block
                 h_t2, c_t2 = self.encoder_2_convlstm(input_tensor=h_t,
                                                     cur_state=[h_t2, c_t2]) 
 
-            out , (h_lstm, c_lstm) = self.lstm(weather_t, (h_lstm, c_lstm))
+            out , (h_lstm2, c_lstm2) = self.lstm2(weather_t, (h_lstm2, c_lstm2))
 
-            #h_t2 = h_t2 + out.squeeze(1).unsqueeze(2).unsqueeze(3).repeat(1, 1, 128, 128)
+            h_t2 = h_t2 + out.squeeze(1).unsqueeze(2).unsqueeze(3).repeat(1, 1, 128, 128)
 
                 
 
@@ -297,15 +299,15 @@ class ConvLSTMLSTM(nn.Module):
                 #first block
                 h_t, c_t = self.decoder_1_convlstm(input_tensor=pred,
                                                     cur_state=[h_t, c_t]) 
-                # out , (h_lstm, c_lstm) = self.lstm(weather_t, (h_lstm, c_lstm))
-                # if self.hparams.method != "MLP":
+                #out , (h_lstm, c_lstm) = self.lstm(weather_t, (h_lstm, c_lstm))
+                #if self.hparams.method != "MLP":
                 #    h_t = h_t + out.squeeze(1).unsqueeze(2).unsqueeze(3).repeat(1, 1, 128, 128)   
                 # Second block
                 h_t2, c_t2 = self.decoder_2_convlstm(input_tensor=h_t,
                                                     cur_state=[h_t2, c_t2])
                 
 
-            out , (h_lstm, c_lstm) = self.lstm2(weather_t, (h_lstm, c_lstm))
+            out , (h_lstm2, c_lstm2) = self.lstm2(weather_t, (h_lstm2, c_lstm2))
 
             h_t2 = h_t2 + out.squeeze(1).unsqueeze(2).unsqueeze(3).repeat(1, 1, 128, 128)
             
