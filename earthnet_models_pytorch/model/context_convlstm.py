@@ -1,6 +1,6 @@
 """ContextConvLSTM
 """
-"is it working?"
+
 from turtle import forward
 from typing import Optional, Union, List
 
