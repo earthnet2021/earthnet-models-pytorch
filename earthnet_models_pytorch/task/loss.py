@@ -52,14 +52,10 @@ class MaskedLoss(nn.Module):
         targetsmasked = targets * mask  
 
         if self.distance_type == "L2":
-            #if preds.shape[2] == 5:
-            #    return torch.sum(F.mse_loss(predsmasked,targetsmasked, reduction='none'), dim=[0,1,3,4])/ ((mask > 0).sum() + 1)
-            #else:
+
             return F.mse_loss(predsmasked,targetsmasked, reduction='sum')/ ((mask > 0).sum() + 1)  # (input, target, reduction: Specifies the reduction to apply to the output)
         elif self.distance_type == "L1":
-            #if preds.shape[2] == 5:
-            #return torch.sum(F.l1_loss(predsmasked,targetsmasked, reduction='none'), dim=[0,1,3,4])/ ((mask > 0).sum() + 1)
-            #else:
+
             return F.l1_loss(predsmasked,targetsmasked, reduction='sum')/ ((mask > 0).sum() + 1)
         
 
@@ -131,16 +127,13 @@ class BaseLoss(nn.Module):
             
             masks = torch.where(masks.bool(), (preds >= 0).type_as(masks), masks)
 
-
-
-
         dist = self.distance(preds, targs, masks) 
 
         logs["distance"] = dist
 
         loss = dist * self.dist_scale
-        '''
-        if "state_params" in aux:  # What's happen ?
+        
+        if "state_params" in aux:  
             state_normal = make_normal_from_raw_params(aux["state_params"])  # create a normal distribution from the given parametres
             kld_state = distrib.kl_divergence(state_normal, distrib.Normal(0,1)).mean()
             lambda_state = self.lambda_state(current_step)
@@ -163,7 +156,7 @@ class BaseLoss(nn.Module):
             loss += lambda_l2_res * l2_res
             logs["l2_res"] = l2_res
             logs["lambda_l2_res"] = lambda_l2_res
-        '''
+        
         logs["loss"] = loss
         return loss, logs
 

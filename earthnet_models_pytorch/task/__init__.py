@@ -9,7 +9,7 @@ TASKS = {
     "spatio-temporal": SpatioTemporalTask
 }
 
-'''
+
 TRACK_INFO = {
     "en21-std": {
         "iid": {
@@ -60,4 +60,3 @@ TRACK_INFO = {
         }
     }
 }
-'''

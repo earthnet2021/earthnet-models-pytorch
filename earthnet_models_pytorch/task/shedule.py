@@ -18,8 +18,7 @@ class WeightShedule:
         return self.weight
 
 class CyclicShedule:
-    def __init__(self, initial_value = 0, cycle_from_step = 1000, cycle_length = 1000, min_value = 0, max_value = 1, max_value_decrease = 0, n_cycles = 10):
-        
+    def __init__(self, initial_value = 0, cycle_from_step = 1000, cycle_length = 1000, min_value = 0, max_value = 1, max_value_decrease = 0, n_cycles = 10): 
         self.value = initial_value
         self.min_value = min_value
         self.cycle_from_step = cycle_from_step
