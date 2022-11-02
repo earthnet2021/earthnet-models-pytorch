@@ -1,126 +1,64 @@
-# earthnet-models-pytorch
+# EarthNet2022
 
-A PyTorch lightning library for Earth surface forecasting.
+### Context
+Forecasting the state of vegetation in response to climate and weather events is a major challenge. Requena and al. (2021) [1] define the land surface forecasting task as a strongly guided video prediction task where the objective is to forecast the vegetation developing at very fine resolution using topography and weather variables to guide the prediction and design a first dataset for this task, the EarthNet2021 dataset. Several papers have addressed this issue, namely [2, 3] on the EarthNet2021 dataset, and [4] focusing instead on Africa (freshly accepted!:D). See [4] for more details on the project.
 
-This library contains models, dataloaders and scripts for Earth surface forecasting in the context of research surrounding the [EarthNet](www.earthnet.tech) challenge.
+### EarthNet2022, a new brand dataset
+EarthNet2022 is a new dataset, with a better cloud masking and new variables (Landsat climatology NDVI and Sentinel - 1 vegetation index), relevant for environnemental science. Additionnally, the data (from different sources) are irregularly sampled time series. This is the main different from the previous dataset, where the data where 10 dayly interpolated, which is very easy to train deep learning models but hides the actual dynamics of the system.
 
-It is currently under development, thus do expect bugs and please report them!
+The variables are:
+* Sentinel 2 (B02 to B12 bands) - spatio-temporal data
+* Sentinel1 (VV, VH, mask) - spatio-temporal data
+* NDVI Climatology (12 months Landsat 30m/pix) - spatio-temporal data
+* SRTM (DEM) - static data
+* ESA World Cover - static data
+* ERA5 (t2m, pev, slhf, ssr, sp, sshf, e, tp) - temporal data
+* Soil Grids - static data
+* Geomorphons - static data
+* ALOS, COP 30 (DEMs) - static data
 
-The library is build on [PyTorch](www.pytorch.org), a Python deep learning library, and [PyTorch Lightning](https://www.pytorchlightning.ai/), a PyTorch wrapper reducing boilerplate code and adding functionality to scale experiments.
+The target is the Normalized Difference Vegetation Index (NDVI), a proxy for vegetation health monitoring calculated from the red and infrared bands.
 
-In earthnet-models-pytorch there is three main components:
+*Please note:* This new dataset will most likely **not be publicly available** by the end of the project. However, a sample (or few if needed) will be available, as well as the jupyters used to explore the data. 
 
-    1. Model - plain PyTorch models just implementing simple forward passes.
-    2. Setting - Dataset and Metrics for a particular problem
-    3. Task - Abstraction for the training, validation & test loops, tying together models and settings, normally both models and settings are task-specific.
+### Approach - Irregularly sampled time series
+**Bring your own method** 
 
+The objective to create a model capable of learning the relationship between vegetation states, local factors and weather conditions, at a very fine resolution in order to characterise and forecast the impact of weather extremes from an ecosystem perspective. I will firstly explore the new dataset (understand the variables, maybe select some of them), and write the dataloader. 
 
-## Requirements
+the data have different dimensions (spatio-temporal, only temporal (for weather), or static (terrain topology), we will use the simplest solution which consists in resizing and concatenating everything to the spatio-temporal dimensions.
 
-We recommend using Anaconda for managing dependencies of this library. The following bash commands create a suitable environment. Please note the PyTorch installation requirements for your system, see (https://pytorch.org/) - esp. cudatoolkit might have to be installed with a different cuda version.
+Then I need to develop a model for the data. The main point is that the data are irregularly sampled time series (from different sources). Although several papers have addressed this issue for RNNs [5-7], we need to extend the methods to include the spatial dimension of our data. this will be our main axis of research. We will compare our results to a ConvLSTM baseline that does not take into account the time-step irregularity. 
 
-```
-conda create -n emp python=3.10
-conda activate emp
-conda install -c conda-forge mamba
-mamba install -c pytorch -c conda-forge pytorch torchvision torchaudio cudatoolkit=11.3 tensorboard
-mamba install -c conda-forge numpy matplotlib pillow xarray zarr netcdf4
-pip install pytorch-lightning earthnet segmentation-models-pytorch
-```
+A second solution, simpler to implement, consists in directly use the RNN methods developed for time series without spatial component. During the learning phase, the RNN is used only on a random subset of pixels, and the gradient is computed on these pixels. The idea is that in an image, and even more in a landscape, a large number of pixels are (almost) identical, and it is not necessary to compute the gradient for each pixels. In this way, we drastically reduce the learning time required for the use of a RNN on spatio-temporal data. This solution has shown good results with classical RNN, so it is promising for RNN adapted to irregular data. 
 
-## Installation
+Finally, I would like to develop a web application, the tricky part is that I have no knowledge of javascript at the moment, so it could be reduced to a docker, or a simple command line in case of lack of time. But ideally, on the web application, the user will be able to select a sample on the map of Africa, then generate its prediction with some associated analysis. 
 
-```
-pip install git+https://github.com/vitusbenson/earthnet-models-pytorch.git
-```
-or:
-```
-git clone https://github.com/vitusbenson/earthnet-models-pytorch.git
-cd earthnet-models-pytorch
-pip install -e .
-```
-
-## Debug
-
-The design process of a new model or feature is supported in earthnet-models-pytorch by a debug option. Since models often require both a lot of data and GPUs to test the complete training cycle, we use this debug option rather than classic unit testing.
-In order to use it, we need to set up a `config.yaml` containing all configs for the different components. See the `configs` folder for examples. It is recommended to save the setting in a folder structure `configs/<setting>/<model>/<feature>/base.yaml`. If done in this way, the earthnet-models-pytorch logger automatically detects the correct naming for later.
-
-We can check if a model works as desired by running:
-```
-debug.py path/to/setting.yaml
-```
-
-It starts with a fast dev run in PyTorch lightning, which is essentially just performing two train, validation and test loops. It then also overfits a model on 4 batches for 1000 epochs, to check if gradients flow properly and the model does indeed learn. 
-
-Note, the debug and all other scripts are registered by PyPI, so it does not matter from which directory they are started and we dont need to use python for them, they should always work.
-
-## Train
-
-In order to train a model we again need to set up a `config.yaml`, see above regarding for more details.
-
-Then we just do:
-```
-train.py path/to/setting.yaml
-```
-
-It trains the model as specified in the config.
-
-## Tune
-
-Hyperparameter tuning. Explanation tbd.
-
-## Test
-
-The script for testing a trained model works as follows:
-```
-test.py path/to/setting.yaml path/to/checkpoint track --pred_dir path/to/predictions/directory/
-```
-
-Here we replace `track` by the track that we want to test on; this depends on the particular setting you choose. For example in `en21-std` there are 4 tracks: `iid`, `ood`, `ex` and `sea`.
-
-## Plot
-
-Plotting functionality. Explanation tbd.
-
-## API
-
-### **earthnet_models_pytorch.task**
-
-The task is a PyTorch Lightning module that implements the training, validation and testing loops as well as the optimization and logging necessary. Tasks include:
-- spatio-temporal
-- pixelwise test-time gradients and statistical models
-
-**spatio-temporal**
-
-The required data has
-
-- dynamic
-- dynamic_mask
-- static
-- static_mask
-- filepath
-- cubename
-- (landcover)
-
-The model forward takes a `batch` dict, `pred_start` as the first index to be predicted of the first tensor in the dynamic list and `n_preds` as the prediction length.
-
-A setting must implement a metric with a Lightning metrics interface. Note: The Lightning metrics interface as used in this library right now is currently beeing deprecated, thus we will also rework this part.
+### Work-breakdown structure 
+ * Data collection: 0 hours
+ * Data understanding and exploration: 10 hours   
+understanding the distribution 
+ * Framework: 10 hours   
+PyTorch lighnight framework (already implemented?)
+ * Model for irregularly sampled time series: 50 hours
+ * Optimisation: 20 hours 
+ * Building an application: 40 hours   
+ * Final report: 15 hours
+ * Presentation: 10 hours
+ * Total: 155 hours
 
 
-### **earthnet_models_pytorch.setting**
+### Bibliography
+[1] Christian Requena-Mesa, Vitus Benson, Markus Reichstein, Jakob Runge, and Joachim Denzler. "Earthnet2021: A large-scale dataset and challenge for earth surface forecasting as a guided video prediction task." In *Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition*, pages 1132–1142, 2021.
 
-The setting is a combination of a Lightning DataModule and a Lightning Metric. Settings include:
+[2] Codrut-Andrei Diaconu, Sudipan Saha, Stephan Günnemann, and Xiao Xiang Zhu. "Understanding the role of weather data for earth surface forecasting using a convlstm-based model." In *Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition*, pages 1362–1371, 2022.
 
-- `en21-std`; the setting of the EarthNet2021 challenge.
-- `en21-veg`; Only predicting vegetation on EarthNet2021 data with additional S2GLC Landcover data.
-- `en21x`; The EarthNet2021x data, which is reworked data from the EarthNet2021 challenge, now focusing on vegetation forecasting in Europe.
-- `en21x-px`; Same as `en21x`, but using pixelwise data from a `.csv` to efficiently create batches for pixelwise models.
-- `en22`; The EarthNet2022 data from the DeepCube UC1 project. Similar to `en21x`.
+[3] Klaus-Rudolf William Kladny, Marco Milanta, Oto Mraz, Koen Hufkens, and Benjamin David Stocker. "Deep learning for satellite image forecasting of vegetation greenness." bioRxiv, 2022.
 
+[4] Claire Robin, Christian Requena-Mesa, Vitus Benson, Lazaro Alonso, Jeran Poehls, Nuno Carvalhais, and Markus Reichstein. "Learning to forecast vegetation greenness at fine resolution over Africa with ConvLSTMs". In *Tackling Climate Change with Machine Learning workshop, NeurIPS 2022*.  	https://arxiv.org/pdf/2210.13648.pdf
 
-Important is that the respective lists and dicts in the init are filled and that possible global arguments are mapped in the `parse.py`.
+[5] Shukla, Satya Narayan, and Benjamin M. Marlin. "A survey on principles, models and methods for learning from irregularly sampled time series." arXiv preprint arXiv:2012.00168 (2020).
 
+[6] Schirmer, Mona, et al. "Modeling irregular time series with continuous recurrent units." In *International Conference on Machine Learning. PMLR, 2022*.
 
-### **earthnet_models_pytorch.model**
-
-The model is a PyTorch nn.Module with build-in parser for hyperparameters (much like a Lightning Module). The forward must align with the requirements of the appropriate task.
+[7] Rubanova, Yulia, Ricky TQ Chen, and David K. Duvenaud. "Latent ordinary differential equations for irregularly-sampled time series." Advances in neural information processing systems 32 (2019).
