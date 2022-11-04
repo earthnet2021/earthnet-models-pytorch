@@ -7,7 +7,7 @@ import torchvision
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 import matplotlib.colors as clr
-import sys
+
 
 CMAP_NDVI = clr.LinearSegmentedColormap.from_list('ndvi', ["#cbbe9a","#fffde4","#bccea5","#66985b","#2e6a32","#123f1e","#0e371a","#01140f","#000d0a"], N=256)
 CMAP_NDVI.set_bad(color='white')
