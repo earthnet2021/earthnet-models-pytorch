@@ -148,10 +148,10 @@ class LocalRNN(nn.Module):
             meso_dynamic_inputs = meso_dynamic_inputs.reshape(b*t_m, c_m, h_m, w_m)
 
             update = self.update_encoder(meso_dynamic_inputs)
-            update = torch.cat([update, meso_dynamic_inputs.squeeze()], dim = 1)
             if h_m != 1 and w_m != 1:
                 update = torch.cat([update, meso_dynamic_inputs[:,:,(h_m//2- 1):(h_m//2),(w_m//2- 1):(w_m//2)].mean((2,3))], dim = 1)
-
+            else:
+                update = torch.cat([update, meso_dynamic_inputs.squeeze()], dim = 1)
             _, c_u = update.shape
 
             update = update.reshape(b,t_m,c_u).unsqueeze(1).repeat(1,h*w, 1, 1).reshape(b*h*w,t_m,c_u)
