@@ -45,7 +45,7 @@ class EarthNet2023Dataset(Dataset):
             'era5land_tp_max']
         self.era5 = ['era5_e', 'era5_pet', 'era5_pev', 'era5_ssrd', 'era5_t2m', 'era5_t2mmax', 'era5_t2mmin', 'era5_tp']
         self.sg = ['sg_bdod_top_mean', 'sg_bdod_sub_mean','sg_cec_top_mean','sg_cec_sub_mean','sg_cfvo_top_mean','sg_cfvo_sub_mean','sg_clay_top_mean','sg_clay_sub_mean','sg_nitrogen_top_mean','sg_nitrogen_sub_mean','sg_phh2o_top_mean','sg_phh2o_sub_mean','sg_ocd_top_mean','sg_ocd_sub_mean','sg_sand_top_mean','sg_sand_sub_mean','sg_silt_top_mean','sg_silt_sub_mean','sg_soc_top_mean','sg_soc_sub_mean']
-
+        self.dem = ['srtm_dem', 'alos_dem', 'cop_dem']
 
     def __getitem__(self, idx: int) -> dict:
         
