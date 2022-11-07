@@ -23,31 +23,34 @@ from earthnet_models_pytorch.utils import str2bool
 
 class EarthNet2023Dataset(Dataset):
 
-    def __init__(self, folder: Union[Path, str], fp16 = False):
+    def __init__(self, folder: Union[Path, str], target: str, fp16 = False):
         if not isinstance(folder, Path):
             folder = Path(folder)
 
-        self.filepaths = sorted(list(folder.glob("*/*.nc")))
-        
+        self.filepaths = sorted(list(folder.glob("*/*.nc"))) # why sorted?
         self.type = np.float16 if fp16 else np.float32
+        self.target = target
+        self.s2_bands = ['s2_B02', 's2_B03', 's2_B04', 's2_B05', 's2_B06', 's2_B07', 's2_B8A']
+        self.s2_avail = 's2_avail'
 
-        self.bands = ['ndvi', 'blue', 'green', 'red', 'nir']
+        self.s1_bands = ['s1_vv', 's1_vh']
+        self.s1_avail = 's1_avail'
 
-        
-        self.meteo_vars = ['pev_max', 'pev_mean', 'pev_min', 'sp_max', 'sp_mean', 'sp_min', 'ssr_max', 'ssr_mean', 'ssr_min', 't2m_max', 't2m_mean', 't2m_min', 'tp_max', 'tp_mean', 'tp_min']
-        self.meteo_scaling_cube = xr.DataArray(data = [1e-4, 1e-4, 1e-4, 1000, 1000, 1000, 50, 50, 50, 400, 400, 400, 500, 500, 500], coords = {"variable": self.meteo_vars})
+        self.ndviclim = ['ndviclim_mean', 'ndviclim_std']
 
+        self.era5lands = ['era5land_t2m_mean', 'era5land_pev_mean', 'era5land_slhf_mean', 'era5land_ssr_mean', 'era5land_sp_mean',  
+            'era5land_sshf_mean', 'era5land_e_mean', 'era5land_tp_mean', 'era5land_t2m_min', 'era5land_pev_min', 'era5land_slhf_min', 
+            'era5land_ssr_min', 'era5land_sp_min', 'era5land_sshf_min', 'era5land_e_min', 'era5land_tp_min', 'era5land_t2m_max', 
+            'era5land_pev_max', 'era5land_slhf_max', 'era5land_ssr_max', 'era5land_sp_max', 'era5land_sshf_max', 'era5land_e_max', 
+            'era5land_tp_max']
+        self.era5 = ['era5_e', 'era5_pet', 'era5_pev', 'era5_ssrd', 'era5_t2m', 'era5_t2mmax', 'era5_t2mmin', 'era5_tp']
+        self.sg = ['sg_bdod_top_mean', 'sg_bdod_sub_mean','sg_cec_top_mean','sg_cec_sub_mean','sg_cfvo_top_mean','sg_cfvo_sub_mean','sg_clay_top_mean','sg_clay_sub_mean','sg_nitrogen_top_mean','sg_nitrogen_sub_mean','sg_phh2o_top_mean','sg_phh2o_sub_mean','sg_ocd_top_mean','sg_ocd_sub_mean','sg_sand_top_mean','sg_sand_sub_mean','sg_silt_top_mean','sg_silt_sub_mean','sg_soc_top_mean','sg_soc_sub_mean']
 
-        self.transform_meteo = transforms.Compose([torch.from_numpy,
-                                    transforms.Lambda(lambda x: (x - mean_meteo) / std_meteo)])
 
     def __getitem__(self, idx: int) -> dict:
         
         filepath = self.filepaths[idx]
         minicube = xr.open_dataset(filepath)
-
-        # minicube["kndvi"] = np.tanh(((minicube.nir - minicube.red)/(minicube.nir+minicube.red+1e-6))**2) / np.tanh(1)
-        minicube["ndvi"] = (minicube.nir - minicube.red)/(minicube.nir+minicube.red+1e-6)
 
         hr_cube = minicube[self.bands].to_array()
         hr = hr_cube.values.transpose((3,0,1,2)).astype(self.type) # t c h w
@@ -80,6 +83,7 @@ class EarthNet2023Dataset(Dataset):
                 torch.from_numpy(highresstatic)
             ],
             "static_mask": [],
+            "target": self.target_computation(minicube),
             "landcover": torch.from_numpy(lc),
             "filepath": str(filepath),
             "cubename": self.__name_getter(filepath)
@@ -107,8 +111,22 @@ class EarthNet2023Dataset(Dataset):
             assert(bool(regex.match(components[1])))
             return "_".join(components[1:]) 
 
+    def target_computation(self, minicube):
+        """Compute the vegetation index (VI) target"""
+        if self.target == "ndvi":
+            targ = (minicube.s2_B08 - minicube.s2_B04) / (minicube.s2_BO8 + minicube.s2_B04 + 1e-6)
 
-class EarthNet2022DataModule(pl.LightningDataModule):
+        # TODO add ndvi normalized, for each measurement, need to select the good month in ndviclim
+        #if self.target == "ndvi_normalized":
+        #    targ = (minicube.s2_B08 - minicube.s2_B04) / (minicube.s2_BO8 + minicube.s2_B04 + 1e-6) - 
+
+        if self.target == "kndvi":
+            targ = np.tanh(((minicube.s2_B08 - minicube.s2_B04) / (minicube.s2_BO8 + minicube.s2_B04 + 1e-6))**2) / np.tanh(1) # Warning, the the denominator is not optimal, needs to be improved
+        return targ
+
+
+
+class EarthNet2023DataModule(pl.LightningDataModule):
 
     def __init__(self, hparams: argparse.Namespace):
         super().__init__()
@@ -126,6 +144,7 @@ class EarthNet2022DataModule(pl.LightningDataModule):
 
         parser.add_argument('--base_dir', type = str, default = "data/datasets/")
         parser.add_argument('--test_track', type = str, default = "iid")
+        parser.add_argument('--target', type = str, default = "ndvi")
 
         parser.add_argument('--fp16', type = str2bool, default = False)
 
@@ -133,7 +152,6 @@ class EarthNet2022DataModule(pl.LightningDataModule):
         parser.add_argument('--val_batch_size', type = int, default = 1)
         parser.add_argument('--test_batch_size', type = int, default = 1)
 
-        parser.add_argument('--val_pct', type = float, default = 0.05)
         parser.add_argument('--val_split_seed', type = float, default = 42)
 
         parser.add_argument('--num_workers', type = int, default = multiprocessing.cpu_count())
@@ -149,7 +167,7 @@ class EarthNet2022DataModule(pl.LightningDataModule):
             self.earthnet_test = EarthNet2023Dataset(self.base_dir/"test", fp16 = self.hparams.fp16)
 
     def train_dataloader(self) -> DataLoader:
-        return DataLoader(self.earthnet_train, batch_size=self.hparams.train_batch_size, num_workers = self.hparams.num_workers,pin_memory=True,drop_last=True)
+        return DataLoader(self.earthnet_train, batch_size=self.hparams.train_batch_size, num_workers = self.hparams.num_workers,pin_memory=True,drop_last=True, shuffle=True)
 
     def val_dataloader(self) -> DataLoader:
         return DataLoader(self.earthnet_val, batch_size=self.hparams.val_batch_size, num_workers = self.hparams.num_workers, pin_memory=True)

@@ -5,7 +5,6 @@ import argparse
 import copy
 import multiprocessing
 import re
-import sys
 
 from pathlib import Path
 
@@ -15,7 +14,7 @@ import torch
 import xarray as xr
 
 from torch import nn
-from torch.utils.data import Dataset, DataLoader, random_split
+from torch.utils.data import Dataset, DataLoader
 from torchvision.transforms import transforms
 
 from earthnet_models_pytorch.utils import str2bool
@@ -116,7 +115,7 @@ class EarthNet2022Dataset(Dataset):
             return "_".join(components[1:]) 
 
 
-class EarthNet2023DataModule(pl.LightningDataModule):
+class EarthNet2022DataModule(pl.LightningDataModule):
 
     def __init__(self, hparams: argparse.Namespace):
         super().__init__()
