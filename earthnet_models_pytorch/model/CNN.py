@@ -30,7 +30,7 @@ class MLP(nn.Module):
         return self.model(weather)
 
 
-class DumbyMLP(nn.Module):
+class CNN(nn.Module):
 
     def __init__(self, hparams: argparse.Namespace):
         super().__init__()

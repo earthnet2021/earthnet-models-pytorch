@@ -112,12 +112,14 @@ class LocalRNN(nn.Module):
             _, t_m, c_m, h_m, w_m = meso_dynamic_inputs.shape
         else:
             _, t_m, c_m = meso_dynamic_inputs.shape
+            h_m, w_m = 1, 1
 
         
 
         if self.hparams.update_encoder_name == "MLP":
             if len(meso_dynamic_inputs.shape) == 5:
                 meso_dynamic_inputs = meso_dynamic_inputs[:,:,:,(h_m//2- 1):(h_m//2),(w_m//2- 1):(w_m//2)].mean((3,4))
+            
             meso_dynamic_inputs = meso_dynamic_inputs.reshape(b, 1, 1, t_m, c_m).repeat(1, h, w, 1, 1).reshape(b*h*w,t_m, c_m)
 
             location_input = state[:,None,:64,:,:].repeat(1,t_m, 1, 1,1).permute(0,3,4,1,2).reshape(b*h*w, t_m, 64)
@@ -143,14 +145,13 @@ class LocalRNN(nn.Module):
 
 
         else:
-
-            meso_dynamic_inputs = meso_dynamic_inputs.reshape(b*t_m, c_m, 1, 1) #h_m, w_m)
+            meso_dynamic_inputs = meso_dynamic_inputs.reshape(b*t_m, c_m, h_m, w_m)
 
             update = self.update_encoder(meso_dynamic_inputs)
-            update = torch.cat([update, meso_dynamic_inputs.squeeze()], dim = 1)
-
-            #update = torch.cat([update, meso_dynamic_inputs[:,:,(h_m//2- 1):(h_m//2),(w_m//2- 1):(w_m//2)].mean((2,3))], dim = 1)
-
+            if h_m != 1 and w_m != 1:
+                update = torch.cat([update, meso_dynamic_inputs[:,:,(h_m//2- 1):(h_m//2),(w_m//2- 1):(w_m//2)].mean((2,3))], dim = 1)
+            else:
+                update = torch.cat([update, meso_dynamic_inputs.squeeze()], dim = 1)
             _, c_u = update.shape
 
             update = update.reshape(b,t_m,c_u).unsqueeze(1).repeat(1,h*w, 1, 1).reshape(b*h*w,t_m,c_u)
