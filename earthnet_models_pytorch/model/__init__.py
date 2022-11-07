@@ -1,22 +1,16 @@
 
-
-from lib2to3.pytree import Base
-from earthnet_models_pytorch.model.channel_u_net import ChannelUNet
 from earthnet_models_pytorch.model.local_rnn import LocalRNN
 from earthnet_models_pytorch.model.rnn import RNN
 from earthnet_models_pytorch.model.context_convlstm import ContextConvLSTM
-from earthnet_models_pytorch.model.u_net_convlstm import UnetConvLSTM
-from earthnet_models_pytorch.model.dumby_mlp import DumbyMLP
+from earthnet_models_pytorch.model.CNN import CNN
 from earthnet_models_pytorch.model.convlstm_lstm import ConvLSTMLSTM
 from earthnet_models_pytorch.task import TASKS
 
 MODELS = {
-    "channel-u-net": ChannelUNet,
     "local-rnn": LocalRNN,
     "rnn": RNN,
     "context-convlstm": ContextConvLSTM,
-    "u-net-convlstm": UnetConvLSTM,
-    "dumby-mlp": DumbyMLP,
+    "dumby-mlp": CNN,
     "convlstm-lstm": ConvLSTMLSTM
 }
 

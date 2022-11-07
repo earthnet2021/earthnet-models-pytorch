@@ -13,8 +13,6 @@ scripts = [
     'scripts/train.py', 
     'scripts/test.py', 
     'scripts/tune.py',
-    'scripts/analysis.py',
-    'scripts/data_exploration.py', 
     'scripts/slurmrun.sh'
 ]
 
