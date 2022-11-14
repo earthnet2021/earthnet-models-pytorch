@@ -3,16 +3,10 @@
 """
 
 from argparse import ArgumentParser
-import shutil
 import os
 import time
 import yaml
-import sys
-from torchsummary import summary
-import torch
 import pytorch_lightning as pl
-from pytorch_lightning.plugins import DDPPlugin
-
 from earthnet_models_pytorch.model import MODELS, MODELTASKS
 
 from earthnet_models_pytorch.setting import DATASETS

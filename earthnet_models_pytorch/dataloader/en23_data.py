@@ -28,32 +28,47 @@ class EarthNet2023Dataset(Dataset):
             folder = Path(folder)
 
         self.filepaths = sorted(list(folder.glob("*/*.nc"))) # why sorted?
+
         self.type = np.float16 if fp16 else np.float32
+
         self.target = target
-        self.s2_bands = ['s2_B02', 's2_B03', 's2_B04', 's2_B05', 's2_B06', 's2_B07', 's2_B8A']
-        self.s2_avail = 's2_avail'
-
-        self.s1_bands = ['s1_vv', 's1_vh']
-        self.s1_avail = 's1_avail'
-
-        self.ndviclim = ['ndviclim_mean', 'ndviclim_std']
-
-        self.era5lands = ['era5land_t2m_mean', 'era5land_pev_mean', 'era5land_slhf_mean', 'era5land_ssr_mean', 'era5land_sp_mean',  
-            'era5land_sshf_mean', 'era5land_e_mean', 'era5land_tp_mean', 'era5land_t2m_min', 'era5land_pev_min', 'era5land_slhf_min', 
-            'era5land_ssr_min', 'era5land_sp_min', 'era5land_sshf_min', 'era5land_e_min', 'era5land_tp_min', 'era5land_t2m_max', 
-            'era5land_pev_max', 'era5land_slhf_max', 'era5land_ssr_max', 'era5land_sp_max', 'era5land_sshf_max', 'era5land_e_max', 
-            'era5land_tp_max']
-        self.era5 = ['era5_e', 'era5_pet', 'era5_pev', 'era5_ssrd', 'era5_t2m', 'era5_t2mmax', 'era5_t2mmin', 'era5_tp']
-        self.sg = ['sg_bdod_top_mean', 'sg_bdod_sub_mean','sg_cec_top_mean','sg_cec_sub_mean','sg_cfvo_top_mean','sg_cfvo_sub_mean','sg_clay_top_mean','sg_clay_sub_mean','sg_nitrogen_top_mean','sg_nitrogen_sub_mean','sg_phh2o_top_mean','sg_phh2o_sub_mean','sg_ocd_top_mean','sg_ocd_sub_mean','sg_sand_top_mean','sg_sand_sub_mean','sg_silt_top_mean','sg_silt_sub_mean','sg_soc_top_mean','sg_soc_sub_mean']
-        self.dem = ['srtm_dem', 'alos_dem', 'cop_dem']
+        
+        self.variables = {'s2_bands': ['s2_B02', 's2_B03', 's2_B04', 's2_B05', 's2_B06', 's2_B07', 's2_B8A'],
+                's2_avail': ['s2_avail'],
+                's2_scene_classification': ['s2_SCL'],
+                'cloud_mask': ['s2_mask'],
+                's1_bands': ['s1_vv', 's1_vh'],
+                's1_avail': ['s1_avail'],
+                'ndviclim': ['ndviclim_mean', 'ndviclim_std'],
+                'era5lands': ['era5land_t2m_mean', 'era5land_pev_mean', 'era5land_slhf_mean', 'era5land_ssr_mean', 'era5land_sp_mean',  
+                            'era5land_sshf_mean', 'era5land_e_mean', 'era5land_tp_mean', 'era5land_t2m_min', 'era5land_pev_min', 'era5land_slhf_min', 
+                            'era5land_ssr_min', 'era5land_sp_min', 'era5land_sshf_min', 'era5land_e_min', 'era5land_tp_min', 'era5land_t2m_max', 
+                            'era5land_pev_max', 'era5land_slhf_max', 'era5land_ssr_max', 'era5land_sp_max', 'era5land_sshf_max', 'era5land_e_max', 
+                            'era5land_tp_max'],
+                'era5': ['era5_e', 'era5_pet', 'era5_pev', 'era5_ssrd', 'era5_t2m', 'era5_t2mmax', 'era5_t2mmin', 'era5_tp'],
+                'sg': ['sg_bdod_top_mean', 'sg_bdod_sub_mean','sg_cec_top_mean','sg_cec_sub_mean','sg_cfvo_top_mean','sg_cfvo_sub_mean',
+                            'sg_clay_top_mean','sg_clay_sub_mean','sg_nitrogen_top_mean','sg_nitrogen_sub_mean','sg_phh2o_top_mean','sg_phh2o_sub_mean',
+                            'sg_ocd_top_mean','sg_ocd_sub_mean','sg_sand_top_mean','sg_sand_sub_mean','sg_silt_top_mean','sg_silt_sub_mean','sg_soc_top_mean',
+                            'sg_soc_sub_mean'],
+                'dem': ['srtm_dem', 'alos_dem', 'cop_dem'],
+                'landscape': ['esawc_lc']
+                }
 
     def __getitem__(self, idx: int) -> dict:
         
         filepath = self.filepaths[idx]
         minicube = xr.open_dataset(filepath)
 
-        hr_cube = minicube[self.bands].to_array()
-        hr = hr_cube.values.transpose((3,0,1,2)).astype(self.type) # t c h w
+        # select the days with available data
+        s2_avail = minicube[self.variables['s2_avail']] 
+        index_avail = np.where(s2_avail == 1)[0]
+
+        # detect the missing day
+        missing = index_avail[1:] - index_avail[:-1] - 5
+        index_missing = np.where(missing > 0)[0]
+
+        # create the minicube
+        s2_cube = minicube[self.variables['s2_bands']].isel(time=index_avail).to_array()
 
         hr[np.isnan(hr)] = 0
         hr[hr > 1] = 1
