@@ -13,15 +13,16 @@ Checkpointer:
     every_n_val_epochs: 1
 
 Trainer:
-    gpus: 4 #6
-    accelerator: 'ddp'
+    gpus: [6]
+    strategy: 'ddp'
     #deterministic: True
     log_every_n_steps: 32
+    accumulate_grad_batches: 8
     #profiler: 'advanced'
     #fast_dev_run: True
     #log_gpu_memory: 'all'
     #weights_summary: 'full'
-    max_epochs: 100
+    max_epochs: 150
     #limit_train_batches: 128
     #limit_val_batches: 64
     gradient_clip_val: 1
@@ -30,17 +31,17 @@ Trainer:
 Data:
     base_dir: "path/to/data"
     test_track: "iid"
-    train_batch_size: 8 #96
+    train_batch_size: 4 #96
     val_batch_size: 1
     test_batch_size: 1 #96
-    num_workers: 16 #2
+    num_workers: 8 #2
 
 Task:
     loss:
         name: "masked"
         args: {
             distance_type: "L2",
-            rescale: True
+            rescale: False
         }
         dist_scale: 1
         state_shedule: {
@@ -65,8 +66,9 @@ Task:
         min_lc: 2
         max_lc: 6
         comp_ndvi: False
-    context_length: 9
-    target_length: 36
+
+    context_length: 35
+    target_length: 10
     n_stochastic_preds: 1
     optimization:
         optimizer:
@@ -74,7 +76,7 @@ Task:
                 name: Adam
                 args: 
                     betas: [0.9, 0.999]
-                lr_per_sample: 0.000005
+                lr_per_sample: 0.0000005
         lr_shedule:
             -
                 name: MultiStepLR
@@ -82,6 +84,9 @@ Task:
                     milestones: [60,90] #[2, 20, 50, 90]
                     gamma: 0.1
     n_log_batches: 8
+    train_batch_size: 4 #96
+    val_batch_size: 1
+    test_batch_size: 1 #96
     compute_metric_on_test: True
 
 Model:
@@ -90,13 +95,11 @@ Model:
         encoder_name: timm-efficientnet-b3
         encoder_weights: noisy-student
         in_channels: 46
-        classes: 256
+        classes: 192
         decoder_merge_policy: cat
         decoder_dropout: 0
     update_encoder_name: MLP
     update_encoder_inchannels: 97
     update_encoder_nclasses: 96
-    train_lstm_npixels: 512
-    lc_min: 2
-    lc_max: 6
-    val_n_splits: 20
+    update_encoder_inchannels: 24
+    train_lstm_npixels: 4096

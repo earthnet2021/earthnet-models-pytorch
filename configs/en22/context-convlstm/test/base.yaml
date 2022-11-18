@@ -1,0 +1,99 @@
+Architecture: "context-convlstm"
+
+Seed: 42
+
+Setting: "en22"
+
+Logger:
+    save_dir: "experiments/"
+
+Checkpointer:
+    save_top_k: 1
+    save_last: True
+    every_n_epochs: 5
+
+Trainer:
+    gpus: [4] #6
+    strategy: 'ddp'
+    #deterministic: True
+    log_every_n_steps: 32
+    #profiler: 'advanced'
+    #fast_dev_run: True
+    #log_gpu_memory: 'all'
+    #weights_summary: 'full'
+    max_epochs: 100
+    #limit_train_batches: 128
+    #limit_val_batches: 64
+    gradient_clip_val: 1
+    val_check_interval: 0.1
+  
+Data:
+    base_dir: "/workspace/data/scratch/L2_minicubes/"  
+    test_track: "iid"
+    # val_pct: 0.01
+    train_batch_size: 4 #96
+    val_batch_size: 1
+    test_batch_size: 1 #96
+    num_workers: 8 #2
+
+Task:
+    loss:
+        name: "masked"
+        args: {
+            distance_type: "L2"
+        }
+        dist_scale: 1
+        state_shedule: {
+            initial_weight: 0,
+            increase_from_step: 1500,
+            weight_step: 0.00001,
+            max_weight: 1
+        }
+        inference_shedule: {
+            initial_weight: 0,
+            increase_from_step: 3000,
+            weight_step: 0.0000000001,
+            max_weight: 1
+        }
+        residuals_shedule: {
+            initial_weight: 0,
+            increase_from_step: 1500,
+            weight_step: 0.00001,
+            max_weight: 1
+        }
+        ndvi: True
+        min_lc: 2
+        max_lc: 6
+        comp_ndvi: True
+    context_length: 9
+    target_length: 36
+    n_stochastic_preds: 1
+    optimization:
+        optimizer:
+            - 
+                name: Adam
+                args: 
+                    betas: [0.9, 0.999]
+                lr_per_sample: 0.00002
+        lr_shedule:
+            -
+                name: MultiStepLR
+                args:
+                    milestones: [40,70,90] #[2, 20, 50, 90]
+                    gamma: 0.1
+    n_log_batches: 8
+    compute_metric_on_test: True
+    train_batch_size: 4 #96
+    val_batch_size: 1
+    test_batch_size: 1 #96
+
+Model:
+    context_length: 9
+    target_length: 36
+    hidden_dim: [64, 64, 64, 64]
+    kernel_size: 3
+    num_layers: 3
+    lc_min: 2
+    lc_max: 6
+    val_n_splits: 20
+    method: 'ablation'

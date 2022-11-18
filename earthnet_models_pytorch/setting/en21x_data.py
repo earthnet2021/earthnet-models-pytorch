@@ -24,7 +24,7 @@ class EarthNet2021XDataset(Dataset):
         if not isinstance(folder, Path):
             folder = Path(folder)
 
-        self.filepaths = sorted(list(folder.glob("**/*.nc")))
+        self.filepaths = sorted(list(folder.glob("**/*.nc")))  # Listing Python source files in this directory tree
         
         self.type = np.float16 if fp16 else np.float32
 
@@ -35,7 +35,7 @@ class EarthNet2021XDataset(Dataset):
         self.soilgrids_all = soilgrids_all
 
         self.eobs_scaling_cube = xr.DataArray(data = [100, 100, 100, 20, 100, 100, 100, 100, 1000, 1000, 1000, 200, 1000, 1000, 1000, 200, 50, 50, 50, 10, 50, 50, 50, 10, 50, 50, 50, 10], coords = {"variable": ['fg_max', 'fg_mean', 'fg_min', 'fg_spread', 'hu_max', 'hu_mean', 'hu_min', 'hu_spread', 'qq_max',
-    'qq_mean', 'qq_min', 'qq_spread', 'rr_max', 'rr_mean', 'rr_min', 'rr_spread', 'tg_max', 'tg_mean', 'tg_min', 'tg_spread', 'tn_max', 'tn_mean', 'tn_min', 'tn_spread', 'tx_max', 'tx_mean', 'tx_min', 'tx_spread']})
+    'qq_mean', 'qq_min', 'qq_spread', 'rr_max', 'rr_mean', 'rr_min', 'rr_spread', 'tg_max', 'tg_mean', 'tg_min', 'tg_spread', 'tn_max', 'tn_mean', 'tn_min', 'tn_spread', 'tx_max', 'tx_mean', 'tx_min', 'tx_spread']})  # ???
 
         self.eobs_vars = ['fg_max', 'fg_mean', 'fg_min', 'fg_spread', 'hu_max', 'hu_mean', 'hu_min', 'hu_spread', 'qq_max',
     'qq_mean', 'qq_min', 'qq_spread', 'rr_max', 'rr_mean', 'rr_min', 'rr_spread', 'tg_max', 'tg_mean', 'tg_min', 'tg_spread', 'tn_max', 'tn_mean', 'tn_min', 'tn_spread', 'tx_max', 'tx_mean', 'tx_min', 'tx_spread']
@@ -48,7 +48,7 @@ class EarthNet2021XDataset(Dataset):
 
         kndvi = minicube.kndvi.values.transpose((2,0,1))[:, None, ...].astype(self.type) # t c h w
 
-        kndvi /= np.tanh(1)
+        kndvi /= np.tanh(1)   # WARNING TODO compute the distance between all pixels for sigma (respect the Gustau advice)
 
         kndvi[np.isnan(kndvi)] = 0
 
@@ -63,13 +63,13 @@ class EarthNet2021XDataset(Dataset):
             eobs_cube = eobs_cube.sel(variable = [v for v in self.eobs_vars if "spread" not in v])
 
         if self.spatial_eobs:
-            eobs = eobs_cube.values.transpose((1,0,2,3)).astype(self.type) # t c h w
+            eobs = eobs_cube.values.transpose((1,0,2,3)).astype(self.type) # t c h w  
         else:
             eobs = eobs_cube.values.transpose((1,0)).astype(self.type)
 
         eobs[np.isnan(eobs)] = 0  # MAYBE BAD IDEA......
         
-        dem = minicube.dem.values[None,...].astype(self.type) # c h w
+        dem = minicube.dem.values[None,...].astype(self.type) # c h w  
         
         dem /= 2000
         dem[np.isnan(dem)] = 0  # MAYBE BAD IDEA......
@@ -110,8 +110,8 @@ class EarthNet2021XDataset(Dataset):
             "filepath": str(filepath),
             "cubename": self.__name_getter(filepath)
         }
-
         return data
+    
     def __len__(self) -> int:
         return len(self.filepaths)
 
@@ -133,7 +133,8 @@ class EarthNet2021XDataset(Dataset):
             return "_".join(components[1:]) 
 
 
-class EarthNet2021XpxDataset(Dataset):
+class EarthNet2021XpxDataset(Dataset):  
+
     def __init__(self, folder: Union[Path, str], fp16 = False, eobs_spread = False, soilgrids_all = False):
         if not isinstance(folder, Path):
             folder = Path(folder)
@@ -156,7 +157,7 @@ class EarthNet2021XpxDataset(Dataset):
 
         print("Initialized dataset")
 
-    def __getitem__(self, idx: int) -> dict:
+    def __getitem__(self, idx: int) -> dict:   
 
         pixel = self.dataset.isel(loc = idx)
 
@@ -228,8 +229,8 @@ class EarthNet2021XpxDataset(Dataset):
 
 
 class EarthNet2021XDataModule(pl.LightningDataModule):
-
-    def __init__(self, hparams: argparse.Namespace):
+    
+    def __init__(self, hparams: argparse.Namespace):  
         super().__init__()
         self.save_hyperparameters(copy.deepcopy(hparams))
         self.base_dir = Path(hparams.base_dir)
@@ -262,7 +263,6 @@ class EarthNet2021XDataModule(pl.LightningDataModule):
         return parser
     
     def setup(self, stage: str = None):
-
         if stage == 'fit' or stage is None:
             earthnet_corpus = EarthNet2021XDataset(self.base_dir/"train", fp16 = self.hparams.fp16, spatial_eobs = self.hparams.spatial_eobs, eobs_spread = self.hparams.eobs_spread, soilgrids_all = self.hparams.soilgrids_all)
 

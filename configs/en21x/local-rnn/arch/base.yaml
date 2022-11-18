@@ -10,11 +10,11 @@ Logger:
 Checkpointer:
     save_top_k: 1
     save_last: True
-    period: 1
+    every_n_epochs: 5
 
 Trainer:
-    gpus: 4 #6
-    accelerator: 'ddp'
+    gpus: 0 #4 #6
+    strategy: 'ddp'
     #deterministic: True
     log_every_n_steps: 32
     #profiler: 'advanced'
@@ -34,7 +34,7 @@ Data:
     train_batch_size: 1 #96
     val_batch_size: 1
     test_batch_size: 1 #96
-    num_workers: 4 #2
+    num_workers: 0 # 4 #2
 
 Task:
     loss:

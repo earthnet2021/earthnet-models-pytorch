@@ -149,8 +149,6 @@ class RNN(nn.Module):
 
             last_dynamic_input = hr_dynamic_inputs[:,-1,...]
 
-            #b, t, c = hr_dynamic_inputs.shape
-
             hr_dynamic_inputs = hr_dynamic_inputs.reshape(b*h*w, t*c)
 
             static_inputs = data["static"][0]
@@ -198,6 +196,7 @@ class RNN(nn.Module):
                 meso_dynamic_inputs = meso_dynamic_inputs[:,:,:,(h_m//2- 1):(h_m//2),(w_m//2- 1):(w_m//2)].mean((3,4))[:,None,None,...].repeat(1,h, w, 1, 1).reshape(b*h*w, t_m, c_m)
             else:
                 _, t_m, c_m = meso_dynamic_inputs.shape
+        
                 meso_dynamic_inputs = meso_dynamic_inputs[:,None,None,...].repeat(1,h, w, 1, 1).reshape(b*h*w, t_m, c_m)
 
             if self.hparams.lc_onehot:

@@ -7,11 +7,14 @@ import shutil
 import os
 import time
 import yaml
-
+import sys
+from torchsummary import summary
 import torch
 import pytorch_lightning as pl
+from pytorch_lightning.plugins import DDPPlugin
 
 from earthnet_models_pytorch.model import MODELS, MODELTASKS
+
 from earthnet_models_pytorch.setting import DATASETS
 from earthnet_models_pytorch.utils import parse_setting
 
@@ -21,7 +24,6 @@ def train_model(setting_dict: dict, setting_file: str = None):
 
     pl.seed_everything(setting_dict["Seed"])
     # Data
-
     data_args = ["--{}={}".format(key,value) for key, value in setting_dict["Data"].items()]
     data_parser = ArgumentParser()
     data_parser = DATASETS[setting_dict["Setting"]].add_data_specific_args(data_parser)
@@ -42,6 +44,9 @@ def train_model(setting_dict: dict, setting_file: str = None):
     task_params = task_parser.parse_args(task_args)
     task = MODELTASKS[setting_dict["Architecture"]](model = model, hparams = task_params)
     
+    #task.load_from_checkpoint(checkpoint_path = "experiments/en22/context-convlstm/baseline_convlstm_bigger/full_train/checkpoints/last.ckpt", context_length = setting_dict["Task"]["context_length"], target_length = setting_dict["Task"]["target_length"], model = model, hparams = task_params)
+
+
     # Logger
     logger = pl.loggers.TensorBoardLogger(**setting_dict["Logger"])
 
@@ -52,6 +57,7 @@ def train_model(setting_dict: dict, setting_file: str = None):
             yaml.dump(setting_dict, fp)
 
     # Checkpointing
+    
     checkpoint_callback = pl.callbacks.ModelCheckpoint(**setting_dict["Checkpointer"])
 
     # Trainer
@@ -60,17 +66,15 @@ def train_model(setting_dict: dict, setting_file: str = None):
         trainer_dict["profiler"] = pl.profiler.AdvancedProfiler(output_filename="curr_profile")
 
     trainer = pl.Trainer(logger = logger, callbacks = [checkpoint_callback], **trainer_dict)
-
-    dm.setup("fit")
+ 
     trainer.fit(task, dm)
+    
     print(f"Best model {checkpoint_callback.best_model_path} with score {checkpoint_callback.best_model_score}")
 
     end = time.time()
 
     print(f"Calculation done in {end - start} seconds.")
     
-
-
 
 
 if __name__ == "__main__":

@@ -22,7 +22,7 @@ scripts = [
     'scripts/debug.py', 
     'scripts/train.py', 
     'scripts/test.py', 
-    'scripts/tune.py', 
+    'scripts/tune.py',
     'scripts/slurmrun.sh'
 ]
 
