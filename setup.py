@@ -6,6 +6,16 @@ with open("README.md", "r") as fh:
 
 
 install_requires = [
+    "tensorboard",
+    "numpy",
+    "matplotlib",
+    "pillow",
+    "xarray",
+    "zarr",
+    "netcdf4",
+    "pytorch-lightning",
+    "earthnet",
+    "segmentation-models-pytorch"
     ]
 
 scripts = [
@@ -26,7 +36,7 @@ setup(name='earthnet-models-pytorch',
         long_description_content_type="text/markdown",
         classifiers=[
                 "Intended Audience :: Science/Research",
-                "License :: Other/Proprietary License",
+                "License :: OSI Approved :: MIT License",
                 "Programming Language :: Python :: 3"
                  ],
         packages=find_packages(),
