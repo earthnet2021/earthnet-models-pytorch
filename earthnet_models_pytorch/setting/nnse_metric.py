@@ -61,7 +61,7 @@ class NNSEVeg(Metric):
 
         nnse = 1 / (2 - (1 -(((ndvi_targ - ndvi_pred) * s2_lc_mask)**2).sum(1) / ((ndvi_targ - ndvi_targ.mean(1).unsqueeze(1))**2).sum(1)))
 
-        n_obs = (s2_lc_mask != 0).sum((1,2,3,4))
+        n_obs = (s2_lc_mask.mean(1) != 0).sum((1, 2, 3))
 
             
         if just_return:
