@@ -20,39 +20,46 @@ from torchvision.transforms import transforms
 
 from earthnet_models_pytorch.utils import str2bool
 
-
-class EarthNet2023Dataset(Dataset):
-
-    def __init__(self, folder: Union[Path, str], target: str, fp16 = False):
-        if not isinstance(folder, Path):
-            folder = Path(folder)
-
-        self.filepaths = sorted(list(folder.glob("*/*.nc"))) # why sorted?
-
-        self.type = np.float16 if fp16 else np.float32
-
-        self.target = target
-        
-        self.variables = {'s2_bands': ['s2_B02', 's2_B03', 's2_B04', 's2_B05', 's2_B06', 's2_B07', 's2_B8A'],
+variables = {'s2_bands': ['s2_B02', 's2_B03', 's2_B04', 's2_B05', 's2_B06', 's2_B07', 's2_B8A'],
                 's2_avail': ['s2_avail'],
                 's2_scene_classification': ['s2_SCL'],
                 'cloud_mask': ['s2_mask'],
                 's1_bands': ['s1_vv', 's1_vh'],
                 's1_avail': ['s1_avail'],
                 'ndviclim': ['ndviclim_mean', 'ndviclim_std'],
-                'era5lands': ['era5land_t2m_mean', 'era5land_pev_mean', 'era5land_slhf_mean', 'era5land_ssr_mean', 'era5land_sp_mean',  
-                            'era5land_sshf_mean', 'era5land_e_mean', 'era5land_tp_mean', 'era5land_t2m_min', 'era5land_pev_min', 'era5land_slhf_min', 
-                            'era5land_ssr_min', 'era5land_sp_min', 'era5land_sshf_min', 'era5land_e_min', 'era5land_tp_min', 'era5land_t2m_max', 
-                            'era5land_pev_max', 'era5land_slhf_max', 'era5land_ssr_max', 'era5land_sp_max', 'era5land_sshf_max', 'era5land_e_max', 
-                            'era5land_tp_max'],
+                #  era5land pev and pet have a low precision
+                'era5lands': ['era5land_t2m_mean', 'era5land_pev_mean', 'era5land_slhf_mean', 'era5land_ssr_mean', 'era5land_sp_mean',  'era5land_sshf_mean', 'era5land_e_mean', 'era5land_tp_mean', 
+                            'era5land_t2m_min', 'era5land_pev_min', 'era5land_slhf_min', 'era5land_ssr_min', 'era5land_sp_min', 'era5land_sshf_min', 'era5land_e_min', 'era5land_tp_min', 
+                            'era5land_t2m_max', 'era5land_pev_max', 'era5land_slhf_max', 'era5land_ssr_max', 'era5land_sp_max', 'era5land_sshf_max', 'era5land_e_max', 'era5land_tp_max'],
                 'era5': ['era5_e', 'era5_pet', 'era5_pev', 'era5_ssrd', 'era5_t2m', 'era5_t2mmax', 'era5_t2mmin', 'era5_tp'],
-                'sg': ['sg_bdod_top_mean', 'sg_bdod_sub_mean','sg_cec_top_mean','sg_cec_sub_mean','sg_cfvo_top_mean','sg_cfvo_sub_mean',
+                'weather_selection' : ['era5_e', 'era5_pet', 'era5_pev', 'era5_ssrd', 'era5_t2m', 'era5_t2mmax', 'era5_t2mmin', 'era5_tp'],
+
+                # soigrids is not yet define on 128 x 128 pixels. Can maybe not be used during the prediction period.
+                'soilgrids': ['sg_bdod_top_mean', 'sg_bdod_sub_mean','sg_cec_top_mean','sg_cec_sub_mean','sg_cfvo_top_mean','sg_cfvo_sub_mean',
                             'sg_clay_top_mean','sg_clay_sub_mean','sg_nitrogen_top_mean','sg_nitrogen_sub_mean','sg_phh2o_top_mean','sg_phh2o_sub_mean',
                             'sg_ocd_top_mean','sg_ocd_sub_mean','sg_sand_top_mean','sg_sand_sub_mean','sg_silt_top_mean','sg_silt_sub_mean','sg_soc_top_mean',
                             'sg_soc_sub_mean'],
-                'dem': ['srtm_dem', 'alos_dem', 'cop_dem'],
+                'elevation': ['srtm_dem', 'alos_dem', 'cop_dem'],
                 'landscape': ['esawc_lc']
                 }
+
+mean = {}
+std = {}
+
+class EarthNet2023Dataset(Dataset):
+
+    def __init__(self, folder: Union[Path, str], target: str, variables=variables, fp16 = False):
+        if not isinstance(folder, Path):
+            folder = Path(folder)
+
+        self.filepaths = sorted(list(folder.glob("*/*.nc"))) # why sorted?
+        self.type = np.float16 if fp16 else np.float32
+        self.target = target
+        self.variables = variables
+        self.mean = mean
+        self.std = std
+
+
 
     def __getitem__(self, idx: int) -> dict:
         
@@ -68,38 +75,37 @@ class EarthNet2023Dataset(Dataset):
         index_missing = np.where(missing > 0)[0]
 
         # create the minicube
+        # s2 is 5 days, and already rescaled [0, 1]
         s2_cube = minicube[self.variables['s2_bands']].isel(time=index_avail).to_array()
-
-        hr[np.isnan(hr)] = 0
-        hr[hr > 1] = 1
-        hr[hr < 0] = 0
+        s2_cube[np.isnan(s2_cube)] = np.mean(s2_cube)
         
-        meteo_cube = minicube[self.meteo_vars].to_array()
-        meteo_cube  = meteo_cube / self.meteo_scaling_cube
-        meteo = meteo_cube.values.transpose((1,0)).astype(self.type)
 
-        meteo[np.isnan(meteo)] =  0
+        meteo_cube = minicube[self.variables['era5lands']].to_array()
+        # meteocube = meteo_cube.values.transpose((1,0)).astype(self.type)
 
-        highresstatic = minicube.dem.values[None,...].astype(self.type) # c h w       
-        highresstatic /= 2000
-        highresstatic[np.isnan(highresstatic)] = 0
+        meteo_cube[np.isnan(meteo_cube)] =  np.mean(meteo_cube)
+
+        topography = minicube # c h w       
+        # highresstatic[np.isnan(highresstatic)] = 0
 
         lc = minicube.lc.values[None, ...].astype(self.type) # c h w
         lc[np.isnan(lc)] = 0
+
+        # Standardization - 
     
         
+        # final minicube
         data = {
             "dynamic": [
-                torch.from_numpy(hr),
-                self.transform_meteo(meteo)
+                torch.from_numpy(s2_cube),
+                torch.from_numpy(meteo_cube)
+                
             ],
             "dynamic_mask": [],
             "static": [
                 torch.from_numpy(highresstatic)
             ],
-            "static_mask": [],
             "target": self.target_computation(minicube),
-            "landcover": torch.from_numpy(lc),
             "filepath": str(filepath),
             "cubename": self.__name_getter(filepath)
         }

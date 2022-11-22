@@ -135,8 +135,6 @@ if __name__ == "__main__":
     data_params = data_parser.parse_args(data_args)
     dm = DATASETS[setting_dict["Setting"]](data_params)
 
-    print(negative_ndvi(dm.train_dataloader()))
-    sys.exit()
     if setting_dict["Function"] == 'nan_value':
         print(nan_value(dm.train_dataloader()))
     elif setting_dict["Function"] == 'mean_and_std':
