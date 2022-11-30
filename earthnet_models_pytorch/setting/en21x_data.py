@@ -1,5 +1,7 @@
 
 from typing import Union, Optional
+import warnings
+warnings.simplefilter(action='ignore', category=FutureWarning)
 
 import argparse
 import copy
@@ -20,7 +22,7 @@ from earthnet_models_pytorch.utils import str2bool
 
 class EarthNet2021XDataset(Dataset):
 
-    def __init__(self, folder: Union[Path, str], fp16 = False, s2_bands = ["ndvi", "B02", "B03", "B04", "B8A"], eobs_vars = ['fg', 'hu', 'pp', 'qq', 'rr', 'tg', 'tn', 'tx'], eobs_agg = ['mean', 'min', 'max'], static_vars = ['srtm_dem', 'alos_dem', 'cop_dem', 'esawc_lc', 'geom_cls']):
+    def __init__(self, folder: Union[Path, str], fp16 = False, s2_bands = ["ndvi", "B02", "B03", "B04", "B8A"], eobs_vars = ['fg', 'hu', 'pp', 'qq', 'rr', 'tg', 'tn', 'tx'], eobs_agg = ['mean', 'min', 'max'], static_vars = ['nasa_dem', 'alos_dem', 'cop_dem', 'esawc_lc', 'geom_cls']):
         if not isinstance(folder, Path):
             folder = Path(folder)
 
@@ -36,8 +38,8 @@ class EarthNet2021XDataset(Dataset):
         self.eobs_mean = xr.DataArray(data = [8.90661030749754, 2.732927619847993, 77.54440854529798, 1014.330962704611, 126.47924227500346, 1.7713217310829938, 4.770701430461286, 13.567999825718509], coords = {'variable': ['eobs_tg', 'eobs_fg', 'eobs_hu', 'eobs_pp', 'eobs_qq', 'eobs_rr', 'eobs_tn', 'eobs_tx']}) 
         self.eobs_std = xr.DataArray(data = [9.75620252236597, 1.4870108944469236, 13.511387994026359, 10.262645403460999, 97.05522895011327, 4.147967261223076, 9.044987677752898, 11.08198777356161], coords = {'variable': ['eobs_tg', 'eobs_fg', 'eobs_hu', 'eobs_pp', 'eobs_qq', 'eobs_rr', 'eobs_tn', 'eobs_tx']}) 
 
-        self.static_mean = xr.DataArray(data = [0.0, 0.0, 0.0, 0.0, 0.0], coords = {'variable': ['srtm_dem', 'alos_dem', 'cop_dem', 'esawc_lc', 'geom_cls']})
-        self.static_std = xr.DataArray(data = [500.0, 500.0, 500.0, 1.0, 1.0], coords = {'variable': ['srtm_dem', 'alos_dem', 'cop_dem', 'esawc_lc', 'geom_cls']})
+        self.static_mean = xr.DataArray(data = [0.0, 0.0, 0.0, 0.0, 0.0], coords = {'variable': ['nasa_dem', 'alos_dem', 'cop_dem', 'esawc_lc', 'geom_cls']})
+        self.static_std = xr.DataArray(data = [500.0, 500.0, 500.0, 1.0, 1.0], coords = {'variable': ['nasa_dem', 'alos_dem', 'cop_dem', 'esawc_lc', 'geom_cls']})
 
 
     def __getitem__(self, idx: int) -> dict:
@@ -45,6 +47,46 @@ class EarthNet2021XDataset(Dataset):
         filepath = self.filepaths[idx]
 
         minicube = xr.open_dataset(filepath)
+
+        # if minicube.s2_B02.shape[1] != 128:
+        #     # print("lat", filepath, minicube.s2_B02.shape, minicube["s2_B02"].dropna(dim = "lat", how = "all").shape)
+        #     new_lat = xr.DataArray(coords = {"lat": np.linspace(minicube.lat.values[0], minicube.lat.values[-1] if len(minicube.lat) > 2 else minicube.lat.values[0] - 0.023551999999654072, 128)}, dims = ("lat", ))
+        #     new_mc = [minicube[[k for k in minicube.data_vars if k not in ["s2_B02", "s2_B03", "s2_B04", "s2_B8A", "alos_dem", "cop_dem", "srtm_dem", "esawc_lc", "geom_cls", "s2_SCL", "s2_mask"]]]]
+
+        #     for var in ["s2_B02", "s2_B03", "s2_B04", "s2_B8A", "alos_dem", "cop_dem", "srtm_dem", "esawc_lc", "geom_cls", "s2_SCL", "s2_mask"]:
+        #         if var in minicube:
+        #             curr_mc = minicube[var].dropna(dim = "lat", how = "all")
+        #             if len(curr_mc.lat) != 128:
+        #                 curr_mc = curr_mc.interp_like(new_lat)
+        #             else:
+        #                 curr_mc["lat"] = new_lat
+        #             #curr_mc["lat"] = minicube["s2_B02"].dropna(dim = "lat", how = "all").lat
+        #             new_mc.append(curr_mc)
+        #     for i in range(len(new_mc[1:])):
+        #         if "lat" in new_mc[i+1].dims:
+        #             new_mc[i+1]["lat"] = new_lat
+
+        #     minicube = xr.merge(new_mc)
+
+        # if minicube.s2_B02.shape[2] != 128:
+        #     # print("lon", filepath, minicube.s2_B02.shape, minicube["s2_B02"].dropna(dim = "lon", how = "all").shape)
+        #     new_lon = xr.DataArray(coords = {"lon": np.linspace(minicube.lon.values[0], minicube.lon.values[-1] if len(minicube.lon) > 2 else minicube.lon.values[0] + 0.037961000000000134, 128)}, dims = ("lon", )) 
+        #     new_mc = [minicube[[k for k in minicube.data_vars if k not in ["s2_B02", "s2_B03", "s2_B04", "s2_B8A", "alos_dem", "cop_dem", "nasa_dem", "esawc_lc", "geom_cls", "s2_SCL", "s2_mask"]]]]
+
+        #     for var in ["s2_B02", "s2_B03", "s2_B04", "s2_B8A", "alos_dem", "cop_dem", "nasa_dem", "esawc_lc", "geom_cls", "s2_SCL", "s2_mask"]:
+        #         if var in minicube:
+        #             curr_mc = minicube[var].dropna(dim = "lon", how = "all")
+        #             if len(curr_mc.lon) != 128:
+        #                 curr_mc = curr_mc.interp_like(new_lon)
+        #             else:
+        #                 curr_mc["lon"] = new_lon
+        #             #curr_mc["lon"] = minicube["s2_B02"].dropna(dim = "lon", how = "all").lon
+        #             new_mc.append(curr_mc)
+        #     for i in range(len(new_mc[1:])):
+        #         if "lon" in new_mc[i+1].dims:
+        #             new_mc[i+1]["lon"] = new_lon
+        #     minicube = xr.merge(new_mc)
+
 
         nir = minicube.s2_B8A
         red = minicube.s2_B04
@@ -77,9 +119,9 @@ class EarthNet2021XDataset(Dataset):
 
         eobsarr[np.isnan(eobsarr)] = 0.  # MAYBE BAD IDEA......
 
-        for static_var in self.static_vars + ["esawc_lc"]: # somehow sometimes a DEM might be missing..
-            if static_var not in minicube:
-                minicube[static_var] = xr.DataArray(data = np.full(shape = (len(minicube.lat), len(minicube.lon)), fill_value = np.NaN), coords = {"lat": minicube.lat, "lon": minicube.lon}, dims = ("lat", "lon"))
+        # for static_var in self.static_vars + ["esawc_lc"]: # somehow sometimes a DEM might be missing..
+        #     if static_var not in minicube:
+        #         minicube[static_var] = xr.DataArray(data = np.full(shape = (len(minicube.lat), len(minicube.lon)), fill_value = np.NaN), coords = {"lat": minicube.lat, "lon": minicube.lon}, dims = ("lat", "lon"))
         
         staticarr = ((minicube[self.static_vars].to_array("variable") - self.static_mean)/self.static_std).transpose("variable", "lat", "lon").values
 
@@ -157,7 +199,7 @@ class EarthNet2021XDataModule(pl.LightningDataModule):
                 self.earthnet_train, self.earthnet_val = random_split(earthnet_corpus, [train_size, val_size])
 
         if stage == 'test' or stage is None:
-            self.earthnet_test = EarthNet2021XDataset(self.base_dir/self.hparams.test_track, fp16 = self.hparams.fp16, spatial_eobs = self.hparams.spatial_eobs, eobs_spread = self.hparams.eobs_spread, soilgrids_all = self.hparams.soilgrids_all)
+            self.earthnet_test = EarthNet2021XDataset(self.base_dir/self.hparams.test_track, fp16 = self.hparams.fp16)
 
     def train_dataloader(self) -> DataLoader:
         return DataLoader(self.earthnet_train, batch_size=self.hparams.train_batch_size, num_workers = self.hparams.num_workers,pin_memory=True,drop_last=True)

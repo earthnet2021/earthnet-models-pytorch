@@ -57,7 +57,7 @@ class SpatioTemporalTask(pl.LightningModule):
         self.metric = METRICS[self.hparams.setting]()
         self.ndvi_pred = (self.hparams.setting == "en21-veg") #TODO: Legacy, remove this...  #TODO: what is mean ?
         
-        self.pred_mode = {"en21-veg": "ndvi", "en21-std": "rgb", "en21x": "kndvi", "en21x-px": "kndvi", "en22": "kndvi"}[self.hparams.setting]
+        self.pred_mode = {"en21-veg": "ndvi", "en21-std": "rgb",  "en21x": "ndvi","en21xold": "kndvi", "en21x-px": "kndvi", "en22": "kndvi"}[self.hparams.setting]
 
         self.model_shedules = []
         for shedule in self.hparams.model_shedules:
@@ -162,14 +162,14 @@ class SpatioTemporalTask(pl.LightningModule):
 
         mean_logs = {l: torch.tensor([log[l].mean() for log in all_logs], dtype=torch.float32, device = self.device).mean() for l in all_logs[0]} 
 
-        batch_size = torch.tensor(self.hparams.val_batch_size, dtype=torch.float32)
+        batch_size = torch.tensor(self.hparams.val_batch_size, dtype=torch.int64)#float32)
         
         # loss_val
         self.log_dict({l+"_val": mean_logs[l] for l in mean_logs}, sync_dist=True, batch_size=batch_size)  
 
         if batch_idx < self.hparams.n_log_batches and len(preds.shape) == 5:
             if self.logger is not None and preds.shape[2] == 1:
-                log_viz(self.logger.experiment, all_viz, batch, batch_idx, self.current_epoch, mode = self.pred_mode) #, lc_min = 82 if not self.hparams.setting == "en22" else 2, lc_max = 104 if not self.hparams.setting == "en22" else 6)
+                log_viz(self.logger.experiment, all_viz, batch, batch_idx, self.current_epoch, mode = self.pred_mode, setting = self.hparams.setting) #, lc_min = 82 if not self.hparams.setting == "en22" else 2, lc_max = 104 if not self.hparams.setting == "en22" else 6)
 
     def validation_epoch_end(self, validation_step_outputs):
         current_scores = self.metric.compute()
@@ -202,7 +202,24 @@ class SpatioTemporalTask(pl.LightningModule):
             static = batch["static"][0]
 
             for j in range(preds.shape[0]):
-                if self.hparams.setting in ["en21x", "en22"]:
+                if self.hparams.setting in ["en21x"]:
+                    # Targets
+                    targ_path = Path(batch["filepath"][j])
+                    targ_cube = xr.open_dataset(targ_path)
+
+                    lat = targ_cube.lat
+                    lon = targ_cube.lon
+
+                    ndvi_preds = preds[j,:,0,...].detach().cpu().numpy()
+                    pred_cube = xr.Dataset({"ndvi_pred": xr.DataArray(data = ndvi_preds, coords = {"time": targ_cube.time.isel(time = slice(4,None,5)).isel(time = slice(self.context_length,self.context_length+self.target_length)), "lat": lat, "lon": lon}, dims = ["time","lat", "lon"])})
+
+                    pred_dir = self.pred_dir
+                    pred_path = pred_dir/targ_path.parent.stem/targ_path.name
+                    pred_path.parent.mkdir(parents = True, exist_ok = True)
+                    if not pred_path.is_file():
+                        pred_cube.to_netcdf(pred_path, encoding={"ndvi_pred":{"dtype": "float32"}})
+                    
+                elif self.hparams.setting in ["en21xold", "en22"]:
                     # Targets
                     targ_path = Path(batch["filepath"][j])
                     targ_cube = xr.open_dataset(targ_path)

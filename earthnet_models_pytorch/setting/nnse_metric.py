@@ -17,7 +17,7 @@ class NNSEVeg(Metric):
         )
 
         self.add_state("nnse_sum", default=torch.tensor(0.0), dist_reduce_fx="sum")  
-        self.add_state("n_obs", default=torch.tensor(0), dist_reduce_fx="sum")
+        self.add_state("n_obs", default=torch.tensor(1e-6), dist_reduce_fx="sum")
 
         self.lc_min = lc_min
         self.lc_max = lc_max
@@ -52,29 +52,36 @@ class NNSEVeg(Metric):
 
         lc = batch["landcover"]
 
-        s2_mask = batch["dynamic_mask"][0][:,-t_pred:,...]
-        s2_lc_mask = torch.where((s2_mask < 1.).bool(), ((lc >= self.lc_min).bool() & (lc <= self.lc_max).bool()).type_as(s2_mask).unsqueeze(1).repeat(1, preds.shape[1], 1, 1, 1), (s2_mask < 1.).type_as(s2_mask))
+        s2_mask = (batch["dynamic_mask"][0][:,-t_pred:,...] < 1.).bool().type_as(preds)  # b t c h w
+        lc_mask = ((lc >= self.lc_min).bool() & (lc <= self.lc_max).bool()).type_as(preds)  # b c h w
 
-        ndvi_targ = batch["dynamic"][0][:, -t_pred:, self.ndvi_targ_idx,...].unsqueeze(2)
+        ndvi_targ = batch["dynamic"][0][:, -t_pred:, self.ndvi_targ_idx,...].unsqueeze(2) # b t c h w
 
-        ndvi_pred = preds[:,:,self.ndvi_pred_idx, ...].unsqueeze(2)
+        ndvi_pred = preds[:,:,self.ndvi_pred_idx, ...].unsqueeze(2) # b t c h w
 
-        nnse = 1 / (2 - (1 -(((ndvi_targ - ndvi_pred) * s2_lc_mask)**2).sum(1) / ((ndvi_targ - ndvi_targ.mean(1).unsqueeze(1))**2).sum(1)))
 
-        n_obs = (s2_lc_mask.mean(1) != 0).sum((1, 2, 3))
+        sum_squared_error = (((ndvi_targ - ndvi_pred) * s2_mask)**2).sum(1)  # b c h w
+        mean_ndvi_targ = (ndvi_targ * s2_mask).sum(1).unsqueeze(1) / (s2_mask.sum(1).unsqueeze(1) + 1e-8)  # b t c h w
 
-            
+        sum_squared_deviation = (((ndvi_targ - mean_ndvi_targ) * s2_mask)**2).sum(1)  # b c h w
+
+        nse = (1 - sum_squared_error / (sum_squared_deviation + 1e-8))  # b c h w
+
+        nnse = (1 / (2 - nse)) * lc_mask  # b c h w
+
+        n_obs = lc_mask.sum((1,2,3))  # b
+
         if just_return:
             cubenames = batch["cubename"]
-            veg_score = nnse.sum((1,2,3)) / n_obs
+            veg_score = 2 - 1/(nnse.sum((1,2,3)) / n_obs) # b
             return [{"name":  cubenames[i], "veg_score": veg_score[i]} for i in range(len(cubenames))]
         else:
             self.nnse_sum += nnse.sum()
-            self.total += n_obs.sum()
+            self.n_obs += n_obs.sum()
 
     def compute(self):  
         """
         Computes a final value from the state of the metric.
         Computes mean squared error over state.
         """
-        return {"veg_score": self.nnse_sum / self.total}
+        return {"veg_score": 2 - 1/(self.nnse_sum / self.n_obs)}
