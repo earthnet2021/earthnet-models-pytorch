@@ -45,9 +45,9 @@ class RootMeanSquaredError(Metric):
             kwargs.pop("just_return", None)
             return out_cache
         
+        
     def update(self, preds, targs, just_return = False):  
         '''Any code needed to update the state given any inputs to the metric.'''
-        
         lc = targs["landcover"]
 
         # Masks
