@@ -1,4 +1,14 @@
-# EarthNet2022
+# EarthNet2023
+
+# Hacking
+
+### pre-processing
+#### Normalisation 
+The histogram of each satellite bands depends of the landcover type, latitude and period of the year. So an appropriate normalization affect different part of the histogram. can play an important r
+https://medium.com/sentinel-hub/how-to-normalize-satellite-images-for-deep-learning-d5b668c885af
+
+
+## Initiate
 
 ### Context
 Forecasting the state of vegetation in response to climate and weather events is a major challenge. Requena and al. (2021) [1] define the land surface forecasting task as a strongly guided video prediction task where the objective is to forecast the vegetation developing at very fine resolution using topography and weather variables to guide the prediction and design a first dataset for this task, the EarthNet2021 dataset. Several papers have addressed this issue, namely [2, 3] on the EarthNet2021 dataset, and [4] focusing instead on Africa (freshly accepted!:D). See [4] for more details on the project.
