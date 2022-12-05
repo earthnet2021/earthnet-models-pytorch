@@ -7,9 +7,10 @@ import os
 import time
 import yaml
 import pytorch_lightning as pl
-from earthnet_models_pytorch.model import MODELS, MODELTASKS
+from earthnet_models_pytorch.model import MODELS
+from earthnet_models_pytorch.task.spatio_temporal import SpatioTemporalTask
 
-from earthnet_models_pytorch.setting import DATASETS
+from earthnet_models_pytorch.dataloader import DATASETS
 from earthnet_models_pytorch.utils import parse_setting
 
 
@@ -34,17 +35,17 @@ def train_model(setting_dict: dict, setting_file: str = None):
     # Task
     task_args = ["--{}={}".format(key,value) for key, value in setting_dict["Task"].items()]
     task_parser = ArgumentParser()
-    task_parser = MODELTASKS[setting_dict["Architecture"]].add_task_specific_args(task_parser)
+    task_parser = SpatioTemporalTask.add_task_specific_args(task_parser)
     task_params = task_parser.parse_args(task_args)
-    task = MODELTASKS[setting_dict["Architecture"]](model = model, hparams = task_params)
+    task = SpatioTemporalTask(model = model, hparams = task_params)
     
     #task.load_from_checkpoint(checkpoint_path = "experiments/en22/context-convlstm/baseline_convlstm_bigger/full_train/checkpoints/last.ckpt", context_length = setting_dict["Task"]["context_length"], target_length = setting_dict["Task"]["target_length"], model = model, hparams = task_params)
 
 
     # Logger
     logger = pl.loggers.TensorBoardLogger(**setting_dict["Logger"])
-
-    if setting_file is not None and type(logger.experiment).__name__ != "DummyExperiment":
+    
+    if setting_file is not None and type(logger.experiment).__name__ != "DummyExperiment": # What and where is define DummyExperiment? ?
         print("Copying setting yaml.")
         os.makedirs(logger.log_dir, exist_ok = True)
         with open(os.path.join(logger.log_dir,"setting.yaml"), 'w') as fp:

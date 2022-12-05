@@ -45,7 +45,7 @@ variables = {
             # Elevation map. Defined on 0 - 2000. 
             'elevation': ['cop_dem'], #['srtm_dem', 'alos_dem', 'cop_dem'],
             # Landscape classes. Categorical variable.
-            'landscape': ['esawc_lc'],
+            'landcover': ['esawc_lc'],
             # Geomorphon classes. Categorical variable. geomorphon is not define on 128 x 128 pixels neither.
             'geomorphon': ['geom_cls']
             }
@@ -90,24 +90,27 @@ class EarthNet2023Dataset(Dataset):
         topography = minicube[self.variables['elevation']].to_array() / 2000 # c h w       
         topography[np.isnan(topography)] = np.mean(topography)
 
-        landscape = minicube[self.variables['landscape']].to_array() # c h w
+        landcover = minicube[self.variables['landcover']].to_array() # c h w
         # TODO categoritcal variables ?
 
     
         
         # Final minicube
         data = {
-            "s2_bands": torch.from_numpy(s2_cube),
-            "meteo": torch.from_numpy(meteo_cube),
-            "mask": torch.from_numpy(s2_mask),
+            "dynamic": [
+                torch.from_numpy(s2_cube),
+                torch.from_numpy(meteo_cube)
+            ],
+            "dynamic_mask": [torch.from_numpy(s2_mask)],
+            "static": [
+                torch.from_numpy(topography)
+            ],
+            "static_mask": [],
             "s2_missing": torch.from_numpy(index_missing),
-            "topography": torch.from_numpy(topography),
-            "landscape": torch.from_numpy(landscape),
-            "target": self.target_computation(minicube),
+            "landcover": torch.from_numpy(landcover),
             "filepath": str(filepath),
             "cubename": self.__name_getter(filepath)
         }
-
         return data
 
     def __len__(self) -> int:

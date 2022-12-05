@@ -5,22 +5,17 @@ import argparse
 import ast
 import copy
 import json
-import sys
 
 import numpy as np
-from PIL import Image, ImageDraw, ImageFont
-import matplotlib.colors as clr
 import xarray as xr
 
 import torch
-import torchvision
 
 import pytorch_lightning as pl 
 
 from torch import nn
 
 from pathlib import Path
-import shutil
 
 from earthnet_models_pytorch.utils import str2bool, log_viz
 from earthnet_models_pytorch.task import setup_loss, SHEDULERS
@@ -148,9 +143,6 @@ class SpatioTemporalTask(pl.LightningModule):
         for i in range(self.n_stochastic_preds):  # several predictions 
             preds, aux = self(data, pred_start = self.context_length, n_preds = self.target_length)  # output model
             all_logs.append(self.loss(preds, batch, aux)[1])
-
-            # if self.loss.distance.rescale:
-            #    preds = ((preds - 0.2)/0.6)  
 
             if batch_idx < self.hparams.n_log_batches:
                 self.metric.compute_on_step = True

@@ -15,7 +15,7 @@ class RootMeanSquaredError(Metric):
     # Each state variable should be called using self.add_state(...)
     def __init__(self, compute_on_step: bool = False, dist_sync_on_step: bool = False, process_group = None, dist_sync_fn = None, lc_min = 73, lc_max = 104, comp_ndvi = True):
         super().__init__(
-            compute_on_step=compute_on_step,
+            compute_on_step=compute_on_step, # depreciated
             dist_sync_on_step=dist_sync_on_step,
             process_group=process_group,
             dist_sync_fn=dist_sync_fn,
@@ -45,7 +45,7 @@ class RootMeanSquaredError(Metric):
             kwargs.pop("just_return", None)
             return out_cache
         
-        
+
     def update(self, preds, targs, just_return = False):  
         '''Any code needed to update the state given any inputs to the metric.'''
         lc = targs["landcover"]

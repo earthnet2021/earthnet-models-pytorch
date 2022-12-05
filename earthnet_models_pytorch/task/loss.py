@@ -1,17 +1,62 @@
 
-
-import sys
-
-from typing import Optional, Union
-
 import torch
-
 from torch import nn
 import torch.nn.functional as F
 import torch.distributions as distrib
 
 from earthnet_models_pytorch.task.shedule import WeightShedule
 
+
+class MaskedLoss(nn.Module):
+    """Loss with a cloud mask to compute only on the vegetation pixel"""
+    def __init__(self, distance_type = "L2", rescale = False):
+        super(MaskedLoss, self).__init__()
+        self.distance_type = distance_type
+        # self.rescale = rescale
+
+    def forward(self, preds, targets, mask):
+        assert(preds.shape == targets.shape)
+        predsmasked = preds * mask
+        targetsmasked = targets * mask  
+
+        if self.distance_type == "L2":
+            return F.mse_loss(predsmasked,targetsmasked, reduction='sum')/ ((mask > 0).sum() + 1)
+        
+        elif self.distance_type == "L1":
+            return F.l1_loss(predsmasked,targetsmasked, reduction='sum')/ ((mask > 0).sum() + 1)
+        
+        elif self.distamce_type == "nnse":
+            return 1 - F.mse_loss(predsmasked,targetsmasked, reduction='sum')/ 1 * 1 / ((mask > 0).sum() + 1) # TODO devise by the variance
+
+
+class PixelwiseLoss(nn.Module):
+    """Loss for pixelwise model"""
+    def __init__(self, setting: dict):
+        super().__init__()
+
+        self.distance = LOSSES[setting["name"]](**setting["args"])
+        self.min_lc = 82 if "min_lc" not in setting else setting["min_lc"]  
+        self.max_lc = 104 if "max_lc" not in setting else setting["max_lc"]  
+
+    def forward(self, preds, batch, aux, current_step = None):
+        logs = {}
+
+        targs = batch["dynamic"][0][:,-preds.shape[1]:,...]  # the number of sample to predict
+
+        lc = batch["landcover"] 
+        
+        masks = ((lc >= self.min_lc).bool() & (lc <= self.max_lc).bool()).type_as(preds).unsqueeze(1).repeat(1, preds.shape[1], 1, 1, 1)  # mask for outlayers using lc threshold 
+
+        masks = torch.where(masks.bool(), (preds >= 0).type_as(masks), masks)
+
+        dist = self.distance(preds, targs, masks)
+        
+        logs["distance"] = dist 
+
+        loss = dist
+
+        logs["loss"] = loss  
+        return loss, logs
 
 def make_normal_from_raw_params(raw_params, scale_stddev=1, dim=-1, eps=1e-8):
     """
@@ -23,7 +68,7 @@ def make_normal_from_raw_params(raw_params, scale_stddev=1, dim=-1, eps=1e-8):
         Tensor containing the Gaussian mean and a raw scale parameter.
     scale_stddev : float
         Multiplier of the final scale parameter of the Gaussian.
-    dim : int
+    dim : int104 if "max_lc" not in setting else
         Dimensions of raw_params so that the first half corresponds to the mean, and the second half to the scale.
     eps : float
         Minimum possible value of the final scale parameter.
@@ -39,71 +84,17 @@ def make_normal_from_raw_params(raw_params, scale_stddev=1, dim=-1, eps=1e-8):
     normal = distrib.Normal(loc, scale * scale_stddev)
     return normal
 
-
-class MaskedLoss(nn.Module):
-    def __init__(self, distance_type = "L2", rescale = False):
-        super(MaskedLoss, self).__init__()
-        self.distance_type = distance_type
-        # self.rescale = rescale
-
-    def forward(self, preds, targets, mask):
-        assert(preds.shape == targets.shape)
-        predsmasked = preds * mask
-        targetsmasked = targets * mask  
-
-        if self.distance_type == "L2":
-
-            return F.mse_loss(predsmasked,targetsmasked, reduction='sum')/ ((mask > 0).sum() + 1)  # (input, target, reduction: Specifies the reduction to apply to the output)
-        elif self.distance_type == "L1":
-
-            return F.l1_loss(predsmasked,targetsmasked, reduction='sum')/ ((mask > 0).sum() + 1)
-        
-
-LOSSES = {"masked": MaskedLoss}
-
-class PixelwiseLoss(nn.Module):
-    def __init__(self, setting: dict):
-        super().__init__()
-
-        self.distance = LOSSES[setting["name"]](**setting["args"])
-        self.min_lc = 82 if "min_lc" not in setting else setting["min_lc"]  
-        self.max_lc = 104 if "max_lc" not in setting else setting["max_lc"]  
-
-    def forward(self, preds, batch, aux, current_step = None):
-        logs = {}
-
-        targs = batch["dynamic"][0][:,-preds.shape[1]:,...]  # the number of sample to predict
-
-        lc = batch["landcover"] 
-        
-
-        masks = ((lc >= self.min_lc).bool() & (lc <= self.max_lc).bool()).type_as(preds).unsqueeze(1).repeat(1, preds.shape[1], 1, 1, 1)  # mask for outlayers using lc threshold 
-
-        masks = torch.where(masks.bool(), (preds >= 0).type_as(masks), masks)
-
-        dist = self.distance(preds, targs, masks)
-        
-        logs["distance"] = dist 
-
-        loss = dist
-
-        logs["loss"] = loss  
-        return loss, logs
-
-
-
-
-class BaseLoss(nn.Module):
+class VariationnalLoss(nn.Module): 
     def __init__(self, setting: dict):
         super().__init__()
         self.distance = LOSSES[setting["name"]](**setting["args"])
-        #self.lambda_state = WeightShedule(**setting["state_shedule"]) # speed of the learning rate ? (I think)
-        #self.lambda_infer = WeightShedule(**setting["inference_shedule"])
-        #self.lambda_l2_res =  WeightShedule(**setting["residuals_shedule"])
+        self.lambda_state = WeightShedule(**setting["state_shedule"]) # speed of the learning rate ? (I think)
+        self.lambda_infer = WeightShedule(**setting["inference_shedule"])
+        self.lambda_l2_res =  WeightShedule(**setting["residuals_shedule"])
         self.dist_scale = 1 if "dist_scale" not in setting else setting["dist_scale"]
         self.ndvi = False if "ndvi" not in setting else setting["ndvi"]
-        self.min_lc = 82 if "min_lc" not in setting else setting["min_lc"]
-        self.max_lc = 104 if "max_lc" not in setting else setting["max_lc"]
+        self.min_lc = setting["min_lc"]
+        self.max_lc = setting["max_lc"]
         self.comp_ndvi = True if "comp_ndvi" not in setting else setting["comp_ndvi"]
 
     def forward(self, preds, batch, aux, current_step = None):   
@@ -160,6 +151,51 @@ class BaseLoss(nn.Module):
         logs["loss"] = loss
         return loss, logs
 
+class BaseLoss(nn.Module): 
+    def __init__(self, setting: dict):
+        super().__init__()
+        self.distance = LOSSES[setting["name"]](**setting["args"])
+        self.lambda_state = WeightShedule(**setting["state_shedule"]) # speed of the learning rate ? (I think)
+        self.lambda_infer = WeightShedule(**setting["inference_shedule"])
+        self.lambda_l2_res =  WeightShedule(**setting["residuals_shedule"])
+        self.dist_scale = 1 if "dist_scale" not in setting else setting["dist_scale"]
+        self.ndvi = False if "ndvi" not in setting else setting["ndvi"]
+        self.min_lc = setting["min_lc"]
+        self.max_lc = setting["max_lc"]
+        self.comp_ndvi = True if "comp_ndvi" not in setting else setting["comp_ndvi"]
+
+    def forward(self, preds, batch, aux, current_step = None):   
+        logs = {}
+        targs = batch["dynamic"][0][:,-preds.shape[1]:,...] 
+        if len(batch["dynamic_mask"]) > 0:
+            masks = batch["dynamic_mask"][0][:,-preds.shape[1]:,...]
+        else:
+            masks = None
+        if self.ndvi:
+            # NDVI computation
+            if preds.shape[2] == 1:
+                targs = targs[:,:,0,...].unsqueeze(2)
+            if masks is not None:
+                masks = masks[:,:,0,...].unsqueeze(2)
+            lc = batch["landcover"]
+            if masks is None:
+                masks = ((lc >= self.min_lc).bool() & (lc <= self.max_lc).bool()).type_as(preds).unsqueeze(1).repeat(1, preds.shape[1], 1, 1, 1)
+            else:
+                masks = torch.where(masks.bool(), ((lc >= self.min_lc).bool() & (lc <= self.max_lc).bool()).type_as(masks).unsqueeze(1).repeat(1, preds.shape[1], 1, 1, 1), masks)
+            
+            masks = torch.where(masks.bool(), (preds >= 0).type_as(masks), masks)
+
+        dist = self.distance(preds, targs, masks) 
+
+        logs["distance"] = dist
+
+        loss = dist * self.dist_scale
+
+        logs["loss"] = loss
+        return loss, logs
+
+
+LOSSES = {"masked": MaskedLoss, "pixelwise": PixelwiseLoss, "base": BaseLoss}
 
 def setup_loss(args):
     if "pixelwise" in args:  

@@ -1,8 +1,3 @@
-
-from typing import Optional, Union
-
-import abc
-
 class WeightShedule:
     def __init__(self, initial_weight = 0, increase_from_step = 4000, weight_step = 1e-10, max_weight = 1, decreasing = False):
         self.weight = initial_weight

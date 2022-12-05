@@ -1,19 +1,14 @@
 """ContextConvLSTM
 """
-
-from turtle import forward
-from typing import Optional, Union, List
+from typing import Optional, Union
 
 import argparse
 import ast
-from grpc import dynamic_ssl_server_credentials
-from pip import main
 import torch.nn as nn
 import torch 
-import sys
 from earthnet_models_pytorch.utils import str2bool
 
-class ContextConvLSTMCell(nn.Module):
+class ConvLSTMCell(nn.Module):
 
     def __init__(self, input_dim, hidden_dim, kernel_size, bias):
         """
@@ -128,7 +123,7 @@ class MLP(nn.Module):
 
 
 
-class ContextConvLSTM(nn.Module):
+class ConvLSTM(nn.Module):
 
     def __init__(self, hparams: argparse.Namespace):
         super().__init__()
@@ -171,22 +166,22 @@ class ContextConvLSTM(nn.Module):
             input_decoder = 1
 
 
-        self.encoder_1_convlstm = ContextConvLSTMCell(input_dim=input_encoder,  
+        self.encoder_1_convlstm = ConvLSTMCell(input_dim=input_encoder,  
                                                hidden_dim=self.hparams.hidden_dim[0],
                                                kernel_size=self.hparams.kernel_size,
                                                bias=self.hparams.bias)
                                             
-        self.encoder_2_convlstm = ContextConvLSTMCell(input_dim=self.hparams.hidden_dim[0],
+        self.encoder_2_convlstm = ConvLSTMCell(input_dim=self.hparams.hidden_dim[0],
                                                hidden_dim=self.hparams.hidden_dim[1],
                                                kernel_size=self.hparams.kernel_size,
                                                bias=self.hparams.bias)
                                                
-        self.decoder_1_convlstm = ContextConvLSTMCell(input_dim=input_decoder, 
+        self.decoder_1_convlstm = ConvLSTMCell(input_dim=input_decoder, 
                                                hidden_dim=self.hparams.hidden_dim[0],
                                                kernel_size=self.hparams.kernel_size,
                                                bias=self.hparams.bias)
         
-        self.decoder_2_convlstm = ContextConvLSTMCell(input_dim=self.hparams.hidden_dim[0],
+        self.decoder_2_convlstm = ConvLSTMCell(input_dim=self.hparams.hidden_dim[0],
                                                hidden_dim=self.hparams.hidden_dim[1],
                                                kernel_size=self.hparams.kernel_size,
                                                bias=self.hparams.bias)
@@ -203,20 +198,20 @@ class ContextConvLSTM(nn.Module):
         self.activation_output = nn.Sigmoid()
 
         if hparams.method == 'bigger':
-            self.encoder_3_convlstm = ContextConvLSTMCell(input_dim=self.hparams.hidden_dim[1],
+            self.encoder_3_convlstm = ConvLSTMCell(input_dim=self.hparams.hidden_dim[1],
                                                hidden_dim=self.hparams.hidden_dim[2],
                                                kernel_size=self.hparams.kernel_size,
                                                bias=self.hparams.bias)
-            self.encoder_4_convlstm = ContextConvLSTMCell(input_dim=self.hparams.hidden_dim[2],
+            self.encoder_4_convlstm = ConvLSTMCell(input_dim=self.hparams.hidden_dim[2],
                                                hidden_dim=self.hparams.hidden_dim[3],
                                                kernel_size=self.hparams.kernel_size,
                                                bias=self.hparams.bias)
 
-            self.decoder_3_convlstm = ContextConvLSTMCell(input_dim=self.hparams.hidden_dim[1],
+            self.decoder_3_convlstm = ConvLSTMCell(input_dim=self.hparams.hidden_dim[1],
                                                hidden_dim=self.hparams.hidden_dim[2],
                                                kernel_size=self.hparams.kernel_size,
                                                bias=self.hparams.bias)
-            self.decoder_4_convlstm = ContextConvLSTMCell(input_dim=self.hparams.hidden_dim[2],
+            self.decoder_4_convlstm = ConvLSTMCell(input_dim=self.hparams.hidden_dim[2],
                                                hidden_dim=self.hparams.hidden_dim[3],
                                                kernel_size=self.hparams.kernel_size,
                                                bias=self.hparams.bias)

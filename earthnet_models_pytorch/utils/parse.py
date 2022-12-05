@@ -7,9 +7,10 @@ parse setting implements copying of global attributes to the particular subcateg
 from pathlib import Path
 import yaml
 import warnings
-from earthnet_models_pytorch.setting import SETTINGS, METRIC_CHECKPOINT_INFO
-from earthnet_models_pytorch.model import MODELS, MODELTASKNAMES
-#from earthnet_models_pytorch.task import TRACK_INFO
+from earthnet_models_pytorch.dataloader import DATASETS, METRIC_CHECKPOINT_INFO
+from earthnet_models_pytorch.model import MODELS
+
+# SETTINGS = ["en21-std", "en21-veg", "europe-veg", "en21x","en21x-px", "en22", "en23"] 
 
 def parse_setting(setting_file, track = None):
 
@@ -22,13 +23,14 @@ def parse_setting(setting_file, track = None):
         else:
             setting, architecture, feature, config = setting_file.parts[-4:]  # example: setting: en21x, architecture: local-rnn, feature: arch, config: base.yaml
         config = "config_"+config[:-5] if config != "base.yaml" else "full_train"
-        if setting not in SETTINGS: 
+        if setting not in DATASETS: 
             setting = None
         if architecture not in MODELS:
             architecture = None
     except:
         setting, architecture, feature, config = None, None, None, None
 
+    # Create the setting dict from the yaml file
     with open(setting_file, 'r') as fp:
         setting_dict = yaml.load(fp, Loader = yaml.FullLoader)
 
@@ -39,7 +41,9 @@ def parse_setting(setting_file, track = None):
                 warnings.warn(f"Ambivalent definition of setting, found {setting_dict['Setting']} in yaml but {setting} in path. Using {setting_dict['Setting']}.")
                 setting = setting_dict["Setting"]
     else:
-        setting_dict["Setting"] = setting if setting is not None else "en21-std"
+        if setting is None:
+            raise ValueError('No Setting was given.')
+        setting_dict["Setting"] = setting
     setting_dict["Task"]["setting"] = setting_dict["Setting"] 
 
     if "Architecture" in setting_dict:
@@ -80,7 +84,7 @@ def parse_setting(setting_file, track = None):
         if feature is not None:
             setting_dict["Logger"]["version"] = feature
         
-
+    # Additionnal information for the training, save as metadata in /experiences
     setting_dict["Seed"] = setting_dict["Seed"] if "Seed" in setting_dict else 42
     setting_dict["Data"]["val_split_seed"] = setting_dict["Seed"]
 
@@ -105,10 +109,6 @@ def parse_setting(setting_file, track = None):
             optimizer["args"]["lr"] = lr
         
     if track is not None: 
-
-        # setting_dict["Task"]["context_length"] = TRACK_INFO[setting_dict["Setting"]][track]["context_length"]
-        # setting_dict["Task"]["target_length"] =TRACK_INFO[setting_dict["Setting"]][track]["target_length"]
-        
         setting_dict["Data"]["test_track"] = track
 
         if "pred_dir" not in setting_dict["Task"]:
@@ -124,6 +124,7 @@ def parse_setting(setting_file, track = None):
     setting_dict["Task"]["val_batch_size"] = setting_dict["Data"]["val_batch_size"]
     setting_dict["Task"]["test_batch_size"] = setting_dict["Data"]["test_batch_size"]
 
+    # TODO maybe simplify
     setting_dict["Task"]["min_lc"] = setting_dict["Task"]["loss"]["min_lc"]
     setting_dict["Task"]["max_lc"] = setting_dict["Task"]["loss"]["max_lc"]
     
