@@ -93,6 +93,7 @@ class EarthNet2023Dataset(Dataset):
         landcover = minicube[self.variables['landcover']].to_array() # c h w
         # TODO categoritcal variables ?
 
+        target = self.target_computation(minicube)
     
         
         # Final minicube
@@ -105,7 +106,7 @@ class EarthNet2023Dataset(Dataset):
             "static": [
                 torch.from_numpy(topography)
             ],
-            "static_mask": [],
+            "target": torch.from_numpy(target),
             "s2_missing": torch.from_numpy(index_missing),
             "landcover": torch.from_numpy(landcover),
             "filepath": str(filepath),
