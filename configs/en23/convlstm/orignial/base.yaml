@@ -1,10 +1,10 @@
 
-Architecture: "convlstm"
+Architecture: "convlstm_ae"
 
 Seed: 42
 
 #Dataset
-Setting: "en22"
+Setting: "en23"
 
 Logger:
     save_dir: "experiments/"
@@ -64,5 +64,4 @@ Model:
     num_layers: 3
     bias: True
     return_all_layers: False
-    input: 'NDVI'
     skip_connections: True

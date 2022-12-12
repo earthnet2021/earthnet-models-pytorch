@@ -70,8 +70,7 @@ class ConvLSTM(nn.Module):
 
         self.hparams = hparams
         
-        input_encoder = 
-        input_decoder = 1  # 33 weather
+        input_encoder = input_decoder = 10
 
 
 
@@ -153,6 +152,8 @@ class ConvLSTM(nn.Module):
             weather_t = weather[:,t,...].repeat(1, 1, 128, 128)  
             input = torch.cat((target[:,t,...], topology), dim = 1)
             input= torch.cat((input, weather_t), dim = 1)
+
+            print(input.shape)
 
             # First block
             h_t, c_t = self.encoder_1_convlstm(input_tensor=input,
