@@ -1,4 +1,4 @@
-"""DumbyMLP
+"""CNN
 """
 
 from turtle import forward

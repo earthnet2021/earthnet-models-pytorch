@@ -1,10 +1,5 @@
 
 from typing import Tuple, Optional, Sequence, Union
-
-import copy
-import multiprocessing
-import sys
-
 from torchmetrics import Metric
 import numpy as np
 import torch
@@ -13,9 +8,10 @@ import torch
 
 class RootMeanSquaredError(Metric):
     # Each state variable should be called using self.add_state(...)
-    def __init__(self, compute_on_step: bool = False, dist_sync_on_step: bool = False, process_group = None, dist_sync_fn = None, lc_min = 73, lc_max = 104, comp_ndvi = True):
+    def __init__(self, compute_on_cpu: bool = False, dist_sync_on_step: bool = False, process_group = None, dist_sync_fn = None, lc_min = int, lc_max = int, comp_ndvi = True):
         super().__init__(
-            compute_on_step=compute_on_step, # depreciated
+             # COMMENT: Vitus, compute_on_step has been depreciated, I updated the code both RMSE and NNSE metric
+            compute_on_cpu=compute_on_cpu, # 
             dist_sync_on_step=dist_sync_on_step,
             process_group=process_group,
             dist_sync_fn=dist_sync_fn,
@@ -91,28 +87,3 @@ class RootMeanSquaredError(Metric):
         """
         return {"RMSE_Veg": torch.sqrt(self.sum_squared_error / self.total)}
 
-
-class RMSE_ens21x(RootMeanSquaredError):
-
-    def __init__(self, compute_on_step: bool = False, dist_sync_on_step: bool = False, process_group = None, dist_sync_fn = None):
-        super().__init__(
-            compute_on_step=compute_on_step,
-            dist_sync_on_step=dist_sync_on_step,
-            process_group=process_group,
-            dist_sync_fn=dist_sync_fn,
-            lc_min = 82,
-            lc_max = 104
-        )
-
-class RMSE_ens22(RootMeanSquaredError):
-
-    def __init__(self, compute_on_step: bool = False, dist_sync_on_step: bool = False, process_group = None, dist_sync_fn = None):
-        super().__init__(
-            compute_on_step=compute_on_step,
-            dist_sync_on_step=dist_sync_on_step,
-            process_group=process_group,
-            dist_sync_fn=dist_sync_fn,
-            lc_min = 2,
-            lc_max = 6,
-            comp_ndvi = False
-        )

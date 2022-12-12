@@ -114,7 +114,7 @@ def parse_setting(setting_file, track = None):
         if "pred_dir" not in setting_dict["Task"]:
             setting_dict["Task"]["pred_dir"] = Path(setting_dict["Logger"]["save_dir"])/setting_dict["Logger"]["name"]/setting_dict["Logger"]["version"]/"preds"/track
 
-    if setting_dict["Architecture"] in ["channel-u-net", "local-rnn","rnn", "context-convlstm", "u-net-convlstm", "dumby-mlp", "convlstm-lstm"]:  
+    if setting_dict["Architecture"] in MODELS:  
         setting_dict["Model"]["setting"] = setting_dict["Setting"]
    
     setting_dict["Model"]["context_length"] = setting_dict["Task"]["context_length"]        
@@ -124,9 +124,8 @@ def parse_setting(setting_file, track = None):
     setting_dict["Task"]["val_batch_size"] = setting_dict["Data"]["val_batch_size"]
     setting_dict["Task"]["test_batch_size"] = setting_dict["Data"]["test_batch_size"]
 
-    # TODO maybe simplify
-    setting_dict["Task"]["min_lc"] = setting_dict["Task"]["loss"]["min_lc"]
-    setting_dict["Task"]["max_lc"] = setting_dict["Task"]["loss"]["max_lc"]
+    if ("min_lc" and "max_lc") not in setting_dict["Task"]["loss"]:
+        raise Warning("min_lc and max_lc are not defined in the yaml file. Default values are min_lc=82 and max_lc=104.")
     
 
     return setting_dict

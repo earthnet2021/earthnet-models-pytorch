@@ -123,7 +123,7 @@ class MLP(nn.Module):
 
 
 
-class ConvLSTM(nn.Module):
+class ContextConvLSTM(nn.Module):
 
     def __init__(self, hparams: argparse.Namespace):
         super().__init__()

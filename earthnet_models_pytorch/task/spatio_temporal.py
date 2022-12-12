@@ -30,6 +30,7 @@ class SpatioTemporalTask(pl.LightningModule):
             self.save_hyperparameters(copy.deepcopy(hparams))
         else:
             self.hparams = copy.deepcopy(hparams)
+
         self.model = model
 
         if hparams.pred_dir is None:
@@ -42,17 +43,19 @@ class SpatioTemporalTask(pl.LightningModule):
         self.context_length = hparams.context_length
         self.target_length = hparams.target_length
 
-        self.min_lc = hparams.min_lc
-        self.max_lc = hparams.max_lc
+        self.min_lc = hparams.loss.min_lc
+        self.max_lc = hparams.loss.max_lc
 
         self.n_stochastic_preds = hparams.n_stochastic_preds 
 
         self.current_filepaths = []
 
-        self.metric = METRICS[self.hparams.setting]()
-        self.ndvi_pred = (self.hparams.setting == "en21-veg") #TODO: Legacy, remove this...  #TODO: what is mean ?
+        self.train_metric = METRICS[self.hparams.setting](lc_min=self.min_lc, max_lc=self.max_lc)
+        self.val_metric = METRICS[self.hparams.setting](lc_min=self.min_lc, max_lc=self.max_lc)
+
+        # self.ndvi_pred = (self.hparams.setting == "en21-veg") #TODO: Legacy, remove this...  #TODO: what is mean ?
         
-        self.pred_mode = {"en21-veg": "ndvi", "en21-std": "rgb", "en21x": "kndvi", "en21x-px": "kndvi", "en22": "kndvi"}[self.hparams.setting]
+        # self.pred_mode = {"en21-veg": "ndvi", "en21-std": "rgb", "en21x": "kndvi", "en21x-px": "kndvi", "en22": "kndvi"}[self.hparams.setting]
 
         self.model_shedules = []
         for shedule in self.hparams.model_shedules:
@@ -75,8 +78,8 @@ class SpatioTemporalTask(pl.LightningModule):
         parser.add_argument('--context_length', type = int, default = 10)
         parser.add_argument('--target_length', type = int, default = 20)
 
-        parser.add_argument('--min_lc', type = int, default = 10)
-        parser.add_argument('--max_lc', type = int, default = 20)
+        parser.add_argument('--min_lc', type = int, default = 82)
+        parser.add_argument('--max_lc', type = int, default = 104)
 
         parser.add_argument('--n_stochastic_preds', type = int, default = 10)
 
@@ -133,7 +136,8 @@ class SpatioTemporalTask(pl.LightningModule):
         '''Operates on a single batch of data from the validation set. In this step you d might generate examples or calculate anything of interest like accuracy.'''
         data = copy.deepcopy(batch)
 
-        data["dynamic"][0] =  data["dynamic"][0][:,:self.context_length,...]  # selection only the context data
+        # selectionne only the context data
+        data["dynamic"][0] =  data["dynamic"][0][:,:self.context_length,...]  
         if len(data["dynamic_mask"]) > 0:
             data["dynamic_mask"][0] = data["dynamic_mask"][0][:,:self.context_length,...]
 
@@ -233,24 +237,16 @@ class SpatioTemporalTask(pl.LightningModule):
 
 
                     # Saving
-                    targ_cube["ndvi_target"] = (targ_cube.nir - targ_cube.red)/(targ_cube.nir+targ_cube.red+1e-6)
-                    pred_cube = xr.Dataset({"ndvi_pred": xr.DataArray(data = hrd, coords = {"time": targ_cube.time.isel(time = slice(self.context_length,self.context_length+self.target_length)), "latitude": y, "longitude": x}, dims = ["latitude", "longitude", "time"])})
-                    pred_cube["ndvi_target"] = xr.DataArray(data = targ_cube["ndvi_target"].isel(time = slice(self.context_length,self.context_length+self.target_length)).values, coords = {"time": targ_cube.time.isel(time = slice(self.context_length,self.context_length+self.target_length)), "latitude": y, "longitude": x}, dims = ["latitude", "longitude", "time"])
+                    # Todo modify
+                    targ_cube["target"] = (targ_cube.nir - targ_cube.red)/(targ_cube.nir+targ_cube.red+1e-6)
+                    pred_cube = xr.Dataset({"pred": xr.DataArray(data = hrd, coords = {"time": targ_cube.time.isel(time = slice(self.context_length,self.context_length+self.target_length)), "latitude": y, "longitude": x}, dims = ["latitude", "longitude", "time"])})
+                    pred_cube["target"] = xr.DataArray(data = targ_cube["target"].isel(time = slice(self.context_length,self.context_length+self.target_length)).values, coords = {"time": targ_cube.time.isel(time = slice(self.context_length,self.context_length+self.target_length)), "latitude": y, "longitude": x}, dims = ["latitude", "longitude", "time"])
                     pred_cube["mask"] = xr.DataArray(data = masks[:,:,0], coords = {"latitude": y, "longitude": x}, dims = ["latitude", "longitude"])
                     pred_cube["landcover"] = xr.DataArray(data = landcover[:,:,0], coords = {"latitude": y, "longitude": x}, dims = ["latitude", "longitude"])
-                    pred_cube["geomorphons"] = xr.DataArray(data = geom, coords = {"latitude": y, "longitude": x}, dims = ["latitude", "longitude"])
-                    pred_cube["SRTM"] = xr.DataArray(data = static[:,:,0], coords = {"latitude": y, "longitude": x}, dims = ["latitude", "longitude"])
                     
                     if not pred_path.is_file():
-                      pred_cube.to_netcdf(pred_path, encoding={"ndvi_pred":{"dtype": "float32"}, "ndvi_target":{"dtype": "float32"}, "mask":{"dtype": "float32"}, "landcover":{"dtype": "float32"}, "geomorphons":{"dtype": "float32"}, "SRTM":{"dtype": "float32"}})
-                    
-                    
-                    # Vitus code
-                    # pred_cube = xr.Dataset({"kndvi_pred": xr.DataArray(data = (np.tanh(1) * hrd[:,:,0,:]).clip(0, np.tanh(1)), coords = {"time": targ_cube.time.isel(time = slice(9,45)), "y": y, "x": x}, dims = ["y", "x", "time"])})
-                    # pred_cube["kndvi"] = xr.DataArray(data = targ_cube["kndvi"].isel(time = slice(9,45)).values, coords = {"time": targ_cube.time.isel(time = slice(9,45)), "y": y, "x": x}, dims = ["y", "x", "time"])
+                      pred_cube.to_netcdf(pred_path, encoding={"pred":{"dtype": "float32"}, "target":{"dtype": "float32"}, "mask":{"dtype": "float32"}, "landcover":{"dtype": "float32"}})
 
-                    # if not pred_path.is_file():
-                       # pred_cube.to_netcdf(pred_path)
                                        
                 else:
                     cubename = batch["cubename"][j]
