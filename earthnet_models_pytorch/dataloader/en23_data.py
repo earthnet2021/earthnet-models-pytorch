@@ -67,34 +67,45 @@ class EarthNet2023Dataset(Dataset):
         minicube = xr.open_dataset(filepath)
 
         # Select the days with available data
-        s2_avail = minicube[self.variables['s2_avail']] 
-        index_avail = np.where(s2_avail == 1)[0]
+        s2_avail = minicube[self.variables['s2_avail']].to_array().values.astype(self.type)
 
         # Detect the missing day
-        missing = index_avail[1:] - index_avail[:-1] - 5
-        index_missing = np.where(missing > 0)[0]
+        # index_avail = np.where(s2_avail == 1)[0]
+        # missing = index_avail[1:] - index_avail[:-1] - 5
+        #index_missing = np.where(missing > 0)[0]
+        #print(index_missing)
 
         # Create the minicube
         # s2 is 5 days, and already rescaled [0, 1]
-        s2_cube = minicube[self.variables['s2_bands']].isel(time=index_avail).to_array()
-        s2_cube[np.isnan(s2_cube)] = np.mean(s2_cube)
+        s2_cube = minicube[self.variables['s2_bands']].to_array().values.transpose((1,0,2,3)).astype(self.type)   # (time, channels, w, h)
 
-        s2_mask = minicube[self.variables['cloud_mask']].isel(time=index_avail).to_array()
+        s2_mask = minicube[self.variables['cloud_mask']].to_array().values.transpose((1,0,2,3)).astype(self.type)    # (time, 1, w, h)
 
         # weather is daily
-        meteo_cube = minicube[self.variables['era5']].to_array()
-        meteo_cube[np.isnan(meteo_cube['era5_tp'])] = 0
-        meteo_cube[np.isnan(meteo_cube)] =  np.mean(meteo_cube)
-        # TODO normalization
+        meteo_cube = minicube[self.variables['era5']]
 
-        topography = minicube[self.variables['elevation']].to_array() / 2000 # c h w       
-        topography[np.isnan(topography)] = np.mean(topography)
+        # rescale temperature on the extreme values ever observed in Africa (Kelvin). 
+        meteo_cube['era5_t2m'] = (meteo_cube['era5_t2m'] - 248) / (328 - 248)
+        meteo_cube['era5_t2mmin'] = (meteo_cube['era5_t2mmin'] - 248) / (328 - 248)
+        meteo_cube['era5_t2mmax'] = (meteo_cube['era5_t2mmax'] - 248) / (328 - 248)
 
-        landcover = minicube[self.variables['landcover']].to_array() # c h w
-        # TODO categoritcal variables ?
+        meteo_cube = meteo_cube.to_array().values.transpose((1,0)).astype(self.type) # t, c
 
-        target = self.target_computation(minicube)
-    
+        meteo_cube[np.isnan(meteo_cube)] = 0
+        # TODO NaN values are replaces by the mean of each variable. To solve, currently RuntimeWarning: overflow encountered in reduce
+        # col_mean = np.nanmean(meteo_cube, axis=0)
+        # inds = np.where(np.isnan(meteo_cube))
+        # meteo_cube[inds] = np.take(col_mean, inds[1])
+
+        topography = minicube[self.variables['elevation']].to_array() / 2000 # c h w, rescaling
+        topography = topography.values.astype(self.type)
+        topography[np.isnan(topography)] = np.mean(topography)  # idk if we can have missing value in the topography
+
+        landcover = minicube[self.variables['landcover']].to_array().values.astype(self.type) # c h w
+        
+        # TODO transform landcover in categoritcal variables if used for training
+
+        target = self.target_computation(minicube).values.astype(self.type)
         
         # Final minicube
         data = {
@@ -107,7 +118,7 @@ class EarthNet2023Dataset(Dataset):
                 torch.from_numpy(topography)
             ],
             "target": torch.from_numpy(target),
-            "s2_missing": torch.from_numpy(index_missing),
+            "s2_avail": torch.from_numpy(s2_avail),
             "landcover": torch.from_numpy(landcover),
             "filepath": str(filepath),
             "cubename": self.__name_getter(filepath)
@@ -133,11 +144,12 @@ class EarthNet2023Dataset(Dataset):
         else:
             assert(bool(regex.match(components[1])))
             return "_".join(components[1:]) 
+            
 
     def target_computation(self, minicube):
         """Compute the vegetation index (VI) target"""
         if self.target == "ndvi":
-            targ = (minicube.s2_B08 - minicube.s2_B04) / (minicube.s2_BO8 + minicube.s2_B04 + 1e-6)
+            targ = (minicube.s2_B8A - minicube.s2_B04) / (minicube.s2_B8A + minicube.s2_B04 + 1e-6)
         
         if self.target == "kndvi": # TODO the the denominator is not optimal, needs to be improved accordingly to the original paper
             targ = np.tanh(((minicube.s2_B08 - minicube.s2_B04) / (minicube.s2_BO8 + minicube.s2_B04 + 1e-6))**2) / np.tanh(1) 

@@ -129,6 +129,12 @@ class ConvLSTMAE(nn.Module):
     
 
     def forward(self, data, pred_start: int = 0, n_preds: Optional[int] = None):
+        #index_avail = np.where(s2_avail == 1)[0]
+
+        # Detect the missing day
+        #missing = index_avail[1:] - index_avail[:-1] - 5
+        #index_missing = np.where(missing > 0)[0]
+        #print(index_missing)
 
         c_l = self.hparams.context_length if self.training else pred_start
 

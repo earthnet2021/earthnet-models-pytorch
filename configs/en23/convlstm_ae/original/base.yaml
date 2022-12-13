@@ -19,7 +19,7 @@ Trainer:
     # The "auto" option recognizes the machine you are on, and selects the respective Accelerator.
     accelerator: "auto" # "gpu" 
     # Accumulates grads every k batches
-    accumulate_grad_batches: 8
+    accumulate_grad_batches: 1 #8
     # Automatically tries to find the largest batch size that fits into memory, before any training.
     auto_scale_batch_size: "binsearch"
     # pick available GPUs automatically
@@ -27,7 +27,7 @@ Trainer:
     # Find the best lr using tune
     auto_lr_find: True
     # Accelerate the training (if the input size doesn't change)
-    benchmark: True
+    benchmark: False
     # Ensures reproducibility
     deterministic: True
     # Number of devices to train on (int) or which devices to train on (list or str)
@@ -68,8 +68,7 @@ Task:
     loss:
         name: "masked" # loss computed with the non-vegetation pixels masked.
         args: {
-            distance_type: "L2",
-            rescale: True
+            distance_type: "L2"
         }
         dist_scale: 1
         min_lc: 2
