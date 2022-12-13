@@ -19,7 +19,7 @@ from pathlib import Path
 
 from earthnet_models_pytorch.utils import str2bool, log_viz
 from earthnet_models_pytorch.task import setup_loss, SHEDULERS
-from earthnet_models_pytorch.setting import METRICS
+from earthnet_models_pytorch.metric import METRICS
 
 class SpatioTemporalTask(pl.LightningModule):
 
@@ -43,15 +43,15 @@ class SpatioTemporalTask(pl.LightningModule):
         self.context_length = hparams.context_length
         self.target_length = hparams.target_length
 
-        self.min_lc = hparams.loss.min_lc
-        self.max_lc = hparams.loss.max_lc
+        self.min_lc = hparams.loss["min_lc"]
+        self.max_lc = hparams.loss["max_lc"]
 
         self.n_stochastic_preds = hparams.n_stochastic_preds 
 
         self.current_filepaths = []
 
-        self.train_metric = METRICS[self.hparams.setting](lc_min=self.min_lc, max_lc=self.max_lc)
-        self.val_metric = METRICS[self.hparams.setting](lc_min=self.min_lc, max_lc=self.max_lc)
+        self.train_metric = METRICS[self.hparams.setting](lc_min=self.min_lc, lc_max=self.max_lc)
+        self.val_metric = METRICS[self.hparams.setting](lc_min=self.min_lc, lc_max=self.max_lc)
 
         # self.ndvi_pred = (self.hparams.setting == "en21-veg") #TODO: Legacy, remove this...  #TODO: what is mean ?
         
@@ -108,17 +108,22 @@ class SpatioTemporalTask(pl.LightningModule):
         return self.model(data, pred_start = pred_start, n_preds = n_preds, **kwargs)
 
     def configure_optimizers(self):
-        optimizers = [getattr(torch.optim,o["name"])(self.parameters(), **o["args"]) for o in self.hparams.optimization["optimizer"]] # This gets any (!) torch.optim optimizer
+        optimizers = [getattr(torch.optim,o["name"])(self.parameters(), **o["args"]) for o in self.hparams.optimization["optimizer"]] 
+        # This gets any (!) torch.optim optimizer
         # torch.optim.lr_scheduler provides several methods to adjust the learning rate based on the number of epochs. 
-        shedulers = [getattr(torch.optim.lr_scheduler,s["name"])(optimizers[i], **s["args"]) for i, s in enumerate(self.hparams.optimization["lr_shedule"])] # This gets any(!) torch.optim.lr_scheduler - but only those with standard callback will work (i.e. not the Plateau one)
+        shedulers = [getattr(torch.optim.lr_scheduler,s["name"])(optimizers[i], **s["args"]) for i, s in enumerate(self.hparams.optimization["lr_shedule"])] 
+        # This gets any(!) torch.optim.lr_scheduler - but only those with standard callback will work (i.e. not the Plateau one)
+        print("spatio_temporal: configure optiöizers", optimizers, shedulers)
         return optimizers, shedulers
 
     
     def training_step(self, batch, batch_idx):
         '''compute and return the training loss and some additional metrics for e.g. the progress bar or logger'''
         kwargs = {}
+
+        # adjust the learning rate
         for (shedule_name, shedule) in self.model_shedules:
-            kwargs[shedule_name] = shedule(self.global_step)  # adjust the learning rate
+            kwargs[shedule_name] = shedule(self.global_step)  
         
         # Predictions generation
         preds, aux = self(batch, n_preds = self.context_length+self.target_length, kwargs = kwargs) 
@@ -275,6 +280,7 @@ class SpatioTemporalTask(pl.LightningModule):
                     json.dump({k: v if isinstance(v, str) else v.item() for k,v in scores.items()}, fp)
     
     def teardown(self, stage):
+        # Profiler function
         if stage == "test" and self.hparams.compute_metric_on_test:
             if self.global_rank == 0:
                 data = []

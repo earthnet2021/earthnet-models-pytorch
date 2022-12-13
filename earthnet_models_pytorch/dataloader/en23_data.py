@@ -181,20 +181,20 @@ class EarthNet2023DataModule(pl.LightningDataModule):
     
     def setup(self, stage: str = None):
         if stage == 'fit' or stage is None:
-            self.earthnet_train = EarthNet2023Dataset(self.base_dir/"train", fp16 = self.hparams.fp16)
-            self.earthnet_val = EarthNet2023Dataset(self.base_dir/"val", fp16 = self.hparams.fp16)
+            self.earthnet_train = EarthNet2023Dataset(self.base_dir/"train", target=self.hparams.target, fp16=self.hparams.fp16)
+            self.earthnet_val = EarthNet2023Dataset(self.base_dir/"val", target=self.hparams.target, fp16=self.hparams.fp16)
 
         if stage == 'test' or stage is None:
-            self.earthnet_test = EarthNet2023Dataset(self.base_dir/"test", fp16 = self.hparams.fp16)
+            self.earthnet_test = EarthNet2023Dataset(self.base_dir/"test", target=self.hparams.target, fp16=self.hparams.fp16)
 
     def train_dataloader(self) -> DataLoader:
-        return DataLoader(self.earthnet_train, batch_size=self.hparams.train_batch_size, num_workers = self.hparams.num_workers,pin_memory=True,drop_last=True, shuffle=True)
+        return DataLoader(self.earthnet_train, batch_size=self.hparams.train_batch_size, num_workers=self.hparams.num_workers,pin_memory=True,drop_last=True, shuffle=True)
 
     def val_dataloader(self) -> DataLoader:
-        return DataLoader(self.earthnet_val, batch_size=self.hparams.val_batch_size, num_workers = self.hparams.num_workers, pin_memory=True)
+        return DataLoader(self.earthnet_val, batch_size=self.hparams.val_batch_size, num_workers=self.hparams.num_workers, pin_memory=True)
 
     def test_dataloader(self) -> DataLoader:
-        return DataLoader(self.earthnet_test, batch_size=self.hparams.test_batch_size, num_workers = self.hparams.num_workers, pin_memory=True)
+        return DataLoader(self.earthnet_test, batch_size=self.hparams.test_batch_size, num_workers=self.hparams.num_workers, pin_memory=True)
 
 
      

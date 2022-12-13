@@ -94,17 +94,17 @@ def parse_setting(setting_file, track = None):
     setting_dict["Checkpointer"] = {**setting_dict["Checkpointer"], **METRIC_CHECKPOINT_INFO[setting_dict["Setting"]]} if "Checkpointer" in setting_dict else METRIC_CHECKPOINT_INFO[setting_dict["Setting"]]
     
     bs = setting_dict["Data"]["train_batch_size"]
-    gpus = setting_dict["Trainer"]["gpus"]
+    devices = setting_dict["Trainer"]["devices"]
     ddp = (setting_dict["Trainer"]["strategy"] == "ddp")
     
     optimizers = setting_dict["Task"]["optimization"]["optimizer"]
     for optimizer in optimizers:  
         if "lr_per_sample" in optimizer:
             lr_per_sample = optimizer["lr_per_sample"]
-            if isinstance(gpus, list):
-                lr = bs * (len(gpus) * ddp + (1-ddp)) * lr_per_sample
+            if isinstance(devices, list):
+                lr = bs * (len(devices) * ddp + (1-ddp)) * lr_per_sample
             else:    
-                lr = bs * (gpus * ddp + (1-ddp)) * lr_per_sample
+                lr = bs * (devices * ddp + (1-ddp)) * lr_per_sample
             print('learning rate', lr)
             optimizer["args"]["lr"] = lr
         

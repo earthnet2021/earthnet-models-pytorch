@@ -70,13 +70,14 @@ class BaseLoss(nn.Module):
     def __init__(self, setting: dict):
         super().__init__()
         self.distance = MaskedDistance(**setting["args"])
-        self.lambda_state = WeightShedule(**setting["state_shedule"]) # speed of the learning rate ? (I think)
-        self.lambda_infer = WeightShedule(**setting["inference_shedule"])
-        self.lambda_l2_res =  WeightShedule(**setting["residuals_shedule"])
         self.dist_scale = 1 if "dist_scale" not in setting else setting["dist_scale"]
         self.min_lc = setting["min_lc"]
         self.max_lc = setting["max_lc"]
-
+        
+        # Variationnal models TODO write a separated loss for variationnal model 
+        self.lambda_state = None if "state_shedule" not in setting else WeightShedule(**setting["state_shedule"]) # speed of the learning rate ? (I think)
+        self.lambda_infer = None if "inference_shedule" not in setting else WeightShedule(**setting["inference_shedule"])
+        self.lambda_l2_res = None if "residuals_shedule" not in setting else WeightShedule(**setting["residuals_shedule"])
 
     def forward(self, preds, batch, aux, current_step = None):   
         logs = {}

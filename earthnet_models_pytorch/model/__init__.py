@@ -1,5 +1,9 @@
-from earthnet_models_pytorch.model import LocalRNN, RNN, CNN, ConvLSTMLSTM, ContextConvLSTM, ConvLSTM
-
+from earthnet_models_pytorch.model.local_rnn import LocalRNN
+from earthnet_models_pytorch.model.rnn import RNN
+from earthnet_models_pytorch.model.context_convlstm import ContextConvLSTM
+from earthnet_models_pytorch.model.cnn import CNN
+from earthnet_models_pytorch.model.convlstm_lstm import ConvLSTMLSTM
+from earthnet_models_pytorch.model.convlstm_ae import ConvLSTMAE
 # from earthnet_models_pytorch.task import TASKS
 
 MODELS = {
@@ -8,7 +12,7 @@ MODELS = {
     "context-convlstm": ContextConvLSTM,
     "cnn": CNN,
     "convlstm-lstm": ConvLSTMLSTM,
-    "convlstm": ConvLSTM
+    "convlstm_ae": ConvLSTMAE
 }
 
 # MODELTASKS = {

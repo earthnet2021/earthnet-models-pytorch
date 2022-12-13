@@ -14,8 +14,9 @@ import sys
 import torch
 import pytorch_lightning as pl
 
-from earthnet_models_pytorch.model import MODELS, MODELTASKS
-from earthnet_models_pytorch.setting import DATASETS
+from earthnet_models_pytorch.task.spatio_temporal import SpatioTemporalTask
+from earthnet_models_pytorch.model import MODELS
+from earthnet_models_pytorch.dataloader import DATASETS
 from earthnet_models_pytorch.utils import parse_setting
 
 
@@ -42,17 +43,18 @@ def fast_dev_run(setting_dict: dict):
     # Task
     task_args = ["--{}={}".format(key,value) for key, value in setting_dict["Task"].items()]  
     task_parser = ArgumentParser()
-    task_parser = MODELTASKS[setting_dict["Architecture"]].add_task_specific_args(task_parser)
+    task_parser = SpatioTemporalTask.add_task_specific_args(task_parser)
     task_params = task_parser.parse_args(task_args)   # argsparse.Namespace with the setting_dict["Task"] dictionnary
-    task = MODELTASKS[setting_dict["Architecture"]](model = model, hparams = task_params) # call the SpacioTemporalTask module with the model module
+    task = SpatioTemporalTask(model = model, hparams = task_params) # call the SpacioTemporalTask module with the model module
 
     # Trainer
     trainer_dict = setting_dict["Trainer"]
     trainer_dict["logger"] = False
-    trainer_dict["fast_dev_run"] = 2  # number of batch
-    trainer_dict["log_gpu_memory"] = 'all'
+    # Runs n if set to n (int) else 1 if set to True batch(es) to ensure your code will execute without errors.
+    trainer_dict["fast_dev_run"] = 2  
+    trainer_dict["overfit_batches"]=10
     if "profiler" in trainer_dict:
-        trainer_dict["profiler"] = pl.profiler.AdvancedProfiler(output_filename="curr_profile") #TODO better output filename...  # performance analysis
+        trainer_dict["profiler"] = pl.profilers.AdvancedProfiler(filename="profiler_output") # performance analysis
 
     trainer = pl.Trainer(**trainer_dict)  # Customize every aspect of training via flags
 
@@ -90,9 +92,9 @@ def overfit_model(setting_dict: dict):
     setting_dict["Task"]["optimization"]["lr_shedule"][0]["args"]["milestones"] = [1000,2000]
     task_args = ["--{}={}".format(key,value) for key, value in setting_dict["Task"].items()]
     task_parser = ArgumentParser()
-    task_parser = MODELTASKS[setting_dict["Architecture"]].add_task_specific_args(task_parser)
+    task_parser = SpatioTemporalTask.add_task_specific_args(task_parser)
     task_params = task_parser.parse_args(task_args)
-    task = MODELTASKS[setting_dict["Architecture"]](model = model, hparams = task_params)
+    task = SpatioTemporalTask(model = model, hparams = task_params)
     
     # Logger
     setting_dict["Logger"]["version"] = "debug"

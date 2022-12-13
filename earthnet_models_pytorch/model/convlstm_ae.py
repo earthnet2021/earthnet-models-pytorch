@@ -63,7 +63,7 @@ class ConvLSTMCell(nn.Module):
 
 
 
-class ConvLSTM(nn.Module):
+class ConvLSTMAE(nn.Module):
 
     def __init__(self, hparams: argparse.Namespace):
         super().__init__()
