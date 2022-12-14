@@ -66,20 +66,26 @@ class EarthNet2023Dataset(Dataset):
         filepath = self.filepaths[idx]
         minicube = xr.open_dataset(filepath)
 
-        # Select the days with available data
-        s2_avail = minicube[self.variables['s2_avail']].to_array().values.astype(self.type)
+        s2_avail = minicube[self.variables['s2_avail']].to_array()
 
-        # Detect the missing day
-        # index_avail = np.where(s2_avail == 1)[0]
-        # missing = index_avail[1:] - index_avail[:-1] - 5
-        #index_missing = np.where(missing > 0)[0]
-        #print(index_missing)
+        # s2 is 5 days is every 5 days
+        t_len = s2_avail.shape[1]
+        time = [i for i in range(4, t_len, 5)]
+
+        index_avail = np.where(s2_avail == 1)[0]
+        if index_avail[0] % 5 != 4:
+            raise Exception("bad assumption on the data, first value s2 =" + str(index_avail[0]))
+
+        # Select the days with available data 
+        s2_avail = s2_avail.isel(time=time).values.astype(self.type)
 
         # Create the minicube
         # s2 is 5 days, and already rescaled [0, 1]
-        s2_cube = minicube[self.variables['s2_bands']].to_array().values.transpose((1,0,2,3)).astype(self.type)   # (time, channels, w, h)
+        s2_cube = minicube[self.variables['s2_bands']].to_array().isel(time=time).values.transpose((1,0,2,3)).astype(self.type)   # (time, channels, w, h)
 
-        s2_mask = minicube[self.variables['cloud_mask']].to_array().values.transpose((1,0,2,3)).astype(self.type)    # (time, 1, w, h)
+        s2_mask = minicube[self.variables['cloud_mask']].to_array().isel(time=time).values.transpose((1,0,2,3)).astype(self.type) # (time, 1, w, h)
+
+        target = self.target_computation(minicube).isel(time=time).values.astype(self.type)
 
         # weather is daily
         meteo_cube = minicube[self.variables['era5']]
@@ -104,8 +110,6 @@ class EarthNet2023Dataset(Dataset):
         landcover = minicube[self.variables['landcover']].to_array().values.astype(self.type) # c h w
         
         # TODO transform landcover in categoritcal variables if used for training
-
-        target = self.target_computation(minicube).values.astype(self.type)
         
         # Final minicube
         data = {
@@ -206,7 +210,7 @@ class EarthNet2023DataModule(pl.LightningDataModule):
         return DataLoader(self.earthnet_val, batch_size=self.hparams.val_batch_size, num_workers=self.hparams.num_workers, pin_memory=True)
 
     def test_dataloader(self) -> DataLoader:
-        return DataLoader(self.earthnet_test, batch_size=self.hparams.test_batch_size, num_workers=self.hparams.num_workers, pin_memory=True)
+        return DataLoader(self.earthnet_test, batch_size=self.hparams.test_batch_siz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e, num_workers=self.hparams.num_workers, pin_memory=True)
 
 
      

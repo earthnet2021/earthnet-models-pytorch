@@ -62,7 +62,7 @@ Data:
     train_batch_size: 4 
     val_batch_size: 4
     test_batch_size: 4 
-    num_workers: 8 # Common bottleneck during the training, increase until saturation. 
+    num_workers: 6 # Common bottleneck during the training, increase until saturation. 
 
 Task:
     loss:
