@@ -66,15 +66,15 @@ class EarthNet2023Dataset(Dataset):
         filepath = self.filepaths[idx]
         minicube = xr.open_dataset(filepath)
 
-        s2_avail = minicube[self.variables['s2_avail']].to_array()
+        s2_avail = np.squeeze(minicube[self.variables['s2_avail']].to_array(), axis=0)
 
         # s2 is 5 days is every 5 days
-        t_len = s2_avail.shape[1]
+        t_len = s2_avail.shape[0]
         time = [i for i in range(4, t_len, 5)]
 
-        index_avail = np.where(s2_avail == 1)[0]
-        if index_avail[0] % 5 != 4:
-            raise Exception("bad assumption on the data, first value s2 =" + str(index_avail[0]))
+        index_avail = np.where(s2_avail.values.astype(self.type) == 1)[0]
+        if index_avail[0] % 5 != 4:     
+            raise Exception("The first available imagery of sentinel-2 is not 4 + [5]" + str(index_avail))
 
         # Select the days with available data 
         s2_avail = s2_avail.isel(time=time).values.astype(self.type)
@@ -85,7 +85,7 @@ class EarthNet2023Dataset(Dataset):
 
         s2_mask = minicube[self.variables['cloud_mask']].to_array().isel(time=time).values.transpose((1,0,2,3)).astype(self.type) # (time, 1, w, h)
 
-        target = self.target_computation(minicube).isel(time=time).values.astype(self.type)
+        target = self.target_computation(minicube).isel(time=time).values[:,None,...].astype(self.type) 
 
         # weather is daily
         meteo_cube = minicube[self.variables['era5']]
@@ -96,8 +96,8 @@ class EarthNet2023Dataset(Dataset):
         meteo_cube['era5_t2mmax'] = (meteo_cube['era5_t2mmax'] - 248) / (328 - 248)
 
         meteo_cube = meteo_cube.to_array().values.transpose((1,0)).astype(self.type) # t, c
-
         meteo_cube[np.isnan(meteo_cube)] = 0
+        
         # TODO NaN values are replaces by the mean of each variable. To solve, currently RuntimeWarning: overflow encountered in reduce
         # col_mean = np.nanmean(meteo_cube, axis=0)
         # inds = np.where(np.isnan(meteo_cube))

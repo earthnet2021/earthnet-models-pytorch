@@ -19,7 +19,7 @@ Trainer:
     # The "auto" option recognizes the machine you are on, and selects the respective Accelerator.
     accelerator: "auto" # "gpu" 
     # Accumulates grads every k batches
-    accumulate_grad_batches: 1 #8
+    accumulate_grad_batches: 8
     # Automatically tries to find the largest batch size that fits into memory, before any training.
     auto_scale_batch_size: "binsearch"
     # pick available GPUs automatically
@@ -59,9 +59,9 @@ Data:
     target: "ndvi"
     # With a batch of size N, a DPP strategy with D devices, and accumulate_grad_batches = K, the effective batch size = K*D*N. 
     # With a DP strategy, the effective batch size= K*N.
-    train_batch_size: 4 
-    val_batch_size: 4
-    test_batch_size: 4 
+    train_batch_size: 2 
+    val_batch_size: 2
+    test_batch_size: 2
     num_workers: 6 # Common bottleneck during the training, increase until saturation. 
 
 Task:
@@ -73,8 +73,8 @@ Task:
         dist_scale: 1
         min_lc: 2
         max_lc: 6
-    context_length: 35
-    target_length: 10
+    context_length: 70
+    target_length: 20
     # for variationnal models
     n_stochastic_preds: 1 
     optimization:

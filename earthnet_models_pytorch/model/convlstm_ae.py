@@ -70,9 +70,9 @@ class ConvLSTMAE(nn.Module):
 
         self.hparams = hparams
         
-        input_encoder = input_decoder = 10
-
-
+        # TODO improve the way to define theses variables
+        input_encoder = 17 # 7 s2 bands, 1 target, 8 weather variables, 1 topography
+        input_decoder = 10 # 7 s2 bands, 1 target, 8 weather variables, 1 topography
 
         self.encoder_1_convlstm = ConvLSTMCell(input_dim=input_encoder,  
                                                hidden_dim=self.hparams.hidden_dim[0],
@@ -129,19 +129,16 @@ class ConvLSTMAE(nn.Module):
     
 
     def forward(self, data, pred_start: int = 0, n_preds: Optional[int] = None):
-        #index_avail = np.where(s2_avail == 1)[0]
-
-        # Detect the missing day
-        #missing = index_avail[1:] - index_avail[:-1] - 5
-        #index_missing = np.where(missing > 0)[0]
-        #print(index_missing)
 
         c_l = self.hparams.context_length if self.training else pred_start
 
         # Data
-        target = data["dynamic"][0][:,(c_l - self.hparams.context_length):c_l,...]
+        # sentinel 2 bands
+        sat = data["dynamic"][0][:,(c_l - self.hparams.context_length):c_l,...]
+        target = data["target"][:,(c_l - self.hparams.context_length):c_l,...]
         weather = data["dynamic"][1].unsqueeze(3).unsqueeze(4)
         topology = data["static"][0]
+        avail =data["s2_avail"][:,(c_l - self.hparams.context_length):c_l]
 
         # Shape: batch size, temporal size, number of channels, height, width
         b, t, _, h, w = data["dynamic"][0].shape
@@ -154,12 +151,18 @@ class ConvLSTMAE(nn.Module):
 
         # encoding network
         for t in range(self.hparams.context_length):
-            # Reshape 
-            weather_t = weather[:,t,...].repeat(1, 1, 128, 128)  
-            input = torch.cat((target[:,t,...], topology), dim = 1)
+            # if avail[t] or t == 0:
+            input = torch.cat((sat[:, t, ...], target[:,t,...]), dim=1)
+            '''else:
+                # if the data are missing, we use the prediction of our model as target and we interpolate the data.
+                pred = self.conv(h_t2)
+                if t == self.hparams.context_length-1:
+                    input = torch.cat(sat[:, t, ...], pred)
+                torch.nn.functional.interpolate(
+                input = torch.cat(target[:,t,...])'''
+            input = torch.cat((input, topology), dim = 1)
+            weather_t = weather[:,t,...].repeat(1, 1, 128, 128) 
             input= torch.cat((input, weather_t), dim = 1)
-
-            print(input.shape)
 
             # First block
             h_t, c_t = self.encoder_1_convlstm(input_tensor=input,
