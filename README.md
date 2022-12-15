@@ -18,6 +18,13 @@ It is well suited for time series, especially for ours since variance is an impo
     * Optimisation: 2 hours (in progress)
 
 ### Documentation
+
+#### Train
+To train the model, we need to set up a ``config.yaml``` file with the path ```configs/<setting>/<model>/<feature>/base.yaml``` then we can run:
+```
+train.py path/to/setting.yaml
+```
+
 #### Description
 The code is implemented using the deep learning framework PyTorch Lightning [9] which is built on top of PyTorch [10].    
 The scripts/train.py call first utils/parse.py to transform the configs/en23/.../.yaml file in a dictionnary of arguments (and certify that the arguments are correct). Then the EarthNet2023DataModule of datamodule/en23_data.py is called and it defines the dataset and the data loader. The model (here model/convlstm_ae.py is also called. In task/spatio_temporal.py we define a LightningModule with all the function called for the training, testing and validation step. We use a logger, a checkpointer and a profiler to get informations from the training. Finally, we use a Trainer of Pytorch Lightnight to automate the process.  
@@ -50,26 +57,18 @@ The scripts/train.py call first utils/parse.py to transform the configs/en23/...
 
 
 #### Model
-##### Missing values
-teacher forcing, loss, model, nan values.
+The model is an ConvLSTM model [11], with an encoding-encoding architecture. To improve the learning, we follow the teacher forcing method of [12] with a Inverse sigmoid decay for the scheduler of the sampling method. We have chosen the inverse sigmoid decay because we assume the prediction task is difficult, and therefore the first prediction is rather bad. Therefore, we want to have essentially the observations at the beginning of the training as input for the prediction of the next frame. 
+
+#### Dataset - Missing values
+the time series of satellite data contain many missing values due to the presence of clouds. which poses a problem both for the forward pass of the model and for the calculation of the loss and the metric. I currently use a simple interpolation to manage this problem. A promising solution would be to use a dedicated algorithm to predict missing data (see [13, 14]), I would like to use one of these methods later to improve the data.
 
 ### My work
-I started by writing the datamodule for the dataset. With the experimental dataset, the process took much longer than expected, first because it required working with a large number of variables (nearly 70 variables from 10 different sources) before selecting a subset, and second because it uncovered unexpected errors in the dataset.    
-Thenm I added a new metric NNSE_metric, more suitable for the task than the L2 norm, I added a new model convlstm-ae, and I updated the loss for the new dataset. 
+I started by writing the datamodule of the dataset. With the experimental dataset, the process took much longer than expected, first because it required working with a large number of variables (nearly 70 variables from 10 different sources) before selecting a subset, and second because it uncovered unexpected errors in the dataset.    
+Then I added a new metric NNSE_metric, more suitable for the task than the L2 norm, I added a new model convlstm-ae, and I updated the loss for the new dataset.    
 Finally, I refactored a part of the code, it was initially very little commented and not very readable, and with the addition of a new dataset it became necessary to have a code that works with all the existing datasets. This task was much more time consuming than expected. And I also updated the libraries and the code, because several arguments were depreciated. Although time consuming, these 2 tasks allowed me to deepen my mastery of pytorch lightnight, and to get updated on the arguments available to improve the learning of the model. 
 
-#### Changes from the initate.
-
-#### Difficulties
-
-#### what I learned
-
-
-### pre-processing
-#### Normalisation 
-The histogram of each satellite bands depends of the landcover type, latitude and period of the year. So an appropriate normalization affect different part of the histogram. can play an important r
-https://medium.com/sentinel-hub/how-to-normalize-satellite-images-for-deep-learning-d5b668c885af
-
+#### Changes from the initate
+I initially thought to handle the task via methods adapted for irregular data in order to manage the problem of missing data due to clouds, a systematic problem with satellite data. However, the solution doesn't seem to fit my data very well. I abandoned the idea because the papers explore particularly the management of irregular gaps, because for some data it can be relevant (for example, medical appointments are not at irregular intervals on the one hand due to the doctor's schedule, but it's also strongly linked to the progression of the disease, so the duration of the gaps are rich of information) In our case, the interval is regular, with some missing days. 
 
 ## Initiate
 
@@ -145,3 +144,11 @@ A., Kopf, A., Yang, E., DeVito, Z., Raison, M., Tejani, A., Chilamkurthy, S., St
 (2019). Pytorch: An imperative style, high-performance deep learning library. In Wallach, H., Larochelle, H., Beygelzimer, A.,
 d'Alché-Buc, F., Fox, E., and Garnett, R., editors, Advances in Neural Information Processing Systems 32, pages 8024–8035.
 Curran Associates, Inc.
+
+[11] Xingjian Shi, Zhourong Chen, Hao Wang, Dit-Yan Yeung, Wai-Kin Wong, and Wang-chun Woo. Convolutional lstm network: A machine learning approach for precipitation nowcasting.Advances in neural information processing systems, 28, 2015.
+
+[12] Bengio, Samy, et al. "Scheduled sampling for sequence prediction with recurrent neural networks." Advances in neural information processing systems 28 (2015).
+
+[13] Fischer, Raphael, et al. "No cloud on the horizon: probabilistic gap filling in satellite image series." 2020 IEEE 7th International Conference on Data Science and Advanced Analytics (DSAA). IEEE, 2020.
+
+[14] Moreno-Martínez, Álvaro, et al. "Multispectral high resolution sensor fusion for smoothing and gap-filling in the cloud." Remote Sensing of Environment 247 (2020): 111901.
