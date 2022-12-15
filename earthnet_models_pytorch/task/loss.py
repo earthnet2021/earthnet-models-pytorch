@@ -23,25 +23,25 @@ class MaskedDistance(nn.Module):
         super(MaskedDistance, self).__init__()
         self.distance_type = distance_type
 
-    def forward(self, preds, targets, mask):
-        assert(preds.shape == targets.shape)
+    def forward(self, preds, targs, mask):
+        assert(preds.shape == targs.shape)
 
         predsmasked = preds * mask
-        targetsmasked = targets * mask
+        targsmasked = targs * mask
 
-        targetsmasked[torch.isnan(targetsmasked)] = 0
-        predsmasked[torch.isnan(targetsmasked)] = 0
+        targsmasked[torch.isnan(targsmasked)] = 0
+        predsmasked[torch.isnan(targsmasked)] = 0
         predsmasked[torch.isnan(predsmasked)] = 0
 
         
         if self.distance_type == "L2":
-            return F.mse_loss(predsmasked,targetsmasked, reduction='sum')/ ((mask > 0).sum() + 1)
+            return F.mse_loss(predsmasked,targsmasked, reduction='sum')/ ((mask > 0).sum() + 1)
         
         elif self.distance_type == "L1":
-            return F.l1_loss(predsmasked,targetsmasked, reduction='sum')/ ((mask > 0).sum() + 1)
+            return F.l1_loss(predsmasked,targsmasked, reduction='sum')/ ((mask > 0).sum() + 1)
         
         elif self.distance_type == "nnse":
-            nse = 1 - F.mse_loss(predsmasked,targetsmasked, reduction='sum')/ (torch.var(targetsmasked)**2 * ((mask > 0).sum() + 1))
+            nse = 1 - F.mse_loss(predsmasked,targsmasked, reduction='sum')/ (torch.var(targsmasked)**2 * ((mask > 0).sum() + 1))
             return 1 / (2 - nse)
 
 
@@ -117,6 +117,9 @@ class BaseLoss(nn.Module):
         # Mask non-vegetation pixel (because ndvi is positive for vegetation pixels)
         masks = torch.where(masks.bool(), (preds >= 0).type_as(masks), 0)
 
+        # There is additionnal NaN values in target, inexplicable 
+        masks[torch.isnan(targs * masks)] = 0
+        
         loss = self.distance(preds, targs, masks) 
         logs["loss"] = loss
 
