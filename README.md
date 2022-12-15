@@ -1,7 +1,5 @@
 # EarthNet2023
 
-## Deliver
-
 ## Hacking
 
 ### Deliverable
