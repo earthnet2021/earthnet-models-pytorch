@@ -49,6 +49,8 @@ The scripts/train.py call first utils/parse.py to transform the configs/en23/...
         * parse.py (refactored, updated and documented)
 
 ### My work
+I 
+
 #### particularites
 teacher forcing, loss, model, nan values.
 
