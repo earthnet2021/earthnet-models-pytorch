@@ -18,13 +18,41 @@ It is well suited for time series, especially for ours since variance is an impo
     * Optimisation: 2 hours (in progress)
 
 ### Documentation
+The code is implemented using the deep learning framework PyTorch Lightning [9] which is built on top of PyTorch [10].
 
+* scripts/    
+    * train.py
+    * debug.py
+    * ...
+* configs/
+    * en23/
+        * convlstm_ae/original/base.yaml
+    * ...
+* earthnet_models_pytorch/
+    * dataloader/
+        * en23.py
+        * ...
+    * metric/
+        * NNSE_metric.py 
+        * ... 
+    * model/
+        * convlstm_ae.py
+    * task/
+        * loss.py
+        * spatio_temporal.py
+        * shedule.py
+    * utils/
+        * logging.py
+        * parse.py  
 
 ### My work
+
 
 #### Changes from the initate.
 
 #### Difficulties
+
+#### what I learned
 
 
 ### pre-processing
@@ -97,3 +125,13 @@ PyTorch lighnight framework (already implemented?)
 [6] Schirmer, Mona, et al. "Modeling irregular time series with continuous recurrent units." In *International Conference on Machine Learning. PMLR, 2022*.
 
 [7] Rubanova, Yulia, Ricky TQ Chen, and David K. Duvenaud. "Latent ordinary differential equations for irregularly-sampled time series." Advances in neural information processing systems 32 (2019).
+
+[8] J Eamonn Nash and Jonh V Sutcliffe. River flow forecasting through conceptual models part i—a discussion of principles. Journal of hydrology, 10(3):282–290, 1970.
+
+[9] Falcon, William. "Pytorch lightning." GitHub. Note: https://github. com/PyTorchLightning/pytorch-lightning 3.6 (2019).
+
+[10] Paszke, A., Gross, S., Massa, F., Lerer, A., Bradbury, J., Chanan, G., Killeen, T., Lin, Z., Gimelshein, N., Antiga, L., Desmaison,
+A., Kopf, A., Yang, E., DeVito, Z., Raison, M., Tejani, A., Chilamkurthy, S., Steiner, B., Fang, L., Bai, J., and Chintala, S.
+(2019). Pytorch: An imperative style, high-performance deep learning library. In Wallach, H., Larochelle, H., Beygelzimer, A.,
+d'Alché-Buc, F., Fox, E., and Garnett, R., editors, Advances in Neural Information Processing Systems 32, pages 8024–8035.
+Curran Associates, Inc.
