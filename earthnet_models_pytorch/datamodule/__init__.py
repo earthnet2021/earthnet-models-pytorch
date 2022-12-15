@@ -1,9 +1,9 @@
 
 
-from earthnet_models_pytorch.dataloader.en21_data import EarthNet2021DataModule
-from earthnet_models_pytorch.dataloader.en22_data import EarthNet2022DataModule
-from earthnet_models_pytorch.dataloader.en23_data import EarthNet2023DataModule
-from earthnet_models_pytorch.dataloader.en21x_data import EarthNet2021XDataModule, EarthNet2021XpxDataModule
+from earthnet_models_pytorch.datamodule.en21_data import EarthNet2021DataModule
+from earthnet_models_pytorch.datamodule.en22_data import EarthNet2022DataModule
+from earthnet_models_pytorch.datamodule.en23_data import EarthNet2023DataModule
+from earthnet_models_pytorch.datamodule.en21x_data import EarthNet2021XDataModule, EarthNet2021XpxDataModule
 
 DATASETS = {"en21-std": EarthNet2021DataModule, "en21-veg": EarthNet2021DataModule, "en21x": EarthNet2021XDataModule, 
             "en21x-px": EarthNet2021XpxDataModule, "en22": EarthNet2022DataModule, "en23": EarthNet2023DataModule}

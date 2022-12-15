@@ -10,7 +10,7 @@ import pytorch_lightning as pl
 from earthnet_models_pytorch.model import MODELS
 from earthnet_models_pytorch.task.spatio_temporal import SpatioTemporalTask
 
-from earthnet_models_pytorch.dataloader import DATASETS
+from earthnet_models_pytorch.datamodule import DATASETS
 from earthnet_models_pytorch.utils import parse_setting
 
 

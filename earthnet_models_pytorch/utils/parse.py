@@ -7,7 +7,7 @@ parse setting implements copying of global attributes to the particular subcateg
 from pathlib import Path
 import yaml
 import warnings
-from earthnet_models_pytorch.dataloader import DATASETS, METRIC_CHECKPOINT_INFO
+from earthnet_models_pytorch.datamodule import DATASETS, METRIC_CHECKPOINT_INFO
 from earthnet_models_pytorch.model import MODELS
 
 # SETTINGS = ["en21-std", "en21-veg", "europe-veg", "en21x","en21x-px", "en22", "en23"] 
