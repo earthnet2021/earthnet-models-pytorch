@@ -98,14 +98,14 @@ class SpatioTemporalTask(pl.LightningModule):
         parser.add_argument('--compute_metric_on_test', type = str2bool, default = False)
         return parser
 
-    def forward(self, data, pred_start: int = 0, n_preds: Optional[int] = None, kwargs = {}):
+    def forward(self, data, step, pred_start: int = 0, n_preds: Optional[int] = None, kwargs = {}):
         """
         data is a dict with tensors
         pred_start is the first index that shall be predicted, defaults to zero.
         n_preds is the length of the prediction, could also be None.
         kwargs are optional keyword arguments parsed to the model, right now these are model shedulers.
         """        
-        return self.model(data, pred_start = pred_start, n_preds = n_preds, **kwargs)
+        return self.model(data, step, pred_start = pred_start, n_preds = n_preds, **kwargs)
 
     def configure_optimizers(self):
         optimizers = [getattr(torch.optim,o["name"])(self.parameters(), **o["args"]) for o in self.hparams.optimization["optimizer"]] 
@@ -125,8 +125,8 @@ class SpatioTemporalTask(pl.LightningModule):
         for (shedule_name, shedule) in self.model_shedules:
             kwargs[shedule_name] = shedule(self.global_step)  
         
-        # Predictions generation
-        preds, aux = self(batch, n_preds = self.context_length+self.target_length, kwargs = kwargs) 
+        # Predictions generation - batch_idx for the schedule of the teacher forcing
+        preds, aux = self(batch, step=self.global_step, n_preds = self.context_length+self.target_length, kwargs = kwargs) 
         loss, logs = self.loss(preds, batch, aux, current_step = self.global_step)
 
         # Logs
