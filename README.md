@@ -47,6 +47,8 @@ The code is implemented using the deep learning framework PyTorch Lightning [9] 
         * parse.py (refactored, updated and documented)
 
 ### My work
+#### particularites
+teacher forcing, loss, model, nan values.
 
 
 #### Changes from the initate.
