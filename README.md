@@ -1,6 +1,30 @@
 # EarthNet2023
 
-# Hacking
+## Deliver
+
+## Hacking
+
+### Deliverable
+* The error metric is a  *Normalized Nash-Sutcliffe Efficiency (NNSE)*.
+    * The Nash-Sutcliffe Efficiency (NSE) [8] rescales the MSE with the variance of the observations σ_0^2 , it is defined as: NSE = 1 − M SE/σ_0^2. 
+It is well suited for time series, especially for ours since variance is an important factor influencing the prediction: during some periods (e.g. winter in Europe) vegetation evolves little or not at all, and is therefore very easy to predict. On the other hand, during other periods (e.g. spring in Europe), vegetation will evolve rapidly and respond in a non-linear way to external factors (luminosity, rainfall). Re-scaling by variance is a way to have a more robust metric and to better compare the samples.
+    * The NNSE is the Normalized NSE, NNSE = 1/(2-nse). The NSE is defined on ]-inf, 0], The NNSE normalizes the metric on [0, 1]. 
+* The target metric is 0.5. This would mean that our model is a better predictor than the average of the observations. This is not so easy to obtain since these observations are predicted, and would beat the state of the art on this task.
+* The current achieved value is: 
+* Work-breakdown:
+    * Data understanding and exploration: 20
+    * Framework: 20 hours
+    * Optimisation: 2 hours (in progress)
+
+### Documentation
+
+
+### My work
+
+#### Changes from the initate.
+
+#### Difficulties
+
 
 ### pre-processing
 #### Normalisation 
