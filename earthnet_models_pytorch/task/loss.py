@@ -35,6 +35,7 @@ class MaskedDistance(nn.Module):
 
         
         if self.distance_type == "L2":
+            # A
             return F.mse_loss(predsmasked,targsmasked, reduction='sum')/ ((mask > 0).sum() + 1)
         
         elif self.distance_type == "L1":
