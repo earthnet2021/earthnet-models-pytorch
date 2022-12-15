@@ -18,32 +18,33 @@ It is well suited for time series, especially for ours since variance is an impo
     * Optimisation: 2 hours (in progress)
 
 ### Documentation
-The code is implemented using the deep learning framework PyTorch Lightning [9] which is built on top of PyTorch [10].
+The code is implemented using the deep learning framework PyTorch Lightning [9] which is built on top of PyTorch [10]. The scripts/train.py call first utils/parse.py to transform the configs/en23/.../.yaml file in a dictionnary of hyperparameters (and certify that the hyperparameters are correct).
 
+#### Architecture
 * scripts/    
-    * train.py
-    * debug.py
+    * train.py (already existing, updated)
+    * debug.py (already existing, updated)
     * ...
 * configs/
     * en23/
-        * convlstm_ae/original/base.yaml
+        * convlstm_ae/original/base.yaml (implemented from scratch, updated and documented compared to configs of previous models)
     * ...
 * earthnet_models_pytorch/
     * dataloader/
-        * en23.py
+        * en23.py (dataloader for the new dataset, implemented from scratch)
         * ...
     * metric/
-        * NNSE_metric.py 
+        * NNSE_metric.py (new metric, implemented from scratch)
         * ... 
     * model/
-        * convlstm_ae.py
+        * convlstm_ae.py (new model for the new dataset, implemented from scratch)
     * task/
-        * loss.py
-        * spatio_temporal.py
-        * shedule.py
+        * loss.py (refactored and updated, improve to include the new dataset)  
+        * spatio_temporal.py (already existing)
+        * shedule.py (already exsting, not used)
     * utils/
-        * logging.py
-        * parse.py  
+        * logging.py (already existing) 
+        * parse.py (refactored, updated and documented)
 
 ### My work
 
