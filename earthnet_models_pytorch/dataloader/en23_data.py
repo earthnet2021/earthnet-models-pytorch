@@ -77,7 +77,7 @@ class EarthNet2023Dataset(Dataset):
             raise Exception("The first available imagery of sentinel-2 is not 4 + [5]" + str(index_avail))
 
         # Select the days with available data 
-        s2_avail = s2_avail.isel(time=time).values.astype(self.type)
+        s2_avail = s2_avail.isel(time=time).values # .astype(int)
 
         # Create the minicube
         # s2 is 5 days, and already rescaled [0, 1]

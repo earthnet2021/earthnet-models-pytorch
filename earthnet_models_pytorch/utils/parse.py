@@ -90,7 +90,7 @@ def parse_setting(setting_file, track = None):
 
     setting_dict["Trainer"]["precision"] = setting_dict["Trainer"]["precision"] if "precision" in setting_dict["Trainer"] else 32  # binary floating-point computer number format 
     setting_dict["Data"]["fp16"] = (setting_dict["Trainer"]["precision"] == 16)   # binary floating-point computer number format 
-
+    
     setting_dict["Checkpointer"] = {**setting_dict["Checkpointer"], **METRIC_CHECKPOINT_INFO[setting_dict["Setting"]]} if "Checkpointer" in setting_dict else METRIC_CHECKPOINT_INFO[setting_dict["Setting"]]
     
     bs = setting_dict["Data"]["train_batch_size"]

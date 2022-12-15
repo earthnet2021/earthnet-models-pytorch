@@ -3,12 +3,13 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 import torch.distributions as distrib
+import sys
 
 from earthnet_models_pytorch.task.shedule import WeightShedule
 
 
 def setup_loss(args):
-    if "pixelwise" in args and args["pixelwise"]:  # check legacy but maybe remove the second argument
+    if "pixelwise" in args and args["pixelwise"]:  # TODO check legacy but maybe remove the second argument
         return PixelwiseLoss(args)
     elif "variationnal" in args and args["variationnal"]:  
         return PixelwiseLoss(args)
@@ -24,9 +25,15 @@ class MaskedDistance(nn.Module):
 
     def forward(self, preds, targets, mask):
         assert(preds.shape == targets.shape)
-        predsmasked = preds * mask
-        targetsmasked = targets * mask  
 
+        predsmasked = preds * mask
+        targetsmasked = targets * mask
+
+        targetsmasked[torch.isnan(targetsmasked)] = 0
+        predsmasked[torch.isnan(targetsmasked)] = 0
+        predsmasked[torch.isnan(predsmasked)] = 0
+
+        
         if self.distance_type == "L2":
             return F.mse_loss(predsmasked,targetsmasked, reduction='sum')/ ((mask > 0).sum() + 1)
         
@@ -80,31 +87,41 @@ class BaseLoss(nn.Module):
         if "target" in batch:
             # todo check shape + mask + lc
             targs = batch['target'][:,-preds.shape[1]:,...]
+        # TODO legacy, update previous dataloaders then remove the else  
         else:
-            targs = batch["dynamic"][0][:,-preds.shape[1]:,...]  # todo legacy, change the previous dataloaders
-
+            targs = batch["dynamic"][0][:,-preds.shape[1]:,...]  
+            if preds.shape[2] == 1: # can probably be removed
+                targs = targs[:,:,0,...].unsqueeze(2)
+        
+        # Masks
         if len(batch["dynamic_mask"]) > 0:
             masks = batch["dynamic_mask"][0][:,-preds.shape[1]:,...]
+            masks = masks[:,:,0,...].unsqueeze(2) # legacy if mask several channels?
         else:
             masks = None
-        if self.ndvi:
-            # NDVI computation
-            if preds.shape[2] == 1:
-                targs = targs[:,:,0,...].unsqueeze(2)
-            if masks is not None:
-                masks = masks[:,:,0,...].unsqueeze(2)
-            lc = batch["landcover"]
-            if masks is None:
-                masks = ((lc >= self.min_lc).bool() & (lc <= self.max_lc).bool()).type_as(preds).unsqueeze(1).repeat(1, preds.shape[1], 1, 1, 1)
-            else:
-                masks = torch.where(masks.bool(), ((lc >= self.min_lc).bool() & (lc <= self.max_lc).bool()).type_as(masks).unsqueeze(1).repeat(1, preds.shape[1], 1, 1, 1), masks)
-            
-            masks = torch.where(masks.bool(), (preds >= 0).type_as(masks), masks)
+
+        # Available days
+        if "s2_avail" in batch:
+            avail = torch.isnan(batch['s2_avail'][:,-preds.shape[1]:,...]).squeeze(0).unsqueeze(2).unsqueeze(3).unsqueeze(4).repeat(1, 1, preds.shape[2],preds.shape[3],preds.shape[3])
+            targs = torch.where(avail, 0, targs)
+            masks = torch.where(avail, 0, masks)
+            preds = torch.where(avail, 0, preds)
+
+        # Mask non vegetation landcover
+        lc = batch["landcover"]
+        if masks is None:
+            masks = ((lc >= self.min_lc).bool() & (lc <= self.max_lc).bool()).type_as(preds).unsqueeze(1).repeat(1, preds.shape[1], 1, 1, 1)
+        else:
+            masks = torch.where(masks.bool(), ((lc >= self.min_lc).bool() & (lc <= self.max_lc).bool()).type_as(masks).unsqueeze(1).repeat(1, preds.shape[1], 1, 1, 1), masks)
+
+        # Mask non-vegetation pixel (because ndvi is positive for vegetation pixels)
+        masks = torch.where(masks.bool(), (preds >= 0).type_as(masks), 0)
 
         loss = self.distance(preds, targs, masks) 
         logs["loss"] = loss
 
         return loss, logs
+
 
 class VariationnalLoss(nn.Module): 
     def __init__(self, setting: dict):
@@ -124,26 +141,28 @@ class VariationnalLoss(nn.Module):
         if "target" in batch:
             # todo check shape + mask + lc
             targs = batch['target'][:,-preds.shape[1]:,...]
-        else:
-            targs = batch["dynamic"][0][:,-preds.shape[1]:,...]  # todo legacy, change the previous dataloaders
 
+        # TODO legacy, update previous dataloaders then remove the else  
+        else:
+            targs = batch["dynamic"][0][:,-preds.shape[1]:,...]  
+            if preds.shape[2] == 1: # can probably be removed
+                targs = targs[:,:,0,...].unsqueeze(2)
+        
+        # Masks
         if len(batch["dynamic_mask"]) > 0:
             masks = batch["dynamic_mask"][0][:,-preds.shape[1]:,...]
+            if masks is not None and masks.shape[2] > 1: # Legacy...
+                masks = masks[:,:,0,...].unsqueeze(2)
         else:
             masks = None
-        if self.ndvi:
-            # NDVI computation
-            if preds.shape[2] == 1:
-                targs = targs[:,:,0,...].unsqueeze(2)
-            if masks is not None:
-                masks = masks[:,:,0,...].unsqueeze(2)
-            lc = batch["landcover"]
-            if masks is None:
-                masks = ((lc >= self.min_lc).bool() & (lc <= self.max_lc).bool()).type_as(preds).unsqueeze(1).repeat(1, preds.shape[1], 1, 1, 1)
-            else:
-                masks = torch.where(masks.bool(), ((lc >= self.min_lc).bool() & (lc <= self.max_lc).bool()).type_as(masks).unsqueeze(1).repeat(1, preds.shape[1], 1, 1, 1), masks)
-            
-            masks = torch.where(masks.bool(), (preds >= 0).type_as(masks), masks)
+
+        lc = batch["landcover"]
+        if masks is None:
+            masks = ((lc >= self.min_lc).bool() & (lc <= self.max_lc).bool()).type_as(preds).unsqueeze(1).repeat(1, preds.shape[1], 1, 1, 1)
+        else:
+            masks = torch.where(masks.bool(), ((lc >= self.min_lc).bool() & (lc <= self.max_lc).bool()).type_as(masks).unsqueeze(1).repeat(1, preds.shape[1], 1, 1, 1), masks)
+        
+        masks = torch.where(masks.bool(), (preds >= 0).type_as(masks), masks)
 
         loss = self.distance(preds, targs, masks) 
 

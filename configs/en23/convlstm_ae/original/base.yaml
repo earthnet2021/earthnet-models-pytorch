@@ -54,7 +54,7 @@ Trainer:
     # inference_mode: True # if False use 'torch.no_grad' instead. 
   
 Data:
-    base_dir: "/workspace/data/africa_v0.3/" 
+    base_dir: "/workspace/data/Deepcube/earthnet2023/" 
     test_track: "iid"
     target: "ndvi"
     # With a batch of size N, a DPP strategy with D devices, and accumulate_grad_batches = K, the effective batch size = K*D*N. 
@@ -70,13 +70,11 @@ Task:
         args: {
             distance_type: "L2"
         }
-        dist_scale: 1
-        min_lc: 2
-        max_lc: 6
+        min_lc: 40
+        max_lc: 90
     context_length: 70
     target_length: 20
-    # for variationnal models
-    n_stochastic_preds: 1 
+    n_stochastic_preds: 1 # for variationnal models
     optimization:
         optimizer:
             - 

@@ -151,18 +151,22 @@ class ConvLSTMAE(nn.Module):
 
         # encoding network
         for t in range(self.hparams.context_length):
-            # if avail[t] or t == 0:
             input = torch.cat((sat[:, t, ...], target[:,t,...]), dim=1)
-            '''else:
-                # if the data are missing, we use the prediction of our model as target and we interpolate the data.
-                pred = self.conv(h_t2)
-                if t == self.hparams.context_length-1:
-                    input = torch.cat(sat[:, t, ...], pred)
-                torch.nn.functional.interpolate(
-                input = torch.cat(target[:,t,...])'''
+            # if avail[t] or t == 0:
+            #     input = torch.cat((sat[:, t, ...], target[:,t,...]), dim=1)
+            # else:
+            #    # if the data are missing, we use the prediction of our model as target and we interpolate the data.
+            #    pred = self.conv(h_t2)
+            #    if t == self.hparams.context_length-1:
+            #        input = torch.cat(sat[:, t, ...], pred)
+            #    # torch.nn.functional.interpolate(
+            #    input = torch.cat(target[:,t,...])
             input = torch.cat((input, topology), dim = 1)
             weather_t = weather[:,t,...].repeat(1, 1, 128, 128) 
             input= torch.cat((input, weather_t), dim = 1)
+
+            input[torch.isnan(input)] = 0
+            assert(torch.sum(torch.isnan(input))==0)
 
             # First block
             h_t, c_t = self.encoder_1_convlstm(input_tensor=input,

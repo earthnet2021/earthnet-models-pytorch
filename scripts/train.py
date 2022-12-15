@@ -45,20 +45,19 @@ def train_model(setting_dict: dict, setting_file: str = None):
     # Logger
     logger = pl.loggers.TensorBoardLogger(**setting_dict["Logger"])
     
-    if setting_file is not None and type(logger.experiment).__name__ != "DummyExperiment": # What and where is define DummyExperiment? ?
+    if setting_file is not None and type(logger.experiment).__name__ != "DummyExperiment": 
         print("Copying setting yaml.")
         os.makedirs(logger.log_dir, exist_ok = True)
         with open(os.path.join(logger.log_dir,"setting.yaml"), 'w') as fp:
             yaml.dump(setting_dict, fp)
 
     # Checkpointing
-    
     checkpoint_callback = pl.callbacks.ModelCheckpoint(**setting_dict["Checkpointer"])
 
     # Trainer
     trainer_dict = setting_dict["Trainer"]
     if "profiler" in trainer_dict:
-        trainer_dict["profiler"] = pl.profiler.AdvancedProfiler(output_filename="curr_profile")
+        trainer_dict["profiler"] = pl.profilers.AdvancedProfiler(filename="profiler_output")
 
     trainer = pl.Trainer(logger = logger, callbacks = [checkpoint_callback], **trainer_dict)
  

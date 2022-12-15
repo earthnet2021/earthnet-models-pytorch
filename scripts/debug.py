@@ -102,12 +102,12 @@ def overfit_model(setting_dict: dict):
 
     # Trainer
     trainer_dict = setting_dict["Trainer"]
-    trainer_dict["overfit_batches"] = 2  # Uses this much data of the training set.
-    trainer_dict["check_val_every_n_epoch"] = 50  #Check val every n train epochs.
+    trainer_dict["overfit_batches"] = 20  # Uses this much data of the training set.
+    trainer_dict["check_val_every_n_epoch"] = 1  #Check val every n train epochs.
     trainer_dict["max_epochs"] = 10
     #trainer_dict["num_sanity_val_steps"] = 0  #Sanity check runs n batches of val before starting the training routine
     if "profiler" in trainer_dict:
-        trainer_dict["profiler"] = pl.profiler.AdvancedProfiler(output_filename="curr_profile")
+        trainer_dict["profiler"] = pl.profilers.AdvancedProfiler(filename="profiler_output")
 
     trainer = pl.Trainer(logger = logger, **trainer_dict)
 
