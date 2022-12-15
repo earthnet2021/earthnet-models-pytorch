@@ -54,8 +54,9 @@ The scripts/train.py call first utils/parse.py to transform the configs/en23/...
 teacher forcing, loss, model, nan values.
 
 ### My work
-I started by writing the datamodule for the dataset. With the experimental dataset, the process took much longer than expected, first because it required working with a large number of variables (nearly 70 variables from 10 different sources) before selecting a subset, and second because it uncovered unexpected errors in the dataset.
-Finally, I refactored a part of the code, it was initially very little commented and not very readable, and with the addition of a new dataset it became necessary to have a code that works with all the existing datasets. This task was much more time consuming than expected. And I also updated the libraries and the code, because several arguments were depreciated. 
+I started by writing the datamodule for the dataset. With the experimental dataset, the process took much longer than expected, first because it required working with a large number of variables (nearly 70 variables from 10 different sources) before selecting a subset, and second because it uncovered unexpected errors in the dataset.    
+Thenm I added a new metric NNSE_metric, more suitable for the task than the L2 norm, I added a new model convlstm-ae, and I updated the loss for the new dataset. 
+Finally, I refactored a part of the code, it was initially very little commented and not very readable, and with the addition of a new dataset it became necessary to have a code that works with all the existing datasets. This task was much more time consuming than expected. And I also updated the libraries and the code, because several arguments were depreciated. Although time consuming, these 2 tasks allowed me to deepen my mastery of pytorch lightnight, and to get updated on the arguments available to improve the learning of the model. 
 
 #### Changes from the initate.
 
