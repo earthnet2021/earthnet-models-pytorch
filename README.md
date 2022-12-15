@@ -20,7 +20,7 @@ It is well suited for time series, especially for ours since variance is an impo
 ### Documentation
 #### Description
 The code is implemented using the deep learning framework PyTorch Lightning [9] which is built on top of PyTorch [10].    
-The scripts/train.py call first utils/parse.py to transform the configs/en23/.../.yaml file in a dictionnary of arguments (and certify that the arguments are correct). Then the EarthNet2023DataModule of datamodule/en23_data.py is called and it defines the dataset and the data loader. The model (here model/convlstm_ae.py is also called. In task/spatio_temporal.py we define a LightningModule with all the function called for the training, testing and validation step. We use a logger, a checkpointer and a profiler to get information from the training. We use a Trainer of Pytorch Lightnight to automate the process.  
+The scripts/train.py call first utils/parse.py to transform the configs/en23/.../.yaml file in a dictionnary of arguments (and certify that the arguments are correct). Then the EarthNet2023DataModule of datamodule/en23_data.py is called and it defines the dataset and the data loader. The model (here model/convlstm_ae.py is also called. In task/spatio_temporal.py we define a LightningModule with all the function called for the training, testing and validation step. We use a logger, a checkpointer and a profiler to get informations from the training. Finally, we use a Trainer of Pytorch Lightnight to automate the process.  
 
 #### Architecture
 * scripts/    
@@ -48,12 +48,14 @@ The scripts/train.py call first utils/parse.py to transform the configs/en23/...
         * logging.py (already existing) 
         * parse.py (refactored, updated and documented)
 
-### My work
-I 
 
-#### particularites
+#### Model
+##### Missing values
 teacher forcing, loss, model, nan values.
 
+### My work
+I started by writing the datamodule for the dataset. With the experimental dataset, the process took much longer than expected, first because it required working with a large number of variables (nearly 70 variables from 10 different sources) before selecting a subset, and second because it uncovered unexpected errors in the dataset.
+Finally, I refactored a part of the code, it was initially very little commented and not very readable, and with the addition of a new dataset it became necessary to have a code that works with all the existing datasets. This task was much more time consuming than expected. And I also updated the libraries and the code, because several arguments were depreciated. 
 
 #### Changes from the initate.
 
@@ -77,7 +79,7 @@ Forecasting the state of vegetation in response to climate and weather events is
 EarthNet2022 is a new dataset, with a better cloud masking and new variables (Landsat climatology NDVI and Sentinel - 1 vegetation index), relevant for environnemental science. Additionnally, the data (from different sources) are irregularly sampled time series. This is the main different from the previous dataset, where the data where 10 dayly interpolated, which is very easy to train deep learning models but hides the actual dynamics of the system.
 
 The variables are:
-* Sentinel 2 (B02 to B12 bands) - spatio-temporal data
+* Sentinel 2 (B02 to B8A bands) - spatio-temporal data
 * Sentinel1 (VV, VH, mask) - spatio-temporal data
 * NDVI Climatology (12 months Landsat 30m/pix) - spatio-temporal data
 * SRTM (DEM) - static data
