@@ -18,7 +18,9 @@ It is well suited for time series, especially for ours since variance is an impo
     * Optimisation: 2 hours (in progress)
 
 ### Documentation
-The code is implemented using the deep learning framework PyTorch Lightning [9] which is built on top of PyTorch [10]. The scripts/train.py call first utils/parse.py to transform the configs/en23/.../.yaml file in a dictionnary of hyperparameters (and certify that the hyperparameters are correct).
+#### Description
+The code is implemented using the deep learning framework PyTorch Lightning [9] which is built on top of PyTorch [10].    
+The scripts/train.py call first utils/parse.py to transform the configs/en23/.../.yaml file in a dictionnary of arguments (and certify that the arguments are correct). Then the EarthNet2023DataModule of datamodule/en23_data.py is called and it defines the dataset and the data loader. The model (here model/convlstm_ae.py is also called. In task/spatio_temporal.py we define a LightningModule with all the function called for the training, testing and validation step. We use a logger, a checkpointer and a profiler to get information from the training. We use a Trainer of Pytorch Lightnight to automate the process.  
 
 #### Architecture
 * scripts/    
