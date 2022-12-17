@@ -31,7 +31,7 @@ Trainer:
     # Ensures reproducibility
     deterministic: True
     # Number of devices to train on (int) or which devices to train on (list or str)
-    devices: [2, 3]
+    devices: [1, 2]
     check_val_every_n_epoch: 1
     # Gradient clipping value. In case of gradient exploding, clip the gradient norm to the defined value.  
     gradient_clip_val: 0 # default setting, no clipping gradient. 
@@ -54,7 +54,7 @@ Trainer:
     # inference_mode: True # if False use 'torch.no_grad' instead. 
   
 Data:
-    base_dir: "/workspace/data/Deepcube/earthnet2023/" 
+    base_dir: "/workspace/data/earthnet2023/" 
     test_track: "iid"
     target: "ndvi"
     # With a batch of size N, a DPP strategy with D devices, and accumulate_grad_batches = K, the effective batch size = K*D*N. 

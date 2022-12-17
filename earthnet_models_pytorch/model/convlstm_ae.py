@@ -131,8 +131,8 @@ class ConvLSTMAE(nn.Module):
     def forward(self, data, step, pred_start: int = 0, n_preds: Optional[int] = None):
 
         c_l = self.hparams.context_length if self.training else pred_start
-        k = 1
-        teacher_forcing_decay = k / (k +torch.exp(step/k)) 
+        # k = 1
+        # teacher_forcing_decay = k / (k +torch.exp(step/k)) 
 
         # Data
         # sentinel 2 bands

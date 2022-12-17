@@ -145,8 +145,6 @@ notebooks/*
 notebooks
 experiments
 experiments/*
-analysis
-analysis/*
 experiments_1
 experiments_1/*
 experiments_old
@@ -155,5 +153,5 @@ plots
 plots/*
 checkpoints 
 checkpoints/*
-work/analysis*
-work/statistics_en22.py
+work/
+work/*
