@@ -17,8 +17,18 @@ It is well suited for time series, especially for ours since variance is an impo
 
 ### Documentation
 
+#### Installation
+
+```
+git clone https://github.com/Clair3/EarthNet2023.git
+conda create -n EarthnetEnv python=3.10
+conda activate EarthnetEnv
+pip install -r requirements.txt
+pip install -e .
+```
+
 #### Train
-To train the model, we need to set up a ``config.yaml``` file with the path ```configs/<setting>/<model>/<feature>/base.yaml``` then we can run:
+To train the model, we need to set up a ```config.yaml``` file with the path ```configs/<setting>/<model>/<feature>/base.yaml``` then we can run:
 ```
 train.py path/to/setting.yaml
 ```
