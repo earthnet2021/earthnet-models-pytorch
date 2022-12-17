@@ -15,7 +15,6 @@ import xarray as xr
 
 from torch import nn
 from torch.utils.data import Dataset, DataLoader, random_split
-from torchvision.transforms import transforms
 
 from earthnet_models_pytorch.utils import str2bool
 
@@ -189,6 +188,10 @@ class EarthNet2023Dataset(Dataset):
 
         # TODO transform landcover in categoritcal variables if used for training
 
+        # NaN values handling
+        s2_cube = np.where(np.isnan(s2_cube), np.zeros(1).astype(self.type), s2_cube)
+        target = np.where(np.isnan(target), np.zeros(1).astype(self.type), target)
+
         # Final minicube
         data = {
             "dynamic": [torch.from_numpy(s2_cube), torch.from_numpy(meteo_cube)],
@@ -281,16 +284,12 @@ class EarthNet2023DataModule(pl.LightningDataModule):
 
     def setup(self, stage: str = None):
         if stage == "fit" or stage is None:
-            self.earthnet_train = EarthNet2023Dataset(
+            earthnet_full = EarthNet2023Dataset(
                 self.base_dir / "train",
                 target=self.hparams.target,
                 fp16=self.hparams.fp16,
             )
-            self.earthnet_val = EarthNet2023Dataset(
-                self.base_dir / "val",
-                target=self.hparams.target,
-                fp16=self.hparams.fp16,
-            )
+            self.earthnet_train, self.earthnet_val = random_split(earthnet_full, [0.9, 0.1], generator=torch.Generator().manual_seed(self.hparams.val_split_seed))
 
         if stage == "test" or stage is None:
             self.earthnet_test = EarthNet2023Dataset(
@@ -320,7 +319,7 @@ class EarthNet2023DataModule(pl.LightningDataModule):
     def test_dataloader(self) -> DataLoader:
         return DataLoader(
             self.earthnet_test,
-            batch_size=self.hparams.test_batch_siz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e,
+            batch_size=self.hparams.test_batch_size,
             num_workers=self.hparams.num_workers,
             pin_memory=True,
         )

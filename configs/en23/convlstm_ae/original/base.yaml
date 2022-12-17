@@ -34,7 +34,7 @@ Trainer:
     devices: [1, 2]
     check_val_every_n_epoch: 1
     # Gradient clipping value. In case of gradient exploding, clip the gradient norm to the defined value.  
-    gradient_clip_val: 0 # default setting, no clipping gradient. 
+    gradient_clip_val: 0  # 0 for no clipping gradient. 
     # How often to add logging rows
     log_every_n_steps: 32
     # Sanity check runs n batches of val before starting the training routine.
@@ -42,7 +42,7 @@ Trainer:
     # Number of GPU nodes for distributed training.
     num_nodes: 1
     max_epochs: 50
-    precision: 16
+    precision: 32
     profiler: True #"Advanced"
     # Training with the DistributedDataParallel strategy
     strategy: 'ddp'
@@ -62,7 +62,7 @@ Data:
     train_batch_size: 2 
     val_batch_size: 2
     test_batch_size: 2
-    num_workers: 6 # Common bottleneck during the training, increase until saturation. 
+    num_workers: 4 # Common bottleneck during the training, increase until saturation. 
 
 Task:
     loss:
@@ -81,15 +81,13 @@ Task:
                 name: Adam
                 args: 
                     betas: [0.9, 0.999]
-                lr_per_sample: 0.0000001
+                lr_per_sample: 0.00001
         lr_shedule:
             -
-                name: MultiStepLR
+                name: ExponentialLR  # ReduceLROnPlateau factor: 0.1, patience: 3
                 args:
-                    milestones: [1000] #[2, 20, 50, 90]
-                    gamma: 0.1
+                    gamma: 0.99
     n_log_batches: 8
-    compute_metric_on_test: True
 
 Model:
     hidden_dim: [64, 64, 64, 64]

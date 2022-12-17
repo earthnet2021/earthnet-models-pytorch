@@ -64,7 +64,7 @@ def fast_dev_run(setting_dict: dict):
     trainer_dict["logger"] = False
     # Runs n if set to n (int) else 1 if set to True batch(es) to ensure your code will execute without errors.
     trainer_dict["fast_dev_run"] = 2
-    trainer_dict["overfit_batches"] = 10
+    trainer_dict["overfit_batches"] = 2
     if "profiler" in trainer_dict:
         trainer_dict["profiler"] = pl.profilers.AdvancedProfiler(
             filename="profiler_output"
@@ -108,10 +108,6 @@ def overfit_model(setting_dict: dict):
     model = MODELS[setting_dict["Architecture"]](model_params)
 
     # Task
-    setting_dict["Task"]["optimization"]["lr_shedule"][0]["args"]["milestones"] = [
-        1000,
-        2000,
-    ]
     task_args = [
         "--{}={}".format(key, value) for key, value in setting_dict["Task"].items()
     ]
@@ -129,6 +125,7 @@ def overfit_model(setting_dict: dict):
     trainer_dict["overfit_batches"] = 20  # Uses this much data of the training set.
     trainer_dict["check_val_every_n_epoch"] = 1  # Check val every n train epochs.
     trainer_dict["max_epochs"] = 10
+    trainer_dict["detect_anomaly"] = True
     # trainer_dict["num_sanity_val_steps"] = 0  #Sanity check runs n batches of val before starting the training routine
     if "profiler" in trainer_dict:
         trainer_dict["profiler"] = pl.profilers.AdvancedProfiler(

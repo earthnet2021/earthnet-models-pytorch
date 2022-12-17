@@ -110,7 +110,7 @@ class SpatioTemporalTask(pl.LightningModule):
         parser.add_argument(
             "--optimization",
             type=ast.literal_eval,
-            default='{"optimizer": [{"name": "Adam", "args:" {"lr": 0.0001, "betas": (0.9, 0.999)} }], "lr_shedule": [{"name": "multistep", "args": {"milestones": [25, 40], "gamma": 0.1} }]}',
+            # default='{"optimizer": [{"name": "Adam", "args:" {"lr": 0.0001, "betas": (0.9, 0.999)} }], "lr_shedule": [{"name": "multistep", "args": {"milestones": [25, 40], "gamma": 0.1} }]}',
         )
 
         parser.add_argument("--model_shedules", type=ast.literal_eval, default="[]")
@@ -136,14 +136,11 @@ class SpatioTemporalTask(pl.LightningModule):
             getattr(torch.optim, o["name"])(self.parameters(), **o["args"])
             for o in self.hparams.optimization["optimizer"]
         ]
-        # This gets any (!) torch.optim optimizer
-        # torch.optim.lr_scheduler provides several methods to adjust the learning rate based on the number of epochs.
+        # A scheduler provides several methods to adjust the learning rate based on the number of epochs.
         shedulers = [
             getattr(torch.optim.lr_scheduler, s["name"])(optimizers[i], **s["args"])
             for i, s in enumerate(self.hparams.optimization["lr_shedule"])
         ]
-        # This gets any(!) torch.optim.lr_scheduler - but only those with standard callback will work (i.e. not the Plateau one)
-        print("spatio_temporal: configure optiöizers", optimizers, shedulers)
         return optimizers, shedulers
 
     def training_step(self, batch, batch_idx):

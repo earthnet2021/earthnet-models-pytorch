@@ -29,31 +29,25 @@ class MaskedDistance(nn.Module):
     def forward(self, preds, targs, mask):
         assert preds.shape == targs.shape
 
-        nan = torch.sum(torch.isnan(targs))
-        predsmasked = preds * mask
-        targsmasked = targs * mask
-        nan2 = torch.sum(torch.isnan(targsmasked))
-
-        # targsmasked[torch.isnan(targsmasked)] = 0
-        # predsmasked[torch.isnan(targsmasked)] = 0
-        # predsmasked[torch.isnan(predsmasked)] = 0
-
-        print(nan, nan2)
+        targsmasked = torch.where(mask.bool(), targs, torch.zeros(1).type_as(targs))
+        predsmasked = torch.where(mask.bool(), preds, torch.zeros(1).type_as(preds))
 
         if self.distance_type == "L2":
 
-            return F.mse_loss(predsmasked, targsmasked, reduction="sum") / (
+            return F.mse_loss(predsmasked, targsmasked, reduction="sum") + +1e-6 / (
                 (mask > 0).sum() + 1
             )
 
         elif self.distance_type == "L1":
-            return F.l1_loss(predsmasked, targsmasked, reduction="sum") / (
+            return F.l1_loss(predsmasked, targsmasked, reduction="sum") + 1e-6 / (
                 (mask > 0).sum() + 1
             )
 
         elif self.distance_type == "nnse":
-            nse = 1 - F.mse_loss(predsmasked, targsmasked, reduction="sum") / (
-                torch.var(targsmasked) ** 2 * ((mask > 0).sum() + 1)
+            nse = (
+                1
+                - F.mse_loss(predsmasked, targsmasked, reduction="sum")
+                + 1e-6 / (torch.var(targsmasked) ** 2 * ((mask > 0).sum() + 1))
             )
             return 1 / (2 - nse)
 
@@ -108,6 +102,7 @@ class BaseLoss(nn.Module):
         if "target" in batch:
             # todo check shape + mask + lc
             targs = batch["target"][:, -preds.shape[1] :, ...]
+
         # TODO legacy, update previous dataloaders then remove the else
         else:
             targs = batch["dynamic"][0][:, -preds.shape[1] :, ...]
@@ -124,19 +119,10 @@ class BaseLoss(nn.Module):
         else:
             masks = None
 
-        # Available days
-        if "s2_avail" in batch:
-            notavail = (
-                torch.isnan(batch["s2_avail"][:, -preds.shape[1] :, ...])
-                .squeeze(0)
-                .unsqueeze(2)
-                .unsqueeze(3)
-                .unsqueeze(4)
-                .repeat(1, 1, preds.shape[2], preds.shape[3], preds.shape[3])
-            )
-            targs = torch.where(notavail, torch.zeros(1).bool().type_as(preds), targs)
-            masks = torch.where(notavail, torch.zeros(1).bool().type_as(preds), masks)
-            preds = torch.where(notavail, torch.zeros(1).bool().type_as(preds), preds)
+        # Undetected NaN values in the original data, faulty transmission of Sentinel-2.
+        masks = torch.where(
+            torch.isnan(targs * masks), torch.zeros(1).bool().type_as(masks), masks
+        )
 
         # Mask non vegetation landcover
         lc = batch["landcover"]
@@ -157,20 +143,16 @@ class BaseLoss(nn.Module):
                 masks,
             )
 
-        # Mask non-vegetation pixel (because ndvi is positive for vegetation pixels)
-
+        # Mask non-vegetation pixel (because vegetation pixels have a positive NDVI)
         masks = torch.where(
             masks.bool(),
-            (preds >= 0).bool().type_as(masks),
+            (targs >= 0).bool().type_as(masks),
             masks,
         )
 
-        # There is additionnal NaN values in target, inexplicable
-        masks[torch.isnan(targs * masks)] = torch.zeros(1).bool().type_as(preds)
-
         loss = self.distance(preds, targs, masks)
         logs["loss"] = loss
-        print(loss, batch["filepath"])
+
         return loss, logs
 
 
