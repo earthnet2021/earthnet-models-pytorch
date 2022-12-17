@@ -274,7 +274,7 @@ class EarthNet2023DataModule(pl.LightningDataModule):
         parser.add_argument("--val_batch_size", type=int, default=1)
         parser.add_argument("--test_batch_size", type=int, default=1)
 
-        parser.add_argument("--val_split_seed", type=float, default=42)
+        parser.add_argument("--val_split_seed", type=int, default=42)
 
         parser.add_argument(
             "--num_workers", type=int, default=multiprocessing.cpu_count()
