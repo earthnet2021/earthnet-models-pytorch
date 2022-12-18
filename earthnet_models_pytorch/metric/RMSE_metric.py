@@ -46,7 +46,7 @@ class RootMeanSquaredError(Metric):
 
         if self.compute_on_step:
             kwargs["just_return"] = True
-            out_cache = self.update(*args, **kwargs)  # compute and return the rmse
+            out_cache = self.update(*args, **kwargs)  # compute and return the nnse
             kwargs.pop("just_return", None)
             return out_cache
 

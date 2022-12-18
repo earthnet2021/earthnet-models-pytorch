@@ -60,7 +60,7 @@ Data:
     # With a batch of size N, a DPP strategy with D devices, and accumulate_grad_batches = K, the effective batch size = K*D*N. 
     # With a DP strategy, the effective batch size= K*N.
     train_batch_size: 2 
-    val_batch_size: 2
+    val_batch_size: 1
     test_batch_size: 2
     num_workers: 4 # Common bottleneck during the training, increase until saturation. 
 

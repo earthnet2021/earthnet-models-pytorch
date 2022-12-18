@@ -55,16 +55,20 @@ class SpatioTemporalTask(pl.LightningModule):
 
         self.current_filepaths = []
 
-        self.train_metric = METRICS[self.hparams.setting](
-            lc_min=self.min_lc, lc_max=self.max_lc
-        )
-        self.val_metric = METRICS[self.hparams.setting](
-            lc_min=self.min_lc, lc_max=self.max_lc
+        self.metric = METRICS[self.hparams.setting](
+            min_lc=self.min_lc, max_lc=self.max_lc
         )
 
-        # self.ndvi_pred = (self.hparams.setting == "en21-veg") #TODO: Legacy, remove this...  #TODO: what is mean ?
+        # self.ndvi_pred = (self.hparams.setting == "en21-veg") #TODO: Legacy, remove this...
 
-        # self.pred_mode = {"en21-veg": "ndvi", "en21-std": "rgb", "en21x": "kndvi", "en21x-px": "kndvi", "en22": "kndvi"}[self.hparams.setting]
+        self.pred_mode = {
+            "en21-veg": "ndvi",
+            "en21-std": "rgb",
+            "en21x": "kndvi",
+            "en21x-px": "kndvi",
+            "en22": "ndvi",
+            "en23": "ndvi",
+        }[self.hparams.setting]
 
         self.model_shedules = []
         for shedule in self.hparams.model_shedules:
@@ -110,7 +114,7 @@ class SpatioTemporalTask(pl.LightningModule):
         parser.add_argument(
             "--optimization",
             type=ast.literal_eval,
-            # default='{"optimizer": [{"name": "Adam", "args:" {"lr": 0.0001, "betas": (0.9, 0.999)} }], "lr_shedule": [{"name": "multistep", "args": {"milestones": [25, 40], "gamma": 0.1} }]}',
+            default='{"optimizer": [{"name": "Adam", "args:" {"lr": 0.0001, "betas": (0.9, 0.999)} }], "lr_shedule": [{"name": "multistep", "args": {"milestones": [25, 40], "gamma": 0.1} }]}',
         )
 
         parser.add_argument("--model_shedules", type=ast.literal_eval, default="[]")
@@ -186,7 +190,10 @@ class SpatioTemporalTask(pl.LightningModule):
 
         for i in range(self.n_stochastic_preds):  # several predictions
             preds, aux = self(
-                data, pred_start=self.context_length, n_preds=self.target_length
+                data,
+                step=self.global_step,
+                pred_start=self.context_length,
+                n_preds=self.target_length,
             )  # output model
             all_logs.append(self.loss(preds, batch, aux)[1])
 

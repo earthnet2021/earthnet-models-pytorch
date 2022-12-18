@@ -245,7 +245,7 @@ def log_viz(tensorboard_logger, viz_data, batch, batch_idx, current_epoch, mode=
                         clouds=masks[j, :, 0, ...] if masks is not None else None,
                         mode="ndvi",
                     )
-                else:  # kndvi
+                else:  # vegetation index
                     ndvi = veg_colorize(
                         targs[j, :, 0, ...],
                         mask=None

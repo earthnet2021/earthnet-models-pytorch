@@ -35,8 +35,8 @@ METRIC_CHECKPOINT_INFO = {  # to refactor too from METRICS? maybe remove mode to
         "mode": 'min'
         },
     "en23": {
-        "monitor": "RMSE_Veg",
-        "filename": 'Epoch-{epoch:02d}-RMSE (Vegetation)-{NNSE_Veg:.4f}',
+        "monitor": "Veg_score",
+        "filename": 'Epoch-{epoch:02d}-Veg_score (Vegetation)-{NNSE_Veg:.4f}',
         "mode": 'min'
         }
 }
