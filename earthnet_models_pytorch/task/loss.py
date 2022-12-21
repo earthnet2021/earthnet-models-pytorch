@@ -32,6 +32,9 @@ class MaskedDistance(nn.Module):
         targsmasked = torch.where(mask.bool(), targs, torch.zeros(1).type_as(targs))
         predsmasked = torch.where(mask.bool(), preds, torch.zeros(1).type_as(preds))
 
+        predsmasked = torch.where(torch.isnan(predsmasked), torch.zeros(1).type_as(predsmasked), predsmasked)
+        targsmasked = torch.where(torch.isnan(targsmasked), torch.zeros(1).type_as(targsmasked), targsmasked)
+
         if self.distance_type == "L2":
 
             return F.mse_loss(predsmasked, targsmasked, reduction="sum") + 1e-6 / (

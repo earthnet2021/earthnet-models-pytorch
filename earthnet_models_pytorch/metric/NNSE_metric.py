@@ -9,14 +9,13 @@ class NormalizedNashSutcliffeEfficiency(Metric):
         self,
         min_lc: int,
         max_lc: int,
-        compute_on_cpu: bool = False,
+        batch_size: int,
         dist_sync_on_step: bool = False,
         process_group=None,
         dist_sync_fn=None,
     ):
         super().__init__(
             # Advanced metric settings
-            compute_on_cpu=compute_on_cpu,  # will automatically move the metric states to cpu after calling update, making sure that GPU memory is not filling up.
             dist_sync_on_step=dist_sync_on_step,  # distributed environment, if the metric should synchronize between different devices every time forward is called
             process_group=process_group,  # distributed environment, by default we synchronize across the world i.e. all processes being computed on. Specify exactly what devices should be synchronized over
             dist_sync_fn=dist_sync_fn,  # distributed environment, by default we use torch.distributed.all_gather() to perform the synchronization between devices.
@@ -25,6 +24,13 @@ class NormalizedNashSutcliffeEfficiency(Metric):
         # Each state variable should be called using self.add_state(...)
         self.add_state("sum_nnse", default=torch.tensor(0.0), dist_reduce_fx="sum")
         self.add_state("n_obs", default=torch.tensor(0), dist_reduce_fx="sum")
+
+        self.add_state(
+            "sum_nnse_sample", default=torch.zeros(batch_size), dist_reduce_fx="sum"
+        )
+        self.add_state(
+            "n_obs_sample", default=torch.zeros(batch_size), dist_reduce_fx="sum"
+        )
 
         self.min_lc = min_lc
         self.max_lc = max_lc
@@ -39,14 +45,12 @@ class NormalizedNashSutcliffeEfficiency(Metric):
             self.update(*args, **kwargs)  # accumulate the metrics
         self._forward_cache = None
 
-        if self.compute_on_step:
-            kwargs["just_return"] = True
-            out_cache = self.update(*args, **kwargs)  # compute and return the rmse
-            kwargs.pop("just_return", None)
-            print("out_cache", out_cache)
-            return out_cache
+        self.update(*args, **kwargs)
+        # print("forward", self.sum_nnse, self.n_obs)
+        return self.compute()
 
-    def update(self, preds, targs, just_return=False):
+
+    def update(self, preds, targs):
         """Any code needed to update the state given any inputs to the metric."""
 
         # Masks: to remove the non-vegetation pixels for the computation of the error
@@ -95,39 +99,58 @@ class NormalizedNashSutcliffeEfficiency(Metric):
         masks = torch.where(
             torch.isnan(targets * masks), torch.zeros(1).bool().type_as(masks), masks
         )
+        targetsmasked = torch.where(
+            masks.bool(), targets, torch.zeros(1).type_as(targets)
+        )
+        predsmasked = torch.where(masks.bool(), preds, torch.zeros(1).type_as(preds))
+
+
+        predsmasked = torch.where(torch.isnan(predsmasked), torch.zeros(1).type_as(predsmasked), predsmasked)
+        targetsmasked = torch.where(torch.isnan(targetsmasked), torch.zeros(1).type_as(targetsmasked), targetsmasked)
 
         # Metric computation
         if len(masks.shape) == 5:
-            nse = 1 - torch.pow(preds * masks - targets * masks, 2).sum(
-                (1, 2, 3, 4)
-            ) / torch.var(targets * masks, (1, 2, 3, 4))
-            nnse = 1 / (2 - nse) + 1e-6
+            mse = torch.pow(predsmasked - targetsmasked, 2).sum((1, 2, 3, 4))
+            var = torch.var(targetsmasked, (1, 2, 3, 4))
+            nse = 1 - mse / (var + 1e-6)
+            nnse = 1 / (2 - nse) 
             n_obs = (masks != 0).sum((1, 2, 3, 4))
         else:
             # pixelwise models
-            nse = 1 - torch.pow(preds * masks - targets * masks, 2).sum(
-                (1, 2)
-            ) / torch.var(targets * masks, (1, 2))
+            nse = 1 - torch.pow(predsmasked - targetsmasked, 2).sum((1, 2)) / torch.var(
+                targetsmasked, (1, 2)
+            )
             nnse = 1 / (2 - nse)
             n_obs = (masks != 0).sum((1, 2))
 
-        if just_return:
-            cubenames = targs["cubename"]
-            veg_score = 2 - 1 / (nnse / n_obs)
-            return [
-                {
-                    "name": cubenames[i],
-                    "rmse": veg_score[i],
-                }  # "rmse" is Legacy, update logging before
-                for i in range(len(cubenames))
-            ]
-        else:
+        # Update states
+        self.sum_nnse_sample += nnse
+        self.n_obs_sample += n_obs
+
+        if n_obs.sum() != 0 and var > 0:
             self.sum_nnse += nnse.sum()
             self.n_obs += n_obs.sum()
 
     def compute(self):
         """
-        Computes a final value from the state of the metric.
-        Computes mean squared error over state.
+        Computes a final value over the state of the metric.
         """
-        return {"Veg_score": 2 - 1 / (self.sum_nnse / self.n_obs)}
+ 
+        # print({"Veg_score compute": 2 - 1 / (self.sum_nnse / self.n_obs)})
+        # we are computing a vegetation score, TODO "rmse" is Legacy, update logging before
+        return {"rmse": 2 - 1 / (self.sum_nnse / self.n_obs)}
+
+    def compute_sample(self, targs):
+        """
+        Computes a final value for each sample over the state of the metric.
+        """
+        cubenames = targs["cubename"]
+        veg_score = 2 - 1 / (self.sum_nnse_sample / self.n_obs_sample)
+        # TODO "rmse" is Legacy, update logging before
+        return [
+            {
+                "name": cubenames[i],
+                "rmse": veg_score[i],
+            }  # "rmse" is Legacy, update logging before
+            for i in range(len(cubenames))
+        ]

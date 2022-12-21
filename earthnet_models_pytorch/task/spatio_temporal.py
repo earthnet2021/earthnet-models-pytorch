@@ -42,8 +42,7 @@ class SpatioTemporalTask(pl.LightningModule):
             )  # logger: hyperparameter of LightningModule for the Trainer
         else:
             self.pred_dir = Path(self.hparams.pred_dir)
-
-        self.loss = setup_loss(hparams.loss)
+        self.current_filepaths = []
 
         self.context_length = hparams.context_length
         self.target_length = hparams.target_length
@@ -53,14 +52,19 @@ class SpatioTemporalTask(pl.LightningModule):
 
         self.n_stochastic_preds = hparams.n_stochastic_preds
 
-        self.current_filepaths = []
-
-        self.metric = METRICS[self.hparams.setting](
-            min_lc=self.min_lc, max_lc=self.max_lc
+        self.loss = setup_loss(hparams.loss)
+        self.val_metric = METRICS[self.hparams.setting](
+            min_lc=self.min_lc,
+            max_lc=self.max_lc,
+            batch_size=self.hparams.val_batch_size,
+        )
+        self.test_metric = METRICS[self.hparams.setting](
+            min_lc=self.min_lc,
+            max_lc=self.max_lc,
+            batch_size=self.hparams.test_batch_size,
         )
 
-        # self.ndvi_pred = (self.hparams.setting == "en21-veg") #TODO: Legacy, remove this...
-
+        # TODO to improve
         self.pred_mode = {
             "en21-veg": "ndvi",
             "en21-std": "rgb",
@@ -72,6 +76,7 @@ class SpatioTemporalTask(pl.LightningModule):
 
         self.model_shedules = []
         for shedule in self.hparams.model_shedules:
+            print("shedule", shedule)
             self.model_shedules.append(
                 (shedule["call_name"], SHEDULERS[shedule["name"]](**shedule["args"]))
             )
@@ -90,38 +95,28 @@ class SpatioTemporalTask(pl.LightningModule):
         )  # parents - A list of ArgumentParser objects whose arguments should also be included
 
         parser.add_argument("--pred_dir", type=str, default=None)
-
         parser.add_argument(
             "--loss",
             type=ast.literal_eval,
             default='{"name": "masked", "args": {"distance_type": "L1"}}',
         )
-
         parser.add_argument("--context_length", type=int, default=10)
         parser.add_argument("--target_length", type=int, default=20)
-
         parser.add_argument("--min_lc", type=int, default=82)
         parser.add_argument("--max_lc", type=int, default=104)
-
         parser.add_argument("--n_stochastic_preds", type=int, default=10)
-
         parser.add_argument("--n_log_batches", type=int, default=2)
-
         parser.add_argument("--train_batch_size", type=int, default=1)
         parser.add_argument("--val_batch_size", type=int, default=1)
         parser.add_argument("--test_batch_size", type=int, default=1)
-
         parser.add_argument(
             "--optimization",
             type=ast.literal_eval,
             default='{"optimizer": [{"name": "Adam", "args:" {"lr": 0.0001, "betas": (0.9, 0.999)} }], "lr_shedule": [{"name": "multistep", "args": {"milestones": [25, 40], "gamma": 0.1} }]}',
         )
-
         parser.add_argument("--model_shedules", type=ast.literal_eval, default="[]")
-
         parser.add_argument("--setting", type=str, default="en21-std")
-
-        parser.add_argument("--compute_metric_on_test", type=str2bool, default=False)
+        # parser.add_argument("--compute_metric_on_test", type=str2bool, default=False)
         return parser
 
     def forward(
@@ -151,11 +146,10 @@ class SpatioTemporalTask(pl.LightningModule):
         """compute and return the training loss and some additional metrics for e.g. the progress bar or logger"""
         kwargs = {}
 
-        # adjust the learning rate
         for (shedule_name, shedule) in self.model_shedules:
             kwargs[shedule_name] = shedule(self.global_step)
 
-        # Predictions generation - batch_idx for the schedule of the teacher forcing
+        # Predictions generation
         preds, aux = self(
             batch,
             step=self.global_step,
@@ -163,60 +157,66 @@ class SpatioTemporalTask(pl.LightningModule):
             kwargs=kwargs,
         )
         loss, logs = self.loss(preds, batch, aux, current_step=self.global_step)
-
+        # self.train_metric(preds, batch)
         # Logs
+        # logs["train_acc_epoch", self.train_metric]
         for shedule_name in kwargs:
             logs[shedule_name] = kwargs[shedule_name]
         logs["batch_size"] = torch.tensor(
             self.hparams.train_batch_size, dtype=torch.float32
         )
         self.log_dict(logs)
-
         return loss
 
     def validation_step(self, batch, batch_idx):
         """Operates on a single batch of data from the validation set. In this step you d might generate examples or calculate anything of interest like accuracy."""
         data = copy.deepcopy(batch)
+        batch_size = torch.tensor(self.hparams.val_batch_size, dtype=torch.float32)
 
-        # selectionne only the context data
+        # select only the context data
         data["dynamic"][0] = data["dynamic"][0][:, : self.context_length, ...]
         if len(data["dynamic_mask"]) > 0:
             data["dynamic_mask"][0] = data["dynamic_mask"][0][
                 :, : self.context_length, ...
             ]
 
-        all_logs = []
-        all_viz = []
+        val_logs = []
+        viz = []
 
-        for i in range(self.n_stochastic_preds):  # several predictions
+        # Metric 
+        for i in range(
+            self.n_stochastic_preds
+        ):  # if several predictions (variationnal models)
+
+            # Model predictions
             preds, aux = self(
                 data,
                 step=self.global_step,
                 pred_start=self.context_length,
                 n_preds=self.target_length,
-            )  # output model
-            all_logs.append(self.loss(preds, batch, aux)[1])
+            )
+            val_logs.append(self.loss(preds, batch, aux)[1])
 
+            # Metric computation
+            self.val_metric(preds, batch)
             if batch_idx < self.hparams.n_log_batches:
-                self.metric.compute_on_step = True
-                scores = self.metric(
-                    preds, batch
-                )  # Returns the metric value over inputs if ``compute_on_step`` is True
-                self.metric.compute_on_step = False
-                all_viz.append((preds, scores))
-            else:
-                self.metric(preds, batch)
+                # self.metric.compute_on_step = True
+                
+                scores = self.val_metric.compute_sample(
+                    batch
+                )  # call self.val_metric.forward
+                # self.metric.compute_on_step = False
+                viz.append((preds, scores))
+
 
         mean_logs = {
             l: torch.tensor(
-                [log[l].mean() for log in all_logs],
+                [log[l].mean() for log in val_logs],
                 dtype=torch.float32,
                 device=self.device,
             ).mean()
-            for l in all_logs[0]
+            for l in val_logs[0]
         }
-
-        batch_size = torch.tensor(self.hparams.val_batch_size, dtype=torch.float32)
 
         # loss_val
         self.log_dict(
@@ -229,17 +229,17 @@ class SpatioTemporalTask(pl.LightningModule):
             if self.logger is not None and preds.shape[2] == 1:
                 log_viz(
                     self.logger.experiment,
-                    all_viz,
+                    viz,
                     batch,
                     batch_idx,
                     self.current_epoch,
                     mode=self.pred_mode,
-                )  # , lc_min = 82 if not self.hparams.setting == "en22" else 2, lc_max = 104 if not self.hparams.setting == "en22" else 6)
+                )
 
     def validation_epoch_end(self, validation_step_outputs):
-        current_scores = self.metric.compute()
+        current_scores = self.val_metric.compute()
         self.log_dict(current_scores, sync_dist=True)
-        self.metric.reset()
+        # self.metric.reset()
         if (
             self.logger is not None
             and type(self.logger.experiment).__name__ != "DummyExperiment"
@@ -418,9 +418,10 @@ class SpatioTemporalTask(pl.LightningModule):
                     )
 
             if self.hparams.compute_metric_on_test:
-                self.metric.compute_on_step = True
-                scores.append(self.metric(preds, batch))
-                self.metric.compute_on_step = False
+                # self.metric.compute_on_step = True
+                self.test_metric(preds, batch)
+                scores.append(self.test_metric.compute_sample(batch))
+                # self.metric.compute_on_step = False
 
         return scores
 

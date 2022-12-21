@@ -191,7 +191,7 @@ class EarthNet2023Dataset(Dataset):
         # NaN values handling
         s2_cube = np.where(np.isnan(s2_cube), np.zeros(1).astype(self.type), s2_cube)
         target = np.where(np.isnan(target), np.zeros(1).astype(self.type), target)
-
+        # print('filepath', filepath)
         # Final minicube
         data = {
             "dynamic": [torch.from_numpy(s2_cube), torch.from_numpy(meteo_cube)],
@@ -204,7 +204,7 @@ class EarthNet2023Dataset(Dataset):
             "cubename": self.__name_getter(filepath),
         }
         return data
-
+ 
     def __len__(self) -> int:
         return len(self.filepaths)
 
