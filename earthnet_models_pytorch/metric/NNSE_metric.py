@@ -127,7 +127,7 @@ class NormalizedNashSutcliffeEfficiency(Metric):
         self.sum_nnse_sample += nnse
         self.n_obs_sample += n_obs
 
-        if n_obs.sum() != 0 and var > 0:
+        if n_obs.sum() != 0 and var.sum() > 0:
             self.sum_nnse += nnse.sum()
             self.n_obs += n_obs.sum()
 
