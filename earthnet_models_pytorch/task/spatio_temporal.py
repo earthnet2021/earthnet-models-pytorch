@@ -198,7 +198,7 @@ class SpatioTemporalTask(pl.LightningModule):
             val_logs.append(self.loss(preds, batch, aux)[1])
 
             # Metric computation
-            self.val_metric(preds, batch)
+            self.val_metric.update(preds, batch)
             if batch_idx < self.hparams.n_log_batches:
                 # self.metric.compute_on_step = True
                 
@@ -238,8 +238,9 @@ class SpatioTemporalTask(pl.LightningModule):
 
     def validation_epoch_end(self, validation_step_outputs):
         current_scores = self.val_metric.compute()
+        self.val_metric.reset() # maybe not needed
         self.log_dict(current_scores, sync_dist=True)
-        # self.metric.reset()
+    
         if (
             self.logger is not None
             and type(self.logger.experiment).__name__ != "DummyExperiment"
@@ -419,7 +420,7 @@ class SpatioTemporalTask(pl.LightningModule):
 
             if self.hparams.compute_metric_on_test:
                 # self.metric.compute_on_step = True
-                self.test_metric(preds, batch)
+                self.test_metric.update(preds, batch)
                 scores.append(self.test_metric.compute_sample(batch))
                 # self.metric.compute_on_step = False
 

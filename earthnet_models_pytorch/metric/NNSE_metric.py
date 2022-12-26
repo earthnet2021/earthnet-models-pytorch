@@ -49,7 +49,6 @@ class NormalizedNashSutcliffeEfficiency(Metric):
         # print("forward", self.sum_nnse, self.n_obs)
         return self.compute()
 
-
     def update(self, preds, targs):
         """Any code needed to update the state given any inputs to the metric."""
 
@@ -104,16 +103,21 @@ class NormalizedNashSutcliffeEfficiency(Metric):
         )
         predsmasked = torch.where(masks.bool(), preds, torch.zeros(1).type_as(preds))
 
-
-        predsmasked = torch.where(torch.isnan(predsmasked), torch.zeros(1).type_as(predsmasked), predsmasked)
-        targetsmasked = torch.where(torch.isnan(targetsmasked), torch.zeros(1).type_as(targetsmasked), targetsmasked)
+        predsmasked = torch.where(
+            torch.isnan(predsmasked), torch.zeros(1).type_as(predsmasked), predsmasked
+        )
+        targetsmasked = torch.where(
+            torch.isnan(targetsmasked),
+            torch.zeros(1).type_as(targetsmasked),
+            targetsmasked,
+        )
 
         # Metric computation
         if len(masks.shape) == 5:
             mse = torch.pow(predsmasked - targetsmasked, 2).sum((1, 2, 3, 4))
             var = torch.var(targetsmasked, (1, 2, 3, 4))
             nse = 1 - mse / (var + 1e-6)
-            nnse = 1 / (2 - nse) 
+            nnse = 1 / (2 - nse)
             n_obs = (masks != 0).sum((1, 2, 3, 4))
         else:
             # pixelwise models
@@ -124,28 +128,28 @@ class NormalizedNashSutcliffeEfficiency(Metric):
             n_obs = (masks != 0).sum((1, 2))
 
         # Update states
-        self.sum_nnse_sample += nnse
-        self.n_obs_sample += n_obs
+        if n_obs.sum() > 0 and var.sum() > 0:
+            self.sum_nnse_sample += nnse
+            self.n_obs_sample += n_obs
 
-        if n_obs.sum() != 0 and var.sum() > 0:
             self.sum_nnse += nnse.sum()
             self.n_obs += n_obs.sum()
+
 
     def compute(self):
         """
         Computes a final value over the state of the metric.
         """
- 
-        # print({"Veg_score compute": 2 - 1 / (self.sum_nnse / self.n_obs)})
+        veg_score = 2 - 1 / (self.sum_nnse_sample / self.n_obs_sample)
         # we are computing a vegetation score, TODO "rmse" is Legacy, update logging before
-        return {"rmse": 2 - 1 / (self.sum_nnse / self.n_obs)}
+        return {"rmse": 2 - 1 / (self.sum_nnse / self.n_obs) + 1e-6}
 
     def compute_sample(self, targs):
         """
         Computes a final value for each sample over the state of the metric.
         """
         cubenames = targs["cubename"]
-        veg_score = 2 - 1 / (self.sum_nnse_sample / self.n_obs_sample)
+        veg_score = 2 - 1 / (self.sum_nnse_sample / self.n_obs_sample) + 1e-6
         # TODO "rmse" is Legacy, update logging before
         return [
             {

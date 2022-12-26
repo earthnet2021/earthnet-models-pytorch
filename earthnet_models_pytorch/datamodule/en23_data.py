@@ -5,7 +5,7 @@ import copy
 import multiprocessing
 import re
 import sys
-
+import pandas as pd
 from pathlib import Path
 
 import numpy as np
@@ -13,7 +13,6 @@ import pytorch_lightning as pl
 import torch
 import xarray as xr
 
-from torch import nn
 from torch.utils.data import Dataset, DataLoader, random_split
 
 from earthnet_models_pytorch.utils import str2bool
@@ -138,7 +137,7 @@ class EarthNet2023Dataset(Dataset):
             .to_array()
             .isel(time=time)
             .values.transpose((1, 0, 2, 3))
-            .astype(self.type)
+            .astype(self.type)[:, :, :128, :128]
         )  # (time, channels, w, h)
 
         s2_mask = (
@@ -146,14 +145,14 @@ class EarthNet2023Dataset(Dataset):
             .to_array()
             .isel(time=time)
             .values.transpose((1, 0, 2, 3))
-            .astype(self.type)
+            .astype(self.type)[:, :, :128, :128]
         )  # (time, 1, w, h)
 
         target = (
             self.target_computation(minicube)
             .isel(time=time)
             .values[:, None, ...]
-            .astype(self.type)
+            .astype(self.type)[:, :, :128, :128]
         )
 
         # weather is daily
@@ -177,13 +176,15 @@ class EarthNet2023Dataset(Dataset):
         topography = (
             minicube[self.variables["elevation"]].to_array() / 2000
         )  # c h w, rescaling
-        topography = topography.values.astype(self.type)
+        topography = topography.values.astype(self.type)[:, :128, :128]
         topography[np.isnan(topography)] = np.mean(
             topography
         )  # idk if we can have missing value in the topography
 
         landcover = (
-            minicube[self.variables["landcover"]].to_array().values.astype(self.type)
+            minicube[self.variables["landcover"]]
+            .to_array()
+            .values.astype(self.type)[:, :128, :128]
         )  # c h w
 
         # TODO transform landcover in categoritcal variables if used for training
@@ -191,7 +192,7 @@ class EarthNet2023Dataset(Dataset):
         # NaN values handling
         s2_cube = np.where(np.isnan(s2_cube), np.zeros(1).astype(self.type), s2_cube)
         target = np.where(np.isnan(target), np.zeros(1).astype(self.type), target)
-        # print('filepath', filepath)
+
         # Final minicube
         data = {
             "dynamic": [torch.from_numpy(s2_cube), torch.from_numpy(meteo_cube)],
@@ -203,8 +204,9 @@ class EarthNet2023Dataset(Dataset):
             "filepath": str(filepath),
             "cubename": self.__name_getter(filepath),
         }
+
         return data
- 
+
     def __len__(self) -> int:
         return len(self.filepaths)
 
@@ -289,7 +291,11 @@ class EarthNet2023DataModule(pl.LightningDataModule):
                 target=self.hparams.target,
                 fp16=self.hparams.fp16,
             )
-            self.earthnet_train, self.earthnet_val = random_split(earthnet_full, [0.9, 0.1], generator=torch.Generator().manual_seed(self.hparams.val_split_seed))
+            self.earthnet_train, self.earthnet_val = random_split(
+                earthnet_full,
+                [0.95, 0.05],
+                generator=torch.Generator().manual_seed(self.hparams.val_split_seed),
+            )
 
         if stage == "test" or stage is None:
             self.earthnet_test = EarthNet2023Dataset(

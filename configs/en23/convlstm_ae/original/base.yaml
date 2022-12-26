@@ -31,7 +31,7 @@ Trainer:
     # Ensures reproducibility
     deterministic: True
     # Number of devices to train on (int) or which devices to train on (list or str)
-    devices: [0, 1]
+    devices: [0]
     check_val_every_n_epoch: 1
     # Gradient clipping value. In case of gradient exploding, clip the gradient norm to the defined value.  
     gradient_clip_val: 0  # 0 for no clipping gradient. 
@@ -49,7 +49,7 @@ Trainer:
     # Help to identify vanishing or exploding gradient by tracking the n-norm (e.g. 2-norm)
     track_grad_norm: 2
     # How often within one training epoch to check the validation set.
-    val_check_interval: 5 # default setting
+    val_check_interval: 1 # default setting
     # Whether to use torch.inference_mode() or torch.no_grad() mode during evaluation
     # inference_mode: True # if False use 'torch.no_grad' instead. 
   
@@ -62,7 +62,7 @@ Data:
     train_batch_size: 2 
     val_batch_size: 2
     test_batch_size: 2
-    num_workers: 4 # Common bottleneck during the training, increase until saturation. 
+    num_workers: 1 # Common bottleneck during the training, increase until saturation. 
 
 Task:
     loss:
