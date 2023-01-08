@@ -32,8 +32,12 @@ class MaskedDistance(nn.Module):
         targsmasked = torch.where(mask.bool(), targs, torch.zeros(1).type_as(targs))
         predsmasked = torch.where(mask.bool(), preds, torch.zeros(1).type_as(preds))
 
-        predsmasked = torch.where(torch.isnan(predsmasked), torch.zeros(1).type_as(predsmasked), predsmasked)
-        targsmasked = torch.where(torch.isnan(targsmasked), torch.zeros(1).type_as(targsmasked), targsmasked)
+        predsmasked = torch.where(
+            torch.isnan(predsmasked), torch.zeros(1).type_as(predsmasked), predsmasked
+        )
+        targsmasked = torch.where(
+            torch.isnan(targsmasked), torch.zeros(1).type_as(targsmasked), targsmasked
+        )
 
         if self.distance_type == "L2":
 
@@ -119,13 +123,12 @@ class BaseLoss(nn.Module):
                 .bool()
                 .type_as(preds)
             )
+            # Undetected NaN values in the original data, faulty transmission of Sentinel-2.
+            masks = torch.where(
+                torch.isnan(targs * masks), torch.zeros(1).bool().type_as(masks), masks
+            )
         else:
             masks = None
-
-        # Undetected NaN values in the original data, faulty transmission of Sentinel-2.
-        masks = torch.where(
-            torch.isnan(targs * masks), torch.zeros(1).bool().type_as(masks), masks
-        )
 
         # Mask non vegetation landcover
         lc = batch["landcover"]

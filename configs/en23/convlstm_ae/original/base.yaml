@@ -31,10 +31,10 @@ Trainer:
     # Ensures reproducibility
     deterministic: True
     # Number of devices to train on (int) or which devices to train on (list or str)
-    devices: [0]
+    devices: [0, 1, 2]
     check_val_every_n_epoch: 1
     # Gradient clipping value. In case of gradient exploding, clip the gradient norm to the defined value.  
-    gradient_clip_val: 0  # 0 for no clipping gradient. 
+    gradient_clip_val: 1  # 0 for no clipping gradient. 
     # How often to add logging rows
     log_every_n_steps: 32
     # Sanity check runs n batches of val before starting the training routine.
@@ -49,20 +49,20 @@ Trainer:
     # Help to identify vanishing or exploding gradient by tracking the n-norm (e.g. 2-norm)
     track_grad_norm: 2
     # How often within one training epoch to check the validation set.
-    val_check_interval: 1 # default setting
+    check_val_every_n_epoch: 1 # default setting
     # Whether to use torch.inference_mode() or torch.no_grad() mode during evaluation
     # inference_mode: True # if False use 'torch.no_grad' instead. 
   
 Data:
-    base_dir: "/workspace/data/earthnet2023/" 
+    base_dir: "/workspace/data/s3/earthnet/earthnet2023/" 
     test_track: "iid"
     target: "ndvi"
     # With a batch of size N, a DPP strategy with D devices, and accumulate_grad_batches = K, the effective batch size = K*D*N. 
     # With a DP strategy, the effective batch size= K*N.
-    train_batch_size: 2 
+    train_batch_size: 2
     val_batch_size: 2
     test_batch_size: 2
-    num_workers: 1 # Common bottleneck during the training, increase until saturation. 
+    num_workers: 4 # Common bottleneck during the training, increase until saturation. 
 
 Task:
     loss:
@@ -81,7 +81,7 @@ Task:
                 name: Adam
                 args: 
                     betas: [0.9, 0.999]
-                lr_per_sample: 0.00001
+                lr_per_sample: 0.000001
         lr_shedule:
             -
                 name: ExponentialLR  # ReduceLROnPlateau factor: 0.1, patience: 3

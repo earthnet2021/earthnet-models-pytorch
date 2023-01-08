@@ -4,4 +4,4 @@ from earthnet_models_pytorch.metric.NNSE_metric import NormalizedNashSutcliffeEf
 
 
 METRICS = {"en21-std": EarthNetScore, "en21-veg": RootMeanSquaredError, "en21x": RootMeanSquaredError,"en21x-px": RootMeanSquaredError, 
-            "en22": RootMeanSquaredError, "en23": NormalizedNashSutcliffeEfficiency}
+            "en22": NormalizedNashSutcliffeEfficiency, "en23": NormalizedNashSutcliffeEfficiency}

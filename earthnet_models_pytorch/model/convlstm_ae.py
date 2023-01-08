@@ -85,8 +85,13 @@ class ConvLSTMAE(nn.Module):
         self.hparams = hparams
 
         # TODO improve the way to define theses variables
-        input_encoder = 17  # 7 s2 bands, 1 target, 8 weather variables, 1 topography
-        input_decoder = 10  # 7 s2 bands, 1 target, 8 weather variables, 1 topography
+        # En23
+        # input_encoder = 17  # 7 s2 bands, 1 target, 8 weather variables, 1 topography
+        # input_decoder = 10  # 1 target, 8 weather variables, 1 topography
+
+        # En22
+        input_encoder = 21  # 4 s2 bands, 1 target, 15 weather variables, 1 topography
+        input_decoder = 17  # 1 target, 15 weather variables, 1 topography
 
         self.encoder_1_convlstm = ConvLSTMCell(
             input_dim=input_encoder,
@@ -156,13 +161,17 @@ class ConvLSTMAE(nn.Module):
     def forward(self, data, step, pred_start: int = 0, n_preds: Optional[int] = None):
 
         c_l = self.hparams.context_length if self.training else pred_start
-        # k = 1
-        # teacher_forcing_decay = k / (k +torch.exp(step/k))
+        k = torch.tensor([1])
+        # TODO definir correctement la valeur de k + regarder shape decay k = max step ? + remove teacher forcing dans val et test
+        teacher_forcing_decay = k / (k +torch.exp(step/k))
+        teacher_forcing = torch.bernoulli(teacher_forcing_decay)
 
         # Data
         # sentinel 2 bands
         sentinel = data["dynamic"][0][:, (c_l - self.hparams.context_length) : c_l, ...]
-        target = data["target"][:, (c_l - self.hparams.context_length) : c_l, ...]  # Used as input only during the context period
+        target = data["target"][
+            :, (c_l - self.hparams.context_length) : c_l + self.hparams.target_length, ...
+        ]  # Used as input only during the context period
 
         weather = data["dynamic"][1].unsqueeze(3).unsqueeze(4)
         topology = data["static"][0]
@@ -206,12 +215,15 @@ class ConvLSTMAE(nn.Module):
         pred = self.conv(h_t2)
         # add the last frame of the context period
         if self.hparams.skip_connections:
-            pred = pred + target[:, -1, 0, ...].unsqueeze(1)
+            pred = pred + target[:, c_l - 1, 0, ...].unsqueeze(1)
 
         pred = self.activation_output(pred)
 
         # forecasting network
         for t in range(self.hparams.target_length):
+            if teacher_forcing:
+                pred = target[:, c_l + t, ...]
+
             # for skip connection
             pred_previous = torch.clone(pred)
 

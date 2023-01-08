@@ -112,6 +112,7 @@ class EarthNet2023Dataset(Dataset):
     def __getitem__(self, idx: int) -> dict:
 
         filepath = self.filepaths[idx]
+        # print(filepath)
         minicube = xr.open_dataset(filepath)
 
         s2_avail = np.squeeze(minicube[self.variables["s2_avail"]].to_array(), axis=0)
@@ -199,12 +200,12 @@ class EarthNet2023Dataset(Dataset):
             "dynamic_mask": [torch.from_numpy(s2_mask)],
             "static": [torch.from_numpy(topography)],
             "target": torch.from_numpy(target),
-            "s2_avail": torch.from_numpy(s2_avail),
+            # "s2_avail": torch.from_numpy(s2_avail),
             "landcover": torch.from_numpy(landcover),
             "filepath": str(filepath),
             "cubename": self.__name_getter(filepath),
         }
-
+        # print(data["filepath"], data["dynamic"][0].shape)
         return data
 
     def __len__(self) -> int:

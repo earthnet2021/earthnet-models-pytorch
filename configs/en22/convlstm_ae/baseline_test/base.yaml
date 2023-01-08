@@ -1,0 +1,92 @@
+
+Architecture: "convlstm_ae"
+
+Seed: 42
+
+Setting: "en22"
+
+Logger:
+    save_dir: "experiments/"
+
+Checkpointer:
+    save_top_k: 1
+    save_last: True
+    every_n_epochs: 5
+
+
+Trainer:
+    # The "auto" option recognizes the machine you are on, and selects the respective Accelerator.
+    accelerator: "auto" # "gpu" 
+    # Accumulates grads every k batches
+    accumulate_grad_batches: 8
+    # Automatically tries to find the largest batch size that fits into memory, before any training.
+    auto_scale_batch_size: "binsearch"
+    # pick available GPUs automatically
+    auto_select_gpus: False
+    # Find the best lr using tune
+    auto_lr_find: True
+    # Accelerate the training (if the input size doesn't change)
+    benchmark: False
+    # Ensures reproducibility
+    deterministic: True
+    # Number of devices to train on (int) or which devices to train on (list or str)
+    devices: [3]
+    check_val_every_n_epoch: 1
+    # Gradient clipping value. In case of gradient exploding, clip the gradient norm to the defined value.  
+    gradient_clip_val: 1  # 0 for no clipping gradient. 
+    # How often to add logging rows
+    log_every_n_steps: 32
+    # Sanity check runs n batches of val before starting the training routine.
+    num_sanity_val_steps: 2
+    # Number of GPU nodes for distributed training.
+    num_nodes: 1
+    max_epochs: 50
+    precision: 32
+    profiler: True #"Advanced"
+    # Training with the DistributedDataParallel strategy
+    strategy: 'ddp'
+    # Help to identify vanishing or exploding gradient by tracking the n-norm (e.g. 2-norm)
+    track_grad_norm: 2
+    # How often within one training epoch to check the validation set.
+    check_val_every_n_epoch: 1 # default setting
+    # Whether to use torch.inference_mode() or torch.no_grad() mode during evaluation
+    # inference_mode: True # if False use 'torch.no_grad' instead. 
+  
+Data:
+    base_dir: "/workspace/data/en22/" 
+    test_track: "iid"
+    train_batch_size: 4 
+    val_batch_size: 1
+    test_batch_size: 1 
+    num_workers: 8 
+Task:
+    loss:
+        name: "masked" # loss computed with the non-vegetation pixels masked.
+        args: {
+            distance_type: "L2"
+        }
+        min_lc: 2
+        max_lc: 6
+    context_length: 35
+    target_length: 10
+    n_stochastic_preds: 1 # for variationnal models
+    optimization:
+        optimizer:
+            - 
+                name: Adam
+                args: 
+                    betas: [0.9, 0.999]
+                lr_per_sample: 0.000001
+        lr_shedule:
+            -
+                name: ExponentialLR  # ReduceLROnPlateau factor: 0.1, patience: 3
+                args:
+                    gamma: 0.99
+    n_log_batches: 8
+
+Model:
+    hidden_dim: [64, 64, 64, 64]
+    kernel_size: 3
+    num_layers: 3
+    bias: True
+    skip_connections: True
