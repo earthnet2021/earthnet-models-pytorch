@@ -1,15 +1,20 @@
 """ContextConvLSTM
 """
-from typing import Optional, Union
+
+from turtle import forward
+from typing import Optional, Union, List
 
 import argparse
 import ast
+from grpc import dynamic_ssl_server_credentials
+from pip import main
 import torch.nn as nn
 import torch
+import sys
 from earthnet_models_pytorch.utils import str2bool
 
 
-class ConvLSTMCell(nn.Module):
+class ContextConvLSTMCell(nn.Module):
     def __init__(self, input_dim, hidden_dim, kernel_size, bias):
         """
         Initialize ConvLSTM cell.
@@ -185,28 +190,28 @@ class ContextConvLSTM(nn.Module):
             input_encoder = 1
             input_decoder = 1
 
-        self.encoder_1_convlstm = ConvLSTMCell(
+        self.encoder_1_convlstm = ContextConvLSTMCell(
             input_dim=input_encoder,
             hidden_dim=self.hparams.hidden_dim[0],
             kernel_size=self.hparams.kernel_size,
             bias=self.hparams.bias,
         )
 
-        self.encoder_2_convlstm = ConvLSTMCell(
+        self.encoder_2_convlstm = ContextConvLSTMCell(
             input_dim=self.hparams.hidden_dim[0],
             hidden_dim=self.hparams.hidden_dim[1],
             kernel_size=self.hparams.kernel_size,
             bias=self.hparams.bias,
         )
 
-        self.decoder_1_convlstm = ConvLSTMCell(
+        self.decoder_1_convlstm = ContextConvLSTMCell(
             input_dim=input_decoder,
             hidden_dim=self.hparams.hidden_dim[0],
             kernel_size=self.hparams.kernel_size,
             bias=self.hparams.bias,
         )
 
-        self.decoder_2_convlstm = ConvLSTMCell(
+        self.decoder_2_convlstm = ContextConvLSTMCell(
             input_dim=self.hparams.hidden_dim[0],
             hidden_dim=self.hparams.hidden_dim[1],
             kernel_size=self.hparams.kernel_size,
@@ -226,26 +231,26 @@ class ContextConvLSTM(nn.Module):
         self.activation_output = nn.Sigmoid()
 
         if hparams.method == "bigger":
-            self.encoder_3_convlstm = ConvLSTMCell(
+            self.encoder_3_convlstm = ContextConvLSTMCell(
                 input_dim=self.hparams.hidden_dim[1],
                 hidden_dim=self.hparams.hidden_dim[2],
                 kernel_size=self.hparams.kernel_size,
                 bias=self.hparams.bias,
             )
-            self.encoder_4_convlstm = ConvLSTMCell(
+            self.encoder_4_convlstm = ContextConvLSTMCell(
                 input_dim=self.hparams.hidden_dim[2],
                 hidden_dim=self.hparams.hidden_dim[3],
                 kernel_size=self.hparams.kernel_size,
                 bias=self.hparams.bias,
             )
 
-            self.decoder_3_convlstm = ConvLSTMCell(
+            self.decoder_3_convlstm = ContextConvLSTMCell(
                 input_dim=self.hparams.hidden_dim[1],
                 hidden_dim=self.hparams.hidden_dim[2],
                 kernel_size=self.hparams.kernel_size,
                 bias=self.hparams.bias,
             )
-            self.decoder_4_convlstm = ConvLSTMCell(
+            self.decoder_4_convlstm = ContextConvLSTMCell(
                 input_dim=self.hparams.hidden_dim[2],
                 hidden_dim=self.hparams.hidden_dim[3],
                 kernel_size=self.hparams.kernel_size,
@@ -291,8 +296,7 @@ class ContextConvLSTM(nn.Module):
         parser.add_argument("--add_conv", type=str2bool, default=False)
         return parser
 
-    def forward(self, data, pred_start: int = 0, n_preds: Optional[int] = None):
-
+    def forward(self, data, step, pred_start: int = 0, n_preds: Optional[int] = None):
         c_l = self.hparams.context_length if self.training else pred_start
 
         # Data
@@ -301,6 +305,12 @@ class ContextConvLSTM(nn.Module):
         ]
         if self.hparams.input == "RGBNR":
             target = hr_dynamics[:, :, :, ...]
+            ndvi = data["target"][
+                :,
+                (c_l - self.hparams.context_length) : c_l,
+                ...,
+            ]
+            target = torch.cat((ndvi, target), dim=2)
         else:
             target = hr_dynamics[:, :, 0, ...].unsqueeze(2)
         weather = data["dynamic"][1].unsqueeze(3).unsqueeze(4)
@@ -342,7 +352,6 @@ class ContextConvLSTM(nn.Module):
                 weather_t = weather[:, t, ...].repeat(1, 1, 128, 128)
                 input = torch.cat((target[:, t, ...], topology), dim=1)
                 input = torch.cat((input, weather_t), dim=1)
-
             else:
                 input = target[:, t, :, :]
 

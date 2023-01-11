@@ -183,7 +183,7 @@ class SpatioTemporalTask(pl.LightningModule):
         val_logs = []
         viz = []
 
-        # Metric 
+        # Metric
         for i in range(
             self.n_stochastic_preds
         ):  # if several predictions (variationnal models)
@@ -201,13 +201,12 @@ class SpatioTemporalTask(pl.LightningModule):
             self.val_metric.update(preds, batch)
             if batch_idx < self.hparams.n_log_batches:
                 # self.metric.compute_on_step = True
-                
+
                 scores = self.val_metric.compute_sample(
                     batch
                 )  # call self.val_metric.forward
                 # self.metric.compute_on_step = False
                 viz.append((preds, scores))
-
 
         mean_logs = {
             l: torch.tensor(
@@ -238,9 +237,9 @@ class SpatioTemporalTask(pl.LightningModule):
 
     def validation_epoch_end(self, validation_step_outputs):
         current_scores = self.val_metric.compute()
-        self.val_metric.reset() # maybe not needed
+        self.val_metric.reset()  # maybe not needed
         self.log_dict(current_scores, sync_dist=True)
-    
+
         if (
             self.logger is not None
             and type(self.logger.experiment).__name__ != "DummyExperiment"
@@ -270,9 +269,11 @@ class SpatioTemporalTask(pl.LightningModule):
 
         for i in range(self.n_stochastic_preds):
             preds, aux = self(
-                batch, pred_start=self.context_length, n_preds=self.target_length
+                batch,
+                step=self.global_step,
+                pred_start=self.context_length,
+                n_preds=self.target_length,
             )
-
             lc = batch["landcover"]
 
             static = batch["static"][0]
@@ -309,7 +310,6 @@ class SpatioTemporalTask(pl.LightningModule):
 
                     landcover = lc[j, ...].permute(1, 2, 0).detach().cpu().numpy()
                     static = static[j, ...].permute(1, 2, 0).detach().cpu().numpy()
-                    geom = targ_cube.geom
 
                     # Paths
                     if self.n_stochastic_preds == 1:
@@ -418,35 +418,32 @@ class SpatioTemporalTask(pl.LightningModule):
                         .numpy(),
                     )
 
-            if self.hparams.compute_metric_on_test:
-                # self.metric.compute_on_step = True
-                self.test_metric.update(preds, batch)
-                scores.append(self.test_metric.compute_sample(batch))
-                # self.metric.compute_on_step = False
+            self.test_metric.update(preds, batch)
+            scores.append(self.test_metric.compute_sample(batch))
 
         return scores
 
     def test_epoch_end(self, test_step_outputs):
         """Called at the end of a test epoch with the output of all test steps."""
-        if self.hparams.compute_metric_on_test:
-            self.pred_dir.mkdir(parents=True, exist_ok=True)
-            with open(
-                self.pred_dir / f"individual_scores_{self.global_rank}.json", "w"
-            ) as fp:
-                json.dump(
-                    [
-                        {
-                            k: v if isinstance(v, str) else v.item()
-                            for k, v in test_step_outputs[i][j][l].items()
-                        }
-                        for i in range(len(test_step_outputs))
-                        for j in range(len(test_step_outputs[i]))
-                        for l in range(len(test_step_outputs[i][j]))
-                    ],
-                    fp,
-                )
 
-            scores = self.metric.compute()
+        self.pred_dir.mkdir(parents=True, exist_ok=True)
+        with open(
+            self.pred_dir / f"individual_scores_{self.global_rank}.json", "w"
+        ) as fp:
+            json.dump(
+                [
+                    {
+                        k: v if isinstance(v, str) else v.item()
+                        for k, v in test_step_outputs[i][j][l].items()
+                    }
+                    for i in range(len(test_step_outputs))
+                    for j in range(len(test_step_outputs[i]))
+                    for l in range(len(test_step_outputs[i][j]))
+                ],
+                fp,
+            )
+
+            scores = self.test_metric.compute()
             if self.trainer.is_global_zero:
                 with open(self.pred_dir / "total_score.json", "w") as fp:
                     json.dump(
@@ -457,9 +454,21 @@ class SpatioTemporalTask(pl.LightningModule):
                         fp,
                     )
 
+    def predict_step(self, batch, batch_idx, dataloader_idx=0):
+        for i in range(self.n_stochastic_preds):
+            preds, aux = self(
+                batch,
+                step=self.global_step,
+                pred_start=self.context_length,
+                n_preds=self.target_length,
+            )
+            score = self.test_metric.compute_sample(batch)
+
+        return preds, score
+
     def teardown(self, stage):
         # Profiler function
-        if stage == "test" and self.hparams.compute_metric_on_test:
+        if stage == "test":
             if self.global_rank == 0:
                 data = []
                 for path in self.pred_dir.glob("individual_scores_*.json"):

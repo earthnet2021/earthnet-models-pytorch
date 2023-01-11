@@ -106,6 +106,7 @@ class BaseLoss(nn.Module):
 
     def forward(self, preds, batch, aux, current_step=None):
         logs = {}
+
         if "target" in batch:
             # todo check shape + mask + lc
             targs = batch["target"][:, -preds.shape[1] :, ...]
@@ -157,6 +158,7 @@ class BaseLoss(nn.Module):
         )
 
         loss = self.distance(preds, targs, masks)
+        
         logs["loss"] = loss
 
         return loss, logs

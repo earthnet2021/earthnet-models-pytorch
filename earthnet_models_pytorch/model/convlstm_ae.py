@@ -159,7 +159,7 @@ class ConvLSTMAE(nn.Module):
         return parser
 
     def forward(self, data, step, pred_start: int = 0, n_preds: Optional[int] = None):
-
+        
         c_l = self.hparams.context_length if self.training else pred_start
         k = torch.tensor([1])
         # TODO definir correctement la valeur de k + regarder shape decay k = max step ? + remove teacher forcing dans val et test
