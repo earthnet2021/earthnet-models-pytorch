@@ -138,6 +138,8 @@ __pycache__
 *.cpython-37.pyc
 *.pth
 *.zip
+*.jl
+*.onnx
 data/*
 *.swp
 lightning_logs/*
