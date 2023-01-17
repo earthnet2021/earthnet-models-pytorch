@@ -10,7 +10,7 @@ import pytorch_lightning as pl
 from earthnet_models_pytorch.model import MODELS
 from earthnet_models_pytorch.task.spatio_temporal import SpatioTemporalTask
 
-from earthnet_models_pytorch.datamodule import DATASETS
+from earthnet_models_pytorch.datamodule import DATAMODULES
 from earthnet_models_pytorch.utils import parse_setting
 
 
@@ -23,9 +23,9 @@ def train_model(setting_dict: dict, setting_file: str = None):
         "--{}={}".format(key, value) for key, value in setting_dict["Data"].items()
     ]
     data_parser = ArgumentParser()
-    data_parser = DATASETS[setting_dict["Setting"]].add_data_specific_args(data_parser)
+    data_parser = DATAMODULES[setting_dict["Setting"]].add_data_specific_args(data_parser)
     data_params = data_parser.parse_args(data_args)
-    dm = DATASETS[setting_dict["Setting"]](data_params)
+    dm = DATAMODULES[setting_dict["Setting"]](data_params)
 
     # Model
     model_args = [

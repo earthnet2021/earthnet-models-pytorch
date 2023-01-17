@@ -296,21 +296,16 @@ class ContextConvLSTM(nn.Module):
         parser.add_argument("--add_conv", type=str2bool, default=False)
         return parser
 
-    def forward(self, data, step, pred_start: int = 0, n_preds: Optional[int] = None):
-        c_l = self.hparams.context_length if self.training else pred_start
+    def forward(self, data, pred_start: int = 0, n_preds: Optional[int] = None):
 
+        # c_l = self.hparams.context_length if self.training else pred_start
+        c_l = 35
         # Data
         hr_dynamics = data["dynamic"][0][
             :, (c_l - self.hparams.context_length) : c_l, ...
         ]
         if self.hparams.input == "RGBNR":
             target = hr_dynamics[:, :, :, ...]
-            ndvi = data["target"][
-                :,
-                (c_l - self.hparams.context_length) : c_l,
-                ...,
-            ]
-            target = torch.cat((ndvi, target), dim=2)
         else:
             target = hr_dynamics[:, :, 0, ...].unsqueeze(2)
         weather = data["dynamic"][1].unsqueeze(3).unsqueeze(4)

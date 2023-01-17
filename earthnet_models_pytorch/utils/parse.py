@@ -7,7 +7,7 @@ parse setting implements copying of global attributes to the particular subcateg
 from pathlib import Path
 import yaml
 import warnings
-from earthnet_models_pytorch.datamodule import DATASETS, METRIC_CHECKPOINT_INFO
+from earthnet_models_pytorch.datamodule import DATAMODULES, METRIC_CHECKPOINT_INFO
 from earthnet_models_pytorch.model import MODELS
 
 # SETTINGS = ["en21-std", "en21-veg", "europe-veg", "en21x","en21x-px", "en22", "en23"]
@@ -26,7 +26,7 @@ def parse_setting(setting_file, track=None):
                 -4:
             ]  # example: setting: en21x, architecture: local-rnn, feature: arch, config: base.yaml
         config = "config_" + config[:-5] if config != "base.yaml" else "full_train"
-        if setting not in DATASETS:
+        if setting not in DATAMODULES:
             setting = None
         if architecture not in MODELS:
             architecture = None

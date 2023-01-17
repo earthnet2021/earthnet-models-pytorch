@@ -125,8 +125,8 @@ def veg_colorize(
 
 
 def log_viz(tensorboard_logger, viz_data, batch, batch_idx, current_epoch, mode="rgb"):
-    targs = batch["dynamic"][0]
-    nrow = 9 if targs.shape[1] % 9 == 0 else 10
+    targs = batch["dynaminrow = 9 if targs.shape[1] % 9 == 0 else 10c"][0]
+    
 
     if "landcover" in batch:
         lc = batch["landcover"]

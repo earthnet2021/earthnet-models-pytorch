@@ -4,6 +4,7 @@ import argparse
 import copy
 import multiprocessing
 import re
+import sys
 
 from pathlib import Path
 
@@ -13,7 +14,7 @@ import torch
 import xarray as xr
 
 from torch import nn
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset, DataLoader, random_split
 from torchvision.transforms import transforms
 
 from earthnet_models_pytorch.utils import str2bool
@@ -28,7 +29,7 @@ class EarthNet2022Dataset(Dataset):
 
         self.type = np.float16 if fp16 else np.float32
 
-        self.bands = ["blue", "green", "red", "nir"]
+        self.bands = ["ndvi", "blue", "green", "red", "nir"]
 
         # With soil moisture
         self.meteo_vars = [
@@ -145,6 +146,21 @@ class EarthNet2022Dataset(Dataset):
                 0.0029,
             ]
         )
+        """
+        
+        self.meteo_vars = ['pev_max', 'pev_mean', 'pev_min', 'sp_max', 'sp_mean', 'sp_min', 'ssr_max', 'ssr_mean', 'ssr_min', 't2m_max', 't2m_mean', 't2m_min', 'tp_max', 'tp_mean', 'tp_min']
+        self.meteo_scaling_cube = xr.DataArray(data = [1e-4, 1e-4, 1e-4, 1000, 1000, 1000, 50, 50, 50, 400, 400, 400, 500, 500, 500], coords = {"variable": self.meteo_vars})
+
+        mean_meteo = torch.tensor([-1.3039e+00, -1.8422e+00, -2.3154e+00,  
+         8.9678e-02,
+         8.9426e-02,  8.9150e-02,  3.8471e-01,  3.2978e-01,  2.4605e-01,
+         7.3636e-01,  7.3166e-01,
+         7.2685e-01,  2.0101e-02,  6.4336e-03,  9.6704e-04])
+
+        std_meteo = torch.tensor([0.8378, 0.8577, 0.9764, 
+        0.0080, 0.0079, 0.0078, 0.0842, 0.0807, 0.0988,
+        0.0146, 0.0144, 0.0153, 0.0294, 0.0105, 0.0029])
+        """
 
         self.transform_meteo = transforms.Compose(
             [
@@ -158,13 +174,13 @@ class EarthNet2022Dataset(Dataset):
         filepath = self.filepaths[idx]
         minicube = xr.open_dataset(filepath)
 
-        target = (minicube.nir - minicube.red) / (minicube.nir + minicube.red + 1e-6)
-        # minicube['ndvi'] = target
+        # minicube["kndvi"] = np.tanh(((minicube.nir - minicube.red)/(minicube.nir+minicube.red+1e-6))**2) / np.tanh(1)
+        minicube["ndvi"] = (minicube.nir - minicube.red) / (
+            minicube.nir + minicube.red + 1e-6
+        )
 
         hr_cube = minicube[self.bands].to_array()
         hr = hr_cube.values.transpose((3, 0, 1, 2)).astype(self.type)  # t c h w
-
-        target = target.values[None, ...].transpose((3, 0, 1, 2)).astype(self.type)
 
         hr[np.isnan(hr)] = 0
         hr[hr > 1] = 1
@@ -187,13 +203,12 @@ class EarthNet2022Dataset(Dataset):
             "dynamic": [torch.from_numpy(hr), self.transform_meteo(meteo)],
             "dynamic_mask": [],
             "static": [torch.from_numpy(highresstatic)],
-            "target": torch.from_numpy(target),
             "static_mask": [],
             "landcover": torch.from_numpy(lc),
             "filepath": str(filepath),
             "cubename": self.__name_getter(filepath),
         }
-        
+
         return data
 
     def __len__(self) -> int:
@@ -246,7 +261,7 @@ class EarthNet2022DataModule(pl.LightningDataModule):
         parser.add_argument("--val_batch_size", type=int, default=1)
         parser.add_argument("--test_batch_size", type=int, default=1)
 
-        # parser.add_argument('--val_pct', type = float, default = 0.05)
+        parser.add_argument("--val_pct", type=float, default=0.05)
         parser.add_argument("--val_split_seed", type=float, default=42)
 
         parser.add_argument(

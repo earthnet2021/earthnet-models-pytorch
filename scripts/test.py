@@ -9,7 +9,7 @@ import torch
 
 from earthnet_models_pytorch.model import MODELS
 from earthnet_models_pytorch.task.spatio_temporal import SpatioTemporalTask
-from earthnet_models_pytorch.datamodule import DATASETS
+from earthnet_models_pytorch.datamodule import DATAMODULES
 from earthnet_models_pytorch.utils import parse_setting
 
 # from torchsummary import summary
@@ -23,9 +23,9 @@ def test_model(setting_dict: dict, checkpoint: str):
         "--{}={}".format(key, value) for key, value in setting_dict["Data"].items()
     ]
     data_parser = ArgumentParser()
-    data_parser = DATASETS[setting_dict["Setting"]].add_data_specific_args(data_parser)
+    data_parser = DATAMODULES[setting_dict["Setting"]].add_data_specific_args(data_parser)
     data_params = data_parser.parse_args(data_args)
-    dm = DATASETS[setting_dict["Setting"]](data_params)
+    dm = DATAMODULES[setting_dict["Setting"]](data_params)
 
     # Model
     model_args = [
@@ -63,33 +63,33 @@ def test_model(setting_dict: dict, checkpoint: str):
     trainer_dict["logger"] = False
     trainer = pl.Trainer(**trainer_dict)
 
-    dm.setup("test")
+    
 
-    x = next(iter(dm.test_dataloader())) #torch.randn(4, 36, 26, 128, 128, device="cuda")
-
-    torch.onnx.export(
-        model,  # model being run
-        x,  # model input (or a tuple for multiple inputs)
-        str(setting_dict["Task"]["pred_dir"])
-        + "/"
-        + str(setting_dict["Logger"]["name"])
-        + ".onnx",  # where to save the model (can be a file or file-like object)
-        export_params=True,  # store the trained parameter weights inside the model file
-        opset_version=10,  # the ONNX version to export the model to
-        do_constant_folding=True,  # whether to execute constant folding for optimization
-        input_names=["input"],  # the model's input names
-        output_names=["output"],  # the model's output names
-        dynamic_axes={
-            "input": {
-                0: "batch_size",
-                1: "time",
-                2: "channels",
-                3: "lon",
-                4: "lat",
-            },  # variable length axes
-            "output": {0: "batch_size"},
-        },
-    )
+    #x = next(iter(dm.setup("test"))) #torch.randn(4, 36, 26, 128, 128, device="cuda")
+    #
+    #torch.onnx.export(
+    #    model,  # model being run
+    #    x,  # model input (or a tuple for multiple inputs)
+    #    str(setting_dict["Task"]["pred_dir"])
+    #    + "/"
+    #    + str(setting_dict["Logger"]["name"])
+    #    + ".onnx",  # where to save the model (can be a file or file-like object)
+    #    export_params=True,  # store the trained parameter weights inside the model file
+    #    opset_version=10,  # the ONNX version to export the model to
+    #    do_constant_folding=True,  # whether to execute constant folding for optimization
+    #    input_names=["input"],  # the model's input names
+    #    output_names=["output"],  # the model's output names
+    #    dynamic_axes={
+    #        "input": {
+    #            0: "batch_size",
+    #            1: "time",
+    #            2: "channels",
+    #            3: "lon",
+    #            4: "lat",
+    #        },  # variable length axes
+    #        "output": {0: "batch_size"},
+    #    },
+    #)
 
     trainer.test(model=task, datamodule=dm, ckpt_path=None)
 

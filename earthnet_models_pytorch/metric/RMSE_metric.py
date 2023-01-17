@@ -1,4 +1,9 @@
 from typing import Tuple, Optional, Sequence, Union
+
+import copy
+import multiprocessing
+import sys
+
 from torchmetrics import Metric
 import numpy as np
 import torch
@@ -8,17 +13,16 @@ class RootMeanSquaredError(Metric):
     # Each state variable should be called using self.add_state(...)
     def __init__(
         self,
-        compute_on_cpu: bool = False,
+        compute_on_step: bool = False,
         dist_sync_on_step: bool = False,
         process_group=None,
         dist_sync_fn=None,
-        lc_min=int,
-        lc_max=int,
+        lc_min=73,
+        lc_max=104,
         comp_ndvi=True,
     ):
         super().__init__(
-            # COMMENT: Vitus, compute_on_step has been depreciated, I updated the code both RMSE and NNSE metric
-            compute_on_cpu=compute_on_cpu,  #
+            compute_on_step=compute_on_step,
             dist_sync_on_step=dist_sync_on_step,
             process_group=process_group,
             dist_sync_fn=dist_sync_fn,
@@ -46,12 +50,13 @@ class RootMeanSquaredError(Metric):
 
         if self.compute_on_step:
             kwargs["just_return"] = True
-            out_cache = self.update(*args, **kwargs)  # compute and return the nnse
+            out_cache = self.update(*args, **kwargs)  # compute and return the rmse
             kwargs.pop("just_return", None)
             return out_cache
 
     def update(self, preds, targs, just_return=False):
         """Any code needed to update the state given any inputs to the metric."""
+
         lc = targs["landcover"]
 
         # Masks
@@ -116,3 +121,40 @@ class RootMeanSquaredError(Metric):
         Computes mean squared error over state.
         """
         return {"RMSE_Veg": torch.sqrt(self.sum_squared_error / self.total)}
+
+
+class RMSE_ens21x(RootMeanSquaredError):
+    def __init__(
+        self,
+        compute_on_step: bool = False,
+        dist_sync_on_step: bool = False,
+        process_group=None,
+        dist_sync_fn=None,
+    ):
+        super().__init__(
+            compute_on_step=compute_on_step,
+            dist_sync_on_step=dist_sync_on_step,
+            process_group=process_group,
+            dist_sync_fn=dist_sync_fn,
+            lc_min=82,
+            lc_max=104,
+        )
+
+
+class RMSE_ens22(RootMeanSquaredError):
+    def __init__(
+        self,
+        compute_on_step: bool = False,
+        dist_sync_on_step: bool = False,
+        process_group=None,
+        dist_sync_fn=None,
+    ):
+        super().__init__(
+            compute_on_step=compute_on_step,
+            dist_sync_on_step=dist_sync_on_step,
+            process_group=process_group,
+            dist_sync_fn=dist_sync_fn,
+            lc_min=2,
+            lc_max=6,
+            comp_ndvi=False,
+        )
