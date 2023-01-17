@@ -151,8 +151,6 @@ experiments_1
 experiments_1/*
 experiments_old
 experiments_old/*
-demo
-demo/*
 plots
 plots/*
 checkpoints 

@@ -1,0 +1,81 @@
+Architecture: context-convlstm
+Checkpointer:
+  every_n_epochs: 5
+  filename: Epoch-{epoch:02d}-RMSE (Vegetation)-{RMSE_Veg:.4f}
+  mode: min
+  monitor: RMSE_Veg
+  save_last: true
+  save_top_k: 1
+Data:
+  base_dir: /workspace/data/en22/
+  fp16: true
+  num_workers: 8
+  test_batch_size: 1
+  test_track: iid
+  train_batch_size: 4
+  val_batch_size: 1
+  val_split_seed: 42
+Logger:
+  name: baseline_RGBNR
+  save_dir: experiments/en23_test/context-convlstm
+  version: full_train
+Model:
+  bias: true
+  context_length: 35
+  hidden_dim:
+  - 64
+  - 64
+  - 64
+  - 64
+  input: RGBNR
+  kernel_size: 3
+  num_layers: 3
+  return_all_layers: false
+  setting: en22
+  skip_connections: true
+  target_length: 10
+Seed: 42
+Setting: en22
+Task:
+  context_length: 35
+  loss:
+    args:
+      distance_type: L2
+    max_lc: 6
+    min_lc: 2
+    name: masked
+    ndvi: true
+  n_log_batches: 8
+  n_stochastic_preds: 1
+  optimization:
+    lr_shedule:
+    - args:
+        gamma: 0.1
+        milestones:
+        - 1500
+      name: MultiStepLR
+    optimizer:
+    - args:
+        betas:
+        - 0.9
+        - 0.999
+        lr: 8.0e-06
+      lr_per_sample: 1.0e-06
+      name: Adam
+  setting: en22
+  target_length: 10
+  test_batch_size: 1
+  train_batch_size: 4
+  val_batch_size: 1
+Trainer:
+  accelerator: auto
+  accumulate_grad_batches: 8
+  devices:
+  - 4
+  - 5
+  gradient_clip_val: 1
+  log_every_n_steps: 32
+  max_epochs: 150
+  precision: 16
+  strategy: ddp
+  val_check_interval: 0.1
