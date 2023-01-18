@@ -111,7 +111,7 @@ def visualisation_targ(targs):
     for col_num in range(grid.shape[0]):
         cols[col_num].image(rgb[col_num, ...], clamp=True, channels='RGB', use_column_width=True)
 
-    st.write("Target")
+    st.write("Vegetation index Target")
     cols = st.columns(grid.shape[0])
     for col_num in range(grid.shape[0]):
         cols[col_num].image(grid[col_num, ...], use_column_width=True)

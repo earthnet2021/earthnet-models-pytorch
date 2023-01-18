@@ -14,6 +14,7 @@ segmentation_models_pytorch==0.2.1
 setuptools==59.5.0
 scipy==1.9.3
 stackstac==0.4.3
+streamlit=1.17.0
 timm==0.4.12
 torch==1.13.1
 torchmetrics==0.11.0
