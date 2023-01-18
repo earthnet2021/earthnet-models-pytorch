@@ -141,7 +141,7 @@ class NormalizedNashSutcliffeEfficiency(Metric):
         Computes a final value over the state of the metric.
         """
         veg_score = 2 - 1 / (self.sum_nnse_sample / self.n_obs_sample)
-        # we are computing a vegetation score, TODO "rmse" is Legacy, update logging before
+        # we are computing a vegetation score, TODO "rmse" is Legacy, update logging before.
         return {"rmse": 2 - 1 / (self.sum_nnse / self.n_obs) + 1e-6}
 
     def compute_sample(self, targs):

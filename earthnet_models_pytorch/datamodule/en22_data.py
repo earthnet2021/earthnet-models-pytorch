@@ -216,7 +216,6 @@ class EarthNet2022Dataset(Dataset):
 
     def __name_getter(self, path: Path) -> str:
         """Helper function gets Cubename from a Path
-
         Args:
             path (Path): One of Path/to/cubename.npz and Path/to/experiment_cubename.npz
 

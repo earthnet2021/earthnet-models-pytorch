@@ -83,13 +83,14 @@ class RootMeanSquaredError(Metric):
 
         # Targets
         targets = targs["dynamic"][0][:, -preds.shape[1] :, ...]
+        # NDVI computation
         if targets.shape[2] >= 3 and self.comp_ndvi:
             targets = (
                 (targets[:, :, 3, ...] - targets[:, :, 2, ...])
                 / (targets[:, :, 3, ...] + targets[:, :, 2, ...] + 1e-6)
             ).unsqueeze(
                 2
-            )  # NDVI computation
+            ) 
         elif targets.shape[2] >= 3:
             targets = targets[:, :, 0, ...].unsqueeze(2)
 

@@ -14,7 +14,6 @@ Checkpointer:
     save_last: True
     every_n_epochs: 5
 
-
 Trainer:
     # The "auto" option recognizes the machine you are on, and selects the respective Accelerator.
     accelerator: "auto" # "gpu" 

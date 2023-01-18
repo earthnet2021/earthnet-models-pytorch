@@ -124,10 +124,8 @@ class CNN(nn.Module):
         )
 
     def forward(self, topology, weather):
-        # weather = self.norm(weather)
         x = self.conv1(topology)
         x = self.norm(x)
-        # x = x * weather
         x = self.conv2(x)
         x = self.conv3(x)
         return x

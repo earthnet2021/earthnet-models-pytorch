@@ -86,12 +86,12 @@ class ConvLSTMAE(nn.Module):
 
         # TODO improve the way to define theses variables
         # En23
-        # input_encoder = 17  # 7 s2 bands, 1 target, 8 weather variables, 1 topography
-        # input_decoder = 10  # 1 target, 8 weather variables, 1 topography
+        input_encoder = 17  # 7 s2 bands, 1 target, 8 weather variables, 1 topography
+        input_decoder = 10  # 1 target, 8 weather variables, 1 topography
 
         # En22
-        input_encoder = 21  # 4 s2 bands, 1 target, 15 weather variables, 1 topography
-        input_decoder = 17  # 1 target, 15 weather variables, 1 topography
+        # input_encoder = 21  # 4 s2 bands, 1 target, 15 weather variables, 1 topography
+        # input_decoder = 17  # 1 target, 15 weather variables, 1 topography
 
         self.encoder_1_convlstm = ConvLSTMCell(
             input_dim=input_encoder,

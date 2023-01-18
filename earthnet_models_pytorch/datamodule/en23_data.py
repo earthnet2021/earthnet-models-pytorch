@@ -169,7 +169,7 @@ class EarthNet2023Dataset(Dataset):
         )  # t, c
         meteo_cube[np.isnan(meteo_cube)] = 0
 
-        # TODO NaN values are replaces by the mean of each variable. To solve, currently RuntimeWarning: overflow encountered in reduce
+        # TODO NaN values are replaces by the mean of each variable.
         # col_mean = np.nanmean(meteo_cube, axis=0)
         # inds = np.where(np.isnan(meteo_cube))
         # meteo_cube[inds] = np.take(col_mean, inds[1])
@@ -205,7 +205,7 @@ class EarthNet2023Dataset(Dataset):
             "filepath": str(filepath),
             "cubename": self.__name_getter(filepath),
         }
-        # print(data["filepath"], data["dynamic"][0].shape)
+        
         return data
 
     def __len__(self) -> int:

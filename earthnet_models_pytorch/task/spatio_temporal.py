@@ -5,22 +5,17 @@ import argparse
 import ast
 import copy
 import json
-import sys
 
 import numpy as np
-from PIL import Image, ImageDraw, ImageFont
-import matplotlib.colors as clr
 import xarray as xr
 
 import torch
-import torchvision
 
 import pytorch_lightning as pl 
 
 from torch import nn
 
 from pathlib import Path
-import shutil
 
 from earthnet_models_pytorch.utils import str2bool, log_viz
 from earthnet_models_pytorch.task import setup_loss, SHEDULERS
@@ -55,7 +50,7 @@ class SpatioTemporalTask(pl.LightningModule):
         self.current_filepaths = []
 
         self.metric = METRICS[self.hparams.setting]()
-        self.ndvi_pred = (self.hparams.setting == "en21-veg") #TODO: Legacy, remove this...  #TODO: what is mean ?
+        self.ndvi_pred = (self.hparams.setting == "en21-veg") #TODO: Legacy, remove this...
         
         self.pred_mode = {"en21-veg": "ndvi", "en21-std": "rgb", "en21x": "kndvi", "en21x-px": "kndvi", "en22": "kndvi"}[self.hparams.setting]
 
