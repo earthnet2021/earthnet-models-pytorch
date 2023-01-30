@@ -4,6 +4,7 @@ from earthnet_models_pytorch.model.rnn import RNN
 from earthnet_models_pytorch.model.context_convlstm import ContextConvLSTM
 from earthnet_models_pytorch.model.CNN import CNN
 from earthnet_models_pytorch.model.convlstm_lstm import ConvLSTMLSTM
+from earthnet_models_pytorch.model.simvp import SimVP
 from earthnet_models_pytorch.task import TASKS
 
 MODELS = {
@@ -11,7 +12,8 @@ MODELS = {
     "rnn": RNN,
     "context-convlstm": ContextConvLSTM,
     "dumby-mlp": CNN,
-    "convlstm-lstm": ConvLSTMLSTM
+    "convlstm-lstm": ConvLSTMLSTM,
+    "simvp": SimVP
 }
 
 MODELTASKS = {
@@ -21,7 +23,8 @@ MODELTASKS = {
     "context-convlstm": TASKS["spatio-temporal"],
     "u-net-convlstm": TASKS["spatio-temporal"],
     "dumby-mlp": TASKS["spatio-temporal"],
-    'convlstm-lstm': TASKS["spatio-temporal"]
+    'convlstm-lstm': TASKS["spatio-temporal"],
+    'simvp': TASKS["spatio-temporal"],
 }
 
 MODELTASKNAMES = {
@@ -31,5 +34,6 @@ MODELTASKNAMES = {
     "context-convlstm": "spatio-temporal",
     "u-net-convlstm" : "spatio-temporal",
     "dumby-mlp" : "spatio-temporal",
-    "convlstm-lstm": "spatio-temporal"
+    "convlstm-lstm": "spatio-temporal",
+    "simvp": "spatio-temporal"
 }
