@@ -8,7 +8,7 @@ import os
 import time
 import yaml
 import sys
-from torchsummary import summary
+# from torchsummary import summary
 import torch
 import pytorch_lightning as pl
 from pytorch_lightning.plugins import DDPPlugin

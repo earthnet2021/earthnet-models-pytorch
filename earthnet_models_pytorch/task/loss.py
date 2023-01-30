@@ -160,8 +160,57 @@ class BaseLoss(nn.Module):
         logs["loss"] = loss
         return loss, logs
 
+class MaskedL2NDVILoss(nn.Module):
+
+    def __init__(self, min_lc = None, max_lc = None, ndvi_pred_idx = 0, ndvi_targ_idx = 0, pred_mask_value = None, **kwargs):
+        super().__init__()
+        
+        self.min_lc = min_lc if min_lc else 0
+        self.max_lc = max_lc if max_lc else 1000
+        self.use_lc = (min_lc != 0) & (max_lc != 1000)
+        self.ndvi_pred_idx = ndvi_pred_idx
+        self.ndvi_targ_idx = ndvi_targ_idx
+        self.pred_mask_value = pred_mask_value
+        print(f"Using Masked L2 NDVI Loss with Landcover boundaries ({self.min_lc, self.max_lc}).")
+
+
+    def forward(self, preds, batch, aux, current_step = None):
+
+        
+        t_pred = preds.shape[1]
+
+        lc = batch["landcover"]
+
+        s2_mask = (batch["dynamic_mask"][0][:,-t_pred:,...] < 1.).bool().type_as(preds)  # b t c h w
+
+        lc_mask = ((lc >= self.min_lc).bool() & (lc <= self.max_lc).bool()).type_as(preds)  # b c h w
+
+        ndvi_targ = batch["dynamic"][0][:, :, self.ndvi_targ_idx,...].unsqueeze(2) # b t c h w
+
+        ndvi_pred = preds[:,:,self.ndvi_pred_idx, ...].unsqueeze(2) # b t c h w
+
+        sum_squared_error = (((ndvi_targ[:, -t_pred:,...] - ndvi_pred) * s2_mask)**2).sum(1)  # b c h w
+
+        mse = sum_squared_error / (s2_mask.sum(1) + 1e-8) # b c h w
+
+        if self.pred_mask_value:
+            pred_mask = (ndvi_pred != self.pred_mask_value).bool().type_as(preds).max(1)[0]
+            mse_lc = (mse * lc_mask * pred_mask).sum() / (lc_mask * pred_mask).sum()
+        elif self.use_lc:
+            mse_lc = (mse * lc_mask).sum() / lc_mask.sum()
+        else:
+            mse_lc = mse.mean()
+        
+        logs = {"loss": mse_lc}
+
+        return mse_lc, logs
+
 
 def setup_loss(args):
+
+    if args["name"] == "MaskedL2NDVILoss":
+        return MaskedL2NDVILoss(**args)
+    
     if "pixelwise" in args:  
         if args["pixelwise"]:  # why ?
             return PixelwiseLoss(args)
