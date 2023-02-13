@@ -120,7 +120,7 @@ class SpatioTemporalTask(pl.LightningModule):
         '''compute and return the training loss and some additional metrics for e.g. the progress bar or logger'''
         kwargs = {}
         for (shedule_name, shedule) in self.model_shedules:
-            kwargs[shedule_name] = shedule(self.global_step)  # adjust the learning rate
+            kwargs[shedule_name] = shedule(self.global_step)
         
         # Predictions generation
         preds, aux = self(batch, n_preds = self.context_length+self.target_length, kwargs = kwargs) 
@@ -128,7 +128,11 @@ class SpatioTemporalTask(pl.LightningModule):
 
         # Logs
         for shedule_name in kwargs:
-            logs[shedule_name] = kwargs[shedule_name]
+            if len(kwargs[shedule_name]) > 1:
+                for i, shed_val in enumerate(kwargs[shedule_name]):
+                    logs[f"{shedule_name}_i"] = shed_val
+            else:
+                logs[shedule_name] = kwargs[shedule_name]
         logs['batch_size'] = torch.tensor(self.hparams.train_batch_size, dtype=torch.float32)
         self.log_dict(logs)  
         

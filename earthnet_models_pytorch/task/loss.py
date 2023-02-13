@@ -162,7 +162,7 @@ class BaseLoss(nn.Module):
 
 class MaskedL2NDVILoss(nn.Module):
 
-    def __init__(self, min_lc = None, max_lc = None, ndvi_pred_idx = 0, ndvi_targ_idx = 0, pred_mask_value = None, **kwargs):
+    def __init__(self, min_lc = None, max_lc = None, ndvi_pred_idx = 0, ndvi_targ_idx = 0, pred_mask_value = None, scale_by_std = False, extra_aux_loss_term = None, extra_aux_loss_weight = 1, **kwargs):
         super().__init__()
         
         self.min_lc = min_lc if min_lc else 0
@@ -171,8 +171,14 @@ class MaskedL2NDVILoss(nn.Module):
         self.ndvi_pred_idx = ndvi_pred_idx
         self.ndvi_targ_idx = ndvi_targ_idx
         self.pred_mask_value = pred_mask_value
-        print(f"Using Masked L2 NDVI Loss with Landcover boundaries ({self.min_lc, self.max_lc}).")
+        self.scale_by_std = scale_by_std
+        if self.scale_by_std:
+            print(f"Using Masked L2/Std NDVI Loss with Landcover boundaries ({self.min_lc, self.max_lc}).")
+        else:
+            print(f"Using Masked L2 NDVI Loss with Landcover boundaries ({self.min_lc, self.max_lc}).")
 
+        self.extra_aux_loss_term = extra_aux_loss_term
+        self.extra_aux_loss_weight = extra_aux_loss_weight
 
     def forward(self, preds, batch, aux, current_step = None):
 
@@ -193,6 +199,11 @@ class MaskedL2NDVILoss(nn.Module):
 
         mse = sum_squared_error / (s2_mask.sum(1) + 1e-8) # b c h w
 
+        if self.scale_by_std:
+            mean_ndvi_targ = (ndvi_targ[:, -t_pred:,...] * s2_mask).sum(1).unsqueeze(1) / (s2_mask.sum(1).unsqueeze(1) + 1e-8)  # b t c h w
+            sum_squared_deviation = (((ndvi_targ[:, -t_pred:,...] - mean_ndvi_targ) * s2_mask)**2).sum(1)  # b c h w
+            mse = sum_squared_error / sum_squared_deviation.clip(min = 0.01) # b c h w
+
         if self.pred_mask_value:
             pred_mask = (ndvi_pred != self.pred_mask_value).bool().type_as(preds).max(1)[0]
             mse_lc = (mse * lc_mask * pred_mask).sum() / (lc_mask * pred_mask).sum()
@@ -202,6 +213,13 @@ class MaskedL2NDVILoss(nn.Module):
             mse_lc = mse.mean()
         
         logs = {"loss": mse_lc}
+
+        if self.extra_aux_loss_term:
+            extra_loss = aux[self.extra_aux_loss_term]
+            logs["mse_lc"] = mse_lc
+            logs[self.extra_aux_loss_term] = extra_loss
+            mse_lc += self.extra_aux_loss_weight * extra_loss
+            logs["loss"] = mse_lc
 
         return mse_lc, logs
 

@@ -8,7 +8,7 @@ from torchmetrics import Metric
 
 class NNSEVeg(Metric):
     # Each state variable should be called using self.add_state(...)
-    def __init__(self, compute_on_step: bool = False, dist_sync_on_step: bool = False, process_group = None, dist_sync_fn = None, lc_min = 10., lc_max = 30., ndvi_pred_idx = 0, ndvi_targ_idx = 0):
+    def __init__(self, compute_on_step: bool = False, dist_sync_on_step: bool = False, process_group = None, dist_sync_fn = None, lc_min = 10., lc_max = 40., ndvi_pred_idx = 0, ndvi_targ_idx = 0):
         super().__init__(
             compute_on_step=compute_on_step,
             dist_sync_on_step=dist_sync_on_step,

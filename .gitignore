@@ -155,3 +155,4 @@ plots
 plots/*
 checkpoints 
 checkpoints/*
+*.out

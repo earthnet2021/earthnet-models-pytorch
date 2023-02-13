@@ -11,12 +11,14 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from earthnet_models_pytorch.utils import str2bool
+from earthnet_models_pytorch.model.enc_dec_layer import get_encoder_decoder, ACTIVATIONS
 
 class SpatioTemporalLSTMCell(nn.Module):
-    def __init__(self, in_channel, num_hidden, width, filter_size, stride, layer_norm):
+    def __init__(self, in_channel, num_hidden, width, filter_size, stride, layer_norm, action_condition = True):
         super(SpatioTemporalLSTMCell, self).__init__()
 
         self.num_hidden = num_hidden
+        self.action_condition = action_condition
         self.padding = filter_size // 2
         self._forget_bias = 1.0
         if layer_norm:
@@ -28,10 +30,11 @@ class SpatioTemporalLSTMCell(nn.Module):
                 nn.Conv2d(num_hidden, num_hidden * 4, kernel_size=filter_size, stride=stride, padding=self.padding),
                 nn.LayerNorm([num_hidden * 4, width, width])
             )
-            self.conv_a = nn.Sequential(
-                nn.Conv2d(num_hidden, num_hidden * 4, kernel_size=filter_size, stride=stride, padding=self.padding),
-                nn.LayerNorm([num_hidden * 4, width, width])
-            )
+            if action_condition:
+                self.conv_a = nn.Sequential(
+                    nn.Conv2d(num_hidden, num_hidden * 4, kernel_size=filter_size, stride=stride, padding=self.padding),
+                    nn.LayerNorm([num_hidden * 4, width, width])
+                )
             self.conv_m = nn.Sequential(
                 nn.Conv2d(num_hidden, num_hidden * 3, kernel_size=filter_size, stride=stride, padding=self.padding),
                 nn.LayerNorm([num_hidden * 3, width, width])
@@ -47,9 +50,10 @@ class SpatioTemporalLSTMCell(nn.Module):
             self.conv_h = nn.Sequential(
                 nn.Conv2d(num_hidden, num_hidden * 4, kernel_size=filter_size, stride=stride, padding=self.padding),
             )
-            self.conv_a = nn.Sequential(
-                nn.Conv2d(num_hidden, num_hidden * 4, kernel_size=filter_size, stride=stride, padding=self.padding),
-            )
+            if action_condition:
+                self.conv_a = nn.Sequential(
+                    nn.Conv2d(num_hidden, num_hidden * 4, kernel_size=filter_size, stride=stride, padding=self.padding),
+                )
             self.conv_m = nn.Sequential(
                 nn.Conv2d(num_hidden, num_hidden * 3, kernel_size=filter_size, stride=stride, padding=self.padding),
             )
@@ -61,12 +65,14 @@ class SpatioTemporalLSTMCell(nn.Module):
     def forward(self, x_t, h_t, c_t, m_t, a_t):
 
         x_concat = self.conv_x(x_t)
-        h_concat = self.conv_h(h_t)
-        a_concat = self.conv_a(a_t)
+        h_concat = self.conv_h(h_t)            
         m_concat = self.conv_m(m_t)
+        if self.action_condition:
+            a_concat = self.conv_a(a_t)
+            h_concat = h_concat * a_concat
 
         i_x, f_x, g_x, i_x_prime, f_x_prime, g_x_prime, o_x = torch.split(x_concat, self.num_hidden, dim=1)
-        i_h, f_h, g_h, o_h = torch.split(h_concat * a_concat, self.num_hidden, dim=1)
+        i_h, f_h, g_h, o_h = torch.split(h_concat, self.num_hidden, dim=1)
         i_m, f_m, g_m = torch.split(m_concat, self.num_hidden, dim=1)
 
         i_t = torch.sigmoid(i_x + i_h)
@@ -89,50 +95,82 @@ class SpatioTemporalLSTMCell(nn.Module):
 
         return h_new, c_new, m_new, delta_c, delta_m
 
-
-
 class PredRNN(nn.Module):
     def __init__(self, hparams: argparse.Namespace):
         super().__init__()
 
         self.hparams = hparams
 
-        if self.hparams.conv_on_input == 1:
-            self.conv_input1 = nn.Conv2d(self.hparams.num_inputs, self.hparams.num_hidden // 2,
-                                         self.hparams.filter_size,
-                                         stride=2, padding=self.hparams.filter_size // 2, bias=False)
-            self.conv_input2 = nn.Conv2d(self.hparams.num_hidden // 2, self.hparams.num_hidden, self.hparams.filter_size, stride=2,
-                                         padding=self.hparams.filter_size // 2, bias=False)
+        self.width = 128
+
+        if self.hparams.conv_on_input:
+            if self.hparams.encdec_norm:
+                norm = self.hparams.encdec_norm
+            else:
+                norm = "group" if self.hparams.norm_on_conv else None
+            if self.hparams.encdec_act:
+                act = self.hparams.encdec_act
+            else:
+                act = "relu" if self.hparams.relu_on_conv else None
+            
+            self.width = 32
+
+            in_channels = self.hparams.num_inputs+ 3*(self.hparams.use_static_inputs)
+
+            self.enc, self.dec = get_encoder_decoder(
+                self.hparams.encoder, in_channels, self.hparams.num_hidden, self.hparams.num_inputs, down_factor = 4, filter_size= self.hparams.filter_size, skip_connection = self.hparams.res_on_conv, norm = norm, act = act, readout_act=self.hparams.encdec_readoutact
+            )
+
+            # if self.hparams.encoder == "PredRNN":
+            #     self.enc = PredRNNEncoder(in_channels, self.hparams.num_hidden // 2, self.hparams.num_hidden, self.hparams.filter_size, norm = self.hparams.norm_on_conv, relu = self.hparams.relu_on_conv)
+            #     self.dec = PredRNNDecoder(self.hparams.num_hidden, self.hparams.num_hidden // 2, self.hparams.num_inputs, self.hparams.filter_size, norm = self.hparams.norm_on_conv, relu = self.hparams.relu_on_conv, residual = self.hparams.res_on_conv)
+            # elif self.hparams.encoder == "SimVP":
+            #     self.enc = Encoder(in_channels, self.hparams.num_hidden, 4)
+            #     self.dec = Decoder(self.hparams.num_hidden, self.hparams.num_inputs, 4)
+            # self.conv_input1 = nn.Conv2d(self.hparams.num_inputs+ 3*(self.hparams.use_static_inputs), self.hparams.num_hidden // 2,
+            #                              self.hparams.filter_size,
+            #                              stride=2, padding=self.hparams.filter_size // 2, bias=False)
+            # self.conv_input2 = nn.Conv2d(self.hparams.num_hidden // 2, self.hparams.num_hidden, self.hparams.filter_size, stride=2,
+            #                              padding=self.hparams.filter_size // 2, bias=False)
+            # self.deconv_output1 = nn.ConvTranspose2d(self.hparams.num_hidden, self.hparams.num_hidden // 2,
+            #                                          self.hparams.filter_size, stride=2, padding=self.hparams.filter_size // 2,
+            #                                          bias=False)
+            # self.deconv_output2 = nn.ConvTranspose2d(self.hparams.num_hidden // 2, self.hparams.num_inputs,
+            #                                          self.hparams.filter_size, stride=2, padding=self.hparams.filter_size // 2,
+            #                                          bias=False)
+        
+        if self.hparams.weather_conditioning == "action":
             self.action_conv_input1 = nn.Conv2d(self.hparams.num_weather, self.hparams.num_hidden // 2,
                                                 1,
                                                 stride=1, padding=0, bias=False)
-            self.action_relu = nn.ReLU()
+            self.relu = nn.ReLU()
             self.action_conv_input2 = nn.Conv2d(self.hparams.num_hidden // 2, self.hparams.num_hidden, 1, stride=1,
                                                 padding=0, bias=False)
-            self.deconv_output1 = nn.ConvTranspose2d(self.hparams.num_hidden, self.hparams.num_hidden // 2,
-                                                     self.hparams.filter_size, stride=2, padding=self.hparams.filter_size // 2,
-                                                     bias=False)
-            self.deconv_output2 = nn.ConvTranspose2d(self.hparams.num_hidden // 2, self.hparams.num_inputs,
-                                                     self.hparams.filter_size, stride=2, padding=self.hparams.filter_size // 2,
-                                                     bias=False)
+        #elif self.hparams.weather_conditioning == "FiLM":
+        #elif self.hparams.weather_conditioning == "cat":
 
         cell_list = []
 
         for i in range(self.hparams.num_layers):
             if i == 0:
-                in_channel = self.hparams.num_inputs + self.hparams.num_weather if self.hparams.conv_on_input == 0 else self.hparams.num_hidden
+                in_channel = self.hparams.num_inputs + 3*(self.hparams.use_static_inputs) if self.hparams.conv_on_input == 0 else self.hparams.num_hidden
             else:
                 in_channel = self.hparams.num_hidden
             cell_list.append(
-                SpatioTemporalLSTMCell(in_channel, self.hparams.num_hidden, 32,
-                                       self.hparams.filter_size, self.hparams.stride, self.hparams.layer_norm)
+                SpatioTemporalLSTMCell(in_channel, self.hparams.num_hidden, self.width,
+                                       self.hparams.filter_size, self.hparams.stride, self.hparams.layer_norm, action_condition = (self.hparams.weather_conditioning == "action"))
             )
 
         self.cell_list = nn.ModuleList(cell_list)
 
         if self.hparams.conv_on_input == 0:
-            self.conv_last = nn.Conv2d(self.hparams.num_hidden, self.hparams.num_inputs, 1, stride=1,
+            self.readout = nn.Conv2d(self.hparams.num_hidden, self.hparams.num_inputs, 1, stride=1,
                                        padding=0, bias=False)
+            if self.hparams.encdec_readoutact:
+                self.readout_act = ACTIVATIONS[self.hparams.encdec_readoutact]()
+            else:
+                self.readout_act = nn.Identity()
+            
         self.adapter = nn.Conv2d(self.hparams.num_hidden, self.hparams.num_hidden, 1, stride=1, padding=0,
                                  bias=False)
 
@@ -158,10 +196,19 @@ class PredRNN(nn.Module):
         parser.add_argument("--layer_norm", type = str2bool, default = False)
         parser.add_argument("--conv_on_input", type = str2bool, default = True)
         parser.add_argument("--res_on_conv", type = str2bool, default = True)
+        parser.add_argument("--relu_on_conv", type = str2bool, default = False)
+        parser.add_argument("--norm_on_conv", type = str2bool, default = False)
+        parser.add_argument("--use_static_inputs", type = str2bool, default = False)
+        parser.add_argument("--encoder", type = str, default = "PredRNN")
+        parser.add_argument("--weather_conditioning", type = str, default = "action")
+        parser.add_argument("--encdec_norm", type = str, default = None)
+        parser.add_argument("--encdec_act", type = str, default = None)
+        parser.add_argument("--encdec_readoutact", type = str, default = None)
+
 
         return parser
 
-    def forward(self, data, pred_start = 0, n_preds = None):
+    def forward(self, data, pred_start = 0, n_preds = None, sampling = None):
 
         n_preds = 0 if n_preds is None else n_preds
         
@@ -171,7 +218,7 @@ class PredRNN(nn.Module):
 
         b, t, c, h, w = hr_dynamic_inputs.shape
 
-        static_inputs = data["static"][0]
+        static_inputs = data["static"][0][:,:3,...]
 
         meso_dynamic_inputs = data["dynamic"][1]
 
@@ -179,12 +226,12 @@ class PredRNN(nn.Module):
 
             _, t_m, c_m = meso_dynamic_inputs.shape
 
-            meso_dynamic_inputs = meso_dynamic_inputs.reshape(b, t_m, c_m, 1, 1).repeat(1, 1, 1, h//4, w//4)
+            meso_dynamic_inputs = meso_dynamic_inputs.reshape(b, t_m, c_m, 1, 1).repeat(1, 1, 1, self.width, self.width)
 
         else:
             _, t_m, c_m, h_m, w_m = meso_dynamic_inputs.shape
 
-            meso_dynamic_inputs = meso_dynamic_inputs.reshape(b, t_m//5, 5, c_m, h_m, w_m).mean(2)[:,:,:,39:41,39:41].repeat(1, 1, 1, h//4, w//4)
+            meso_dynamic_inputs = meso_dynamic_inputs.reshape(b, t_m//5, 5, c_m, h_m, w_m).mean(2)[:,:,:,39:41,39:41].repeat(1, 1, 1, self.width, self.width)
 
         # [batch, length, height, width, channel] -> [batch, length, channel, height, width]
         #frames = all_frames.permute(0, 1, 4, 2, 3).contiguous()
@@ -198,40 +245,61 @@ class PredRNN(nn.Module):
         delta_c_list = []
         delta_m_list = []
 
+        
+
         for i in range(self.hparams.num_layers):
             zeros = torch.zeros(
-                [b, self.hparams.num_hidden, h//4, w//4]).type_as(input_frames)
+                [b, self.hparams.num_hidden, self.width, self.width]).type_as(input_frames)
             h_t.append(zeros)
             c_t.append(zeros)
             delta_c_list.append(zeros)
             delta_m_list.append(zeros)
 
         decouple_loss = []
-        memory = torch.zeros([b, self.hparams.num_hidden, h//4, w//4]).type_as(input_frames)
+        memory = torch.zeros([b, self.hparams.num_hidden, self.width, self.width]).type_as(input_frames)
 
-        for i in range(t - 1):
+        for i in range(self.hparams.context_length + self.hparams.target_length - 1):
             if i < c_l:
-                net = input_frames[:, i]
+                if sampling and i > 0:
+                    proba = (torch.rand(b) < sampling[0]).type_as(input_frames)[:, None, None, None]
+                    net = proba * input_frames[:, i] + (1 - proba) * x_gen
+                else:
+                    net = input_frames[:, i]
             else:
-                net = x_gen
+                if sampling:
+                    proba = (torch.rand(b) < sampling[1]).type_as(input_frames)[:, None, None, None]
+                    net = proba * input_frames[:, i] + (1 - proba) * x_gen
+                else:
+                    net = x_gen
+
+            if self.hparams.use_static_inputs:
+                net = torch.cat([net, static_inputs], dim = 1).contiguous()
             #else:
                 
                 #net = mask_true[:, t - 1] * input_frames[:, t] + (1 - mask_true[:, t - 1]) * x_gen
 
             action = input_actions[:, i+1]
 
-            if self.hparams.conv_on_input == 1:
-                net_shape1 = net.size()
-                net = self.conv_input1(net)
-                if self.hparams.res_on_conv == 1:
-                    input_net1 = net
-                net_shape2 = net.size()
-                net = self.conv_input2(net)
-                if self.hparams.res_on_conv == 1:
-                    input_net2 = net
+            if self.hparams.conv_on_input:
+
+                net, skips = self.enc(net)
+
+                # net_shape1 = net.size()
+                # net = self.conv_input1(net)
+                # if self.hparams.res_on_conv:
+                #     input_net1 = net
+                # net_shape2 = net.size()
+                # if self.hparams.relu_on_conv:
+                #     net = self.relu(net)
+                # net = self.conv_input2(net)
+                # if self.hparams.res_on_conv:
+                #     input_net2 = net
+            if self.hparams.weather_conditioning == "action":
                 action = self.action_conv_input1(action)
-                action = self.action_relu(action)
+                action = self.relu(action)
                 action = self.action_conv_input2(action)
+            else:
+                action = None
 
             h_t[0], c_t[0], memory, delta_c, delta_m = self.cell_list[0](net, h_t[0], c_t[0], memory, action)
             delta_c_list[0] = F.normalize(self.adapter(delta_c).view(delta_c.shape[0], delta_c.shape[1], -1), dim=2)
@@ -245,21 +313,27 @@ class PredRNN(nn.Module):
             for j in range(0, self.hparams.num_layers):
                 decouple_loss.append(torch.mean(torch.abs(
                     torch.cosine_similarity(delta_c_list[j], delta_m_list[j], dim=2))))
-            if self.hparams.conv_on_input == 1:
-                if self.hparams.res_on_conv == 1:
-                    x_gen = self.deconv_output1(h_t[self.hparams.num_layers - 1] + input_net2, output_size=net_shape2)
-                    x_gen = self.deconv_output2(x_gen + input_net1, output_size=net_shape1)
-                else:
-                    x_gen = self.deconv_output1(h_t[self.hparams.num_layers - 1], output_size=net_shape2)
-                    x_gen = self.deconv_output2(x_gen, output_size=net_shape1)
+            if self.hparams.conv_on_input:
+                x_gen = self.dec(h_t[self.hparams.num_layers - 1], skips)
+                # if self.hparams.res_on_conv:
+                #     x_gen = self.deconv_output1(h_t[self.hparams.num_layers - 1] + input_net2, output_size=net_shape2)
+                #     if self.hparams.relu_on_conv:
+                #         x_gen = self.deconv_output2(self.relu(x_gen + input_net1), output_size=net_shape1)
+                #     else:
+                #         x_gen = self.deconv_output2(x_gen + input_net1, output_size=net_shape1)
+                # else:
+                #     x_gen = self.deconv_output1(h_t[self.hparams.num_layers - 1], output_size=net_shape2)
+                #     if self.hparams.relu_on_conv:
+                #         x_gen = self.relu(x_gen)
+                #     x_gen = self.deconv_output2(x_gen, output_size=net_shape1)
             else:
-                x_gen = self.conv_last(h_t[self.hparams.num_layers - 1])
+                x_gen = self.readout(h_t[self.hparams.num_layers - 1])
+                x_gen = self.readout_act(x_gen)
             next_frames.append(x_gen)
 
         decouple_loss = torch.mean(torch.stack(decouple_loss, dim=0))
         # [length, batch, channel, height, width] -> [batch, length, channel, height, width]
-        next_frames = torch.stack(next_frames, dim=0).permute(1, 0, 2, 3, 4).contiguous()
+        next_frames = torch.stack(next_frames, dim=0).permute(1, 0, 2, 3, 4).contiguous()[:, -self.hparams.target_length:, :1, ...]
         # loss = self.MSE_criterion(next_frames, all_frames[:, 1:, :, :, :next_frames.shape[4]]) + self.beta * decouple_loss
         # next_frames = next_frames[:, :, :, :, :self.hparams.num_inputs]
-        
         return next_frames, {"decouple_loss": decouple_loss}

@@ -50,7 +50,7 @@ def fast_dev_run(setting_dict: dict):
     trainer_dict = setting_dict["Trainer"]
     trainer_dict["logger"] = False
     trainer_dict["fast_dev_run"] = 2  # number of batch
-    trainer_dict["log_gpu_memory"] = 'all'
+    #trainer_dict["log_gpu_memory"] = 'all'
     if "profiler" in trainer_dict:
         trainer_dict["profiler"] = pl.profiler.AdvancedProfiler(output_filename="curr_profile") #TODO better output filename...  # performance analysis
 
