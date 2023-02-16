@@ -134,7 +134,7 @@ if __name__ == "__main__":
 
     setting_dict = parse_setting(setting, track)
 
-    st.title("Forecast vegetation greeness on the Earthnet2023 dataset")
+    st.title("Forecast vegetation greeness on the Earthnet2022 dataset")
     minicube = load_minicube()
     model = load_model(checkpoint)
 
