@@ -102,7 +102,6 @@ def visualisation_targ(targs):
         ],
         dim=3,
     ).cpu().detach().numpy()
-    print(rgb)
     grid = ndvi.squeeze(2).squeeze(0).cpu().detach().numpy()
     grid = cmap_veg(grid)
     
