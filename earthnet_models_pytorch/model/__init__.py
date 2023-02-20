@@ -1,8 +1,6 @@
-
 from earthnet_models_pytorch.model.local_rnn import LocalRNN
 from earthnet_models_pytorch.model.rnn import RNN
-from earthnet_models_pytorch.model.context_convlstm import ContextConvLSTM
-from earthnet_models_pytorch.model.CNN import CNN
+from earthnet_models_pytorch.model.convlstm_ae import ConvLSTMAE
 from earthnet_models_pytorch.model.convlstm_lstm import ConvLSTMLSTM
 from earthnet_models_pytorch.model.simvp import SimVP
 from earthnet_models_pytorch.model.predrnn import PredRNN
@@ -13,27 +11,26 @@ from earthnet_models_pytorch.task import TASKS
 MODELS = {
     "local-rnn": LocalRNN,
     "rnn": RNN,
-    "context-convlstm": ContextConvLSTM,
-    "dumby-mlp": CNN,
+    "convlstm_ae": ConvLSTMAE,
     "convlstm-lstm": ConvLSTMLSTM,
     "simvp": SimVP,
     "predrnn": PredRNN,
     "convlstm": ConvLSTM,
-    "nf_resnet": NextFrameResNet
+    "nf_resnet": NextFrameResNet,
 }
 
 MODELTASKS = {
     "channel-u-net": TASKS["spatio-temporal"],
     "local-rnn": TASKS["spatio-temporal"],
     "rnn": TASKS["spatio-temporal"],
-    "context-convlstm": TASKS["spatio-temporal"],
+    "convlstm_ae": TASKS["spatio-temporal"],
     "u-net-convlstm": TASKS["spatio-temporal"],
     "dumby-mlp": TASKS["spatio-temporal"],
-    'convlstm-lstm': TASKS["spatio-temporal"],
-    'simvp': TASKS["spatio-temporal"],
-    "predrnn":  TASKS["spatio-temporal"],
-    "nf_resnet":  TASKS["spatio-temporal"],
-    "convlstm": TASKS["spatio-temporal"]
+    "convlstm-lstm": TASKS["spatio-temporal"],
+    "simvp": TASKS["spatio-temporal"],
+    "predrnn": TASKS["spatio-temporal"],
+    "nf_resnet": TASKS["spatio-temporal"],
+    "convlstm": TASKS["spatio-temporal"],
 }
 
 MODELTASKNAMES = {
@@ -41,11 +38,11 @@ MODELTASKNAMES = {
     "local-rnn": "spatio-temporal",
     "rnn": "spatio-temporal",
     "context-convlstm": "spatio-temporal",
-    "u-net-convlstm" : "spatio-temporal",
-    "dumby-mlp" : "spatio-temporal",
+    "u-net-convlstm": "spatio-temporal",
+    "dumby-mlp": "spatio-temporal",
     "convlstm-lstm": "spatio-temporal",
     "simvp": "spatio-temporal",
     "predrnn": "spatio-temporal",
     "nf_resnet": "spatio-temporal",
-    "convlstm": "spatio-temporal"
+    "convlstm": "spatio-temporal",
 }
