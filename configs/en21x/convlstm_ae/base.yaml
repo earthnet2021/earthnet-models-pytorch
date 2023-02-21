@@ -5,7 +5,7 @@ Seed: 42
 Setting: "en21x"
 
 Logger:
-    save_dir: "earthnet-models-pytorch/experiments/"
+    save_dir: "earthnet_models_pytorch/experiments/"
 
 Checkpointer:
     save_top_k: 1
@@ -13,11 +13,12 @@ Checkpointer:
     every_n_epochs: 1
 
 Trainer:
-    gpus: 1 #6
+    gpus: 1
     strategy: 'ddp'
     #deterministic: True
     log_every_n_steps: 32
     #profiler: 'advanced'
+    accumulate_grad_batches: 8
     #fast_dev_run: True
     #log_gpu_memory: 'all'
     #weights_summary: 'full'
@@ -26,16 +27,15 @@ Trainer:
     #limit_val_batches: 32
     gradient_clip_val: 1
     #val_check_interval: 0.25
-    # Automatically tries to find the largest batch size that fits into memory, before any training.
-    auto_scale_batch_size: "binsearch"
+    enable_progress_bar: False
   
 Data:
     base_dir: "/scratch/vbenson/earthnet2021x/" 
     test_track: "iid"
-    train_batch_size: 4 #96
+    train_batch_size: 4
     val_batch_size: 4
-    test_batch_size: 4 #96
-    num_workers: 16 #32
+    test_batch_size: 4
+    num_workers: 8
     dl_cloudmask: True
 
 Task:
