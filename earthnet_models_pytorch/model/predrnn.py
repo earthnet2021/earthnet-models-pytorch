@@ -12,13 +12,15 @@ import torch.nn.functional as F
 
 from earthnet_models_pytorch.utils import str2bool
 from earthnet_models_pytorch.model.enc_dec_layer import get_encoder_decoder, ACTIVATIONS
+from earthnet_models_pytorch.model.conditioning_layer import Identity_Conditioning,Cat_Conditioning,Cat_Project_Conditioning,CrossAttention_Conditioning,FiLMBlock
 
 class SpatioTemporalLSTMCell(nn.Module):
-    def __init__(self, in_channel, num_hidden, width, filter_size, stride, layer_norm, action_condition = True):
+    def __init__(self, in_channel, num_hidden, width, filter_size, stride, layer_norm, conditioning = None, condition_x_not_h = False, c_channels = None,n_tokens_c = 8):
         super(SpatioTemporalLSTMCell, self).__init__()
 
         self.num_hidden = num_hidden
-        self.action_condition = action_condition
+        self.conditioning = conditioning
+        self.condition_x_not_h = condition_x_not_h
         self.padding = filter_size // 2
         self._forget_bias = 1.0
         if layer_norm:
@@ -30,7 +32,7 @@ class SpatioTemporalLSTMCell(nn.Module):
                 nn.Conv2d(num_hidden, num_hidden * 4, kernel_size=filter_size, stride=stride, padding=self.padding),
                 nn.LayerNorm([num_hidden * 4, width, width])
             )
-            if action_condition:
+            if conditioning == "action":
                 self.conv_a = nn.Sequential(
                     nn.Conv2d(num_hidden, num_hidden * 4, kernel_size=filter_size, stride=stride, padding=self.padding),
                     nn.LayerNorm([num_hidden * 4, width, width])
@@ -50,10 +52,21 @@ class SpatioTemporalLSTMCell(nn.Module):
             self.conv_h = nn.Sequential(
                 nn.Conv2d(num_hidden, num_hidden * 4, kernel_size=filter_size, stride=stride, padding=self.padding),
             )
-            if action_condition:
+            #x_channels = num_hidden * 7 if condition_x_not_h else num_hidden * 4 
+            x_channels = in_channel if condition_x_not_h else num_hidden
+            if conditioning == "action":
                 self.conv_a = nn.Sequential(
                     nn.Conv2d(num_hidden, num_hidden * 4, kernel_size=filter_size, stride=stride, padding=self.padding),
                 )
+            elif conditioning == "cat":
+                self.cond = Cat_Project_Conditioning(x_channels, c_channels)
+            elif conditioning == "FiLM":
+                self.cond = FiLMBlock(c_channels, num_hidden, x_channels)
+            elif conditioning == "xAttn":
+                self.cond = CrossAttention_Conditioning(x_channels, c_channels, n_tokens_c=n_tokens_c, act = "gelu", hidden_dim = 8, n_heads=8)
+            else:
+                self.cond = Identity_Conditioning()
+
             self.conv_m = nn.Sequential(
                 nn.Conv2d(num_hidden, num_hidden * 3, kernel_size=filter_size, stride=stride, padding=self.padding),
             )
@@ -64,12 +77,22 @@ class SpatioTemporalLSTMCell(nn.Module):
 
     def forward(self, x_t, h_t, c_t, m_t, a_t):
 
-        x_concat = self.conv_x(x_t)
-        h_concat = self.conv_h(h_t)            
+                    
         m_concat = self.conv_m(m_t)
-        if self.action_condition:
+
+        if self.conditioning == "action":
+            x_concat = self.conv_x(x_t)
+            h_concat = self.conv_h(h_t)
             a_concat = self.conv_a(a_t)
             h_concat = h_concat * a_concat
+        else:
+            if self.condition_x_not_h:
+                x_t = self.cond(x_t, a_t)
+            else:
+                h_t = self.cond(h_t, a_t)
+
+            x_concat = self.conv_x(x_t)
+            h_concat = self.conv_h(h_t)
 
         i_x, f_x, g_x, i_x_prime, f_x_prime, g_x_prime, o_x = torch.split(x_concat, self.num_hidden, dim=1)
         i_h, f_h, g_h, o_h = torch.split(h_concat, self.num_hidden, dim=1)
@@ -101,24 +124,51 @@ class PredRNN(nn.Module):
 
         self.hparams = hparams
 
+        self.n_tokens_c = 8
         self.width = 128
+
+        enc_in_channels = self.hparams.num_inputs+ 3*(self.hparams.use_static_inputs)
+        c_channels = self.hparams.num_weather
+
+        if self.hparams.encdec_act:
+            act = self.hparams.encdec_act
+        else:
+            act = "relu" if self.hparams.relu_on_conv else None
+
+        if self.hparams.weather_conditioning_loc == "all":
+            enc_dec_proc_conditioning = self.hparams.weather_conditioning
+            self.early_conditioning = Identity_Conditioning()
+        else:
+            enc_dec_proc_conditioning = None
+            if self.hparams.weather_conditioning_loc == "early":
+                x_channels = enc_in_channels
+            
+                if self.hparams.weather_conditioning == "cat":
+                    self.early_conditioning = Cat_Conditioning()#Cat_Project_Conditioning(x_channels, c_channels)
+                    enc_in_channels = x_channels + c_channels
+                elif self.hparams.weather_conditioning == "FiLM":
+                    self.early_conditioning = FiLMBlock(c_channels, self.hparams.num_hidden, x_channels)
+                elif self.hparams.weather_conditioning == "xAttn":
+                    self.early_conditioning = CrossAttention_Conditioning(x_channels, c_channels, n_tokens_c=self.n_tokens_c, act = act, hidden_dim = 16, n_heads=16, mlp_after_attn=self.hparams.mlp_after_attn)
+                else:
+                    self.early_conditioning = Identity_Conditioning()
+            else:
+                self.early_conditioning = Identity_Conditioning()
 
         if self.hparams.conv_on_input:
             if self.hparams.encdec_norm:
                 norm = self.hparams.encdec_norm
             else:
                 norm = "group" if self.hparams.norm_on_conv else None
-            if self.hparams.encdec_act:
-                act = self.hparams.encdec_act
-            else:
-                act = "relu" if self.hparams.relu_on_conv else None
+            
             
             self.width = 32
 
-            in_channels = self.hparams.num_inputs+ 3*(self.hparams.use_static_inputs)
+
+
 
             self.enc, self.dec = get_encoder_decoder(
-                self.hparams.encoder, in_channels, self.hparams.num_hidden, self.hparams.num_inputs, down_factor = 4, filter_size= self.hparams.filter_size, skip_connection = self.hparams.res_on_conv, norm = norm, act = act, readout_act=self.hparams.encdec_readoutact
+                self.hparams.encoder, enc_in_channels, self.hparams.num_hidden, self.hparams.num_inputs, down_factor = 4, filter_size= self.hparams.filter_size, skip_connection = self.hparams.res_on_conv, norm = norm, act = act, readout_act=self.hparams.encdec_readoutact,conditioning = enc_dec_proc_conditioning, c_channels_enc = c_channels,c_channels_dec = c_channels, n_tokens_c = self.n_tokens_c
             )
 
             # if self.hparams.encoder == "PredRNN":
@@ -149,16 +199,18 @@ class PredRNN(nn.Module):
         #elif self.hparams.weather_conditioning == "FiLM":
         #elif self.hparams.weather_conditioning == "cat":
 
+        lstm_weather_cond = self.hparams.weather_conditioning if self.hparams.weather_conditioning_loc in ["latent", "all"] else None
+
         cell_list = []
 
         for i in range(self.hparams.num_layers):
             if i == 0:
-                in_channel = self.hparams.num_inputs + 3*(self.hparams.use_static_inputs) if self.hparams.conv_on_input == 0 else self.hparams.num_hidden
+                in_channel = self.hparams.num_hidden if self.hparams.conv_on_input else enc_in_channels 
             else:
                 in_channel = self.hparams.num_hidden
             cell_list.append(
                 SpatioTemporalLSTMCell(in_channel, self.hparams.num_hidden, self.width,
-                                       self.hparams.filter_size, self.hparams.stride, self.hparams.layer_norm, action_condition = (self.hparams.weather_conditioning == "action"))
+                                       self.hparams.filter_size, self.hparams.stride, self.hparams.layer_norm, conditioning = lstm_weather_cond, condition_x_not_h = self.hparams.condition_x_not_h, c_channels = self.hparams.num_weather,n_tokens_c = 8)
             )
 
         self.cell_list = nn.ModuleList(cell_list)
@@ -201,10 +253,12 @@ class PredRNN(nn.Module):
         parser.add_argument("--use_static_inputs", type = str2bool, default = False)
         parser.add_argument("--encoder", type = str, default = "PredRNN")
         parser.add_argument("--weather_conditioning", type = str, default = "action")
+        parser.add_argument("--condition_x_not_h", type = str2bool, default = False)
+        parser.add_argument("--weather_conditioning_loc", type = str, default = "latent")
         parser.add_argument("--encdec_norm", type = str, default = None)
         parser.add_argument("--encdec_act", type = str, default = None)
         parser.add_argument("--encdec_readoutact", type = str, default = None)
-
+        parser.add_argument("--mlp_after_attn", type = str2bool, default = False)
 
         return parser
 
@@ -226,12 +280,12 @@ class PredRNN(nn.Module):
 
             _, t_m, c_m = meso_dynamic_inputs.shape
 
-            meso_dynamic_inputs = meso_dynamic_inputs.reshape(b, t_m, c_m, 1, 1).repeat(1, 1, 1, self.width, self.width)
+            meso_dynamic_inputs = meso_dynamic_inputs.reshape(b, t_m, c_m, 1, 1)#.repeat(1, 1, 1, self.width, self.width)
 
         else:
             _, t_m, c_m, h_m, w_m = meso_dynamic_inputs.shape
 
-            meso_dynamic_inputs = meso_dynamic_inputs.reshape(b, t_m//5, 5, c_m, h_m, w_m).mean(2)[:,:,:,39:41,39:41].repeat(1, 1, 1, self.width, self.width)
+            meso_dynamic_inputs = meso_dynamic_inputs.reshape(b, t_m//5, 5, c_m, h_m, w_m).mean(2)[:,:,:,39:41,39:41]#.repeat(1, 1, 1, self.width, self.width)
 
         # [batch, length, height, width, channel] -> [batch, length, channel, height, width]
         #frames = all_frames.permute(0, 1, 4, 2, 3).contiguous()
@@ -280,9 +334,16 @@ class PredRNN(nn.Module):
 
             action = input_actions[:, i+1]
 
+            if self.hparams.weather_conditioning == "action":
+                action = self.action_conv_input1(action.repeat(1, 1, self.width, self.width))
+                action = self.relu(action)
+                action = self.action_conv_input2(action)
+
+            net = self.early_conditioning(net, action)
+
             if self.hparams.conv_on_input:
 
-                net, skips = self.enc(net)
+                net, skips = self.enc(net, action)
 
                 # net_shape1 = net.size()
                 # net = self.conv_input1(net)
@@ -294,12 +355,9 @@ class PredRNN(nn.Module):
                 # net = self.conv_input2(net)
                 # if self.hparams.res_on_conv:
                 #     input_net2 = net
-            if self.hparams.weather_conditioning == "action":
-                action = self.action_conv_input1(action)
-                action = self.relu(action)
-                action = self.action_conv_input2(action)
-            else:
-                action = None
+            
+            # else:
+            #     action = None
 
             h_t[0], c_t[0], memory, delta_c, delta_m = self.cell_list[0](net, h_t[0], c_t[0], memory, action)
             delta_c_list[0] = F.normalize(self.adapter(delta_c).view(delta_c.shape[0], delta_c.shape[1], -1), dim=2)
@@ -314,7 +372,7 @@ class PredRNN(nn.Module):
                 decouple_loss.append(torch.mean(torch.abs(
                     torch.cosine_similarity(delta_c_list[j], delta_m_list[j], dim=2))))
             if self.hparams.conv_on_input:
-                x_gen = self.dec(h_t[self.hparams.num_layers - 1], skips)
+                x_gen = self.dec(h_t[self.hparams.num_layers - 1], skips, action)
                 # if self.hparams.res_on_conv:
                 #     x_gen = self.deconv_output1(h_t[self.hparams.num_layers - 1] + input_net2, output_size=net_shape2)
                 #     if self.hparams.relu_on_conv:

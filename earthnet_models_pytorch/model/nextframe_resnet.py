@@ -194,7 +194,7 @@ class NextFrameResNet(nn.Module):
             meso_dynamic_inputs = meso_dynamic_inputs.reshape(B, t_m//5, 5, c_m, h_m, w_m).mean(2)[:,:,:,39:41,39:41].repeat(1, 1, 1, H, W)
 
         preds = []
-        for t in range(T-1):
+        for t in range(self.hparams.context_length + self.hparams.target_length - 1):
             
             if t < c_l:
                 x = torch.cat([hr_dynamic_inputs[:, t, ...], static_inputs], dim = 1).contiguous()
