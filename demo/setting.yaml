@@ -1,0 +1,81 @@
+Architecture: convlstm_ae
+Checkpointer:
+  every_n_epochs: 1
+  filename: Epoch-{epoch:02d}-veg_score-{veg_score:.4f}
+  mode: max
+  monitor: veg_score
+  save_last: true
+  save_top_k: 1
+Data:
+  base_dir: /scratch/vbenson/earthnet2021x/
+  dl_cloudmask: true
+  fp16: false
+  num_workers: 8
+  test_batch_size: 4
+  test_track: iid
+  train_batch_size: 4
+  val_batch_size: 4
+  val_split_seed: 42
+Logger:
+  name: convlstm_ae
+  save_dir: earthnet_models_pytorch/experiments/en21x/convlstm_ae
+  version: config_lr_0.00001
+Model:
+  bias: true
+  context_length: 10
+  hidden_dim:
+  - 64
+  - 64
+  - 64
+  - 64
+  kernel_size: 3
+  num_inputs: 32
+  num_outputs: 5
+  skip_connections: true
+  target_length: 20
+Seed: 42
+Setting: en21x
+Task:
+  compute_metric_on_test: true
+  context_length: 10
+  loss:
+    max_lc: 40
+    min_lc: 10
+    name: MaskedL2NDVILoss
+    ndvi_pred_idx: 0
+    ndvi_targ_idx: 0
+    pred_mask_value: -1
+    scale_by_std: false
+  max_lc: 40
+  min_lc: 10
+  n_log_batches: 2
+  n_stochastic_preds: 1
+  optimization:
+    lr_shedule:
+    - args:
+        gamma: 0.1
+        milestones:
+        - 160
+        - 190
+      name: MultiStepLR
+    optimizer:
+    - args:
+        betas:
+        - 0.9
+        - 0.999
+        lr: 4.0e-05
+      lr_per_sample: 1.0e-05
+      name: AdamW
+  setting: en21x
+  target_length: 20
+  test_batch_size: 4
+  train_batch_size: 4
+  val_batch_size: 4
+Trainer:
+  accumulate_grad_batches: 8
+  gpus: 1
+  gradient_clip_val: 1
+  log_every_n_steps: 32
+  max_epochs: 100
+  precision: 32
+  strategy: ddp

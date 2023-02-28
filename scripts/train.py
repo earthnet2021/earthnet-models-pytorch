@@ -12,6 +12,8 @@ import sys
 import torch
 import pytorch_lightning as pl
 from pytorch_lightning.plugins import DDPPlugin
+from pytorch_lightning.callbacks import TQDMProgressBar
+
 
 from earthnet_models_pytorch.model import MODELS, MODELTASKS
 
@@ -65,7 +67,7 @@ def train_model(setting_dict: dict, setting_file: str = None):
     if "profiler" in trainer_dict:
         trainer_dict["profiler"] = pl.profiler.AdvancedProfiler(output_filename="curr_profile")
 
-    trainer = pl.Trainer(logger = logger, callbacks = [checkpoint_callback], **trainer_dict)
+    trainer = pl.Trainer(logger = logger, callbacks = [checkpoint_callback, TQDMProgressBar(refresh_rate=10)], **trainer_dict)
  
     trainer.fit(task, dm)
     

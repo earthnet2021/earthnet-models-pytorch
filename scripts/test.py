@@ -5,6 +5,7 @@
 import yaml
 
 from argparse import ArgumentParser
+from pytorch_lightning.callbacks import TQDMProgressBar
 
 import torch
 import pytorch_lightning as pl
@@ -47,7 +48,7 @@ def test_model(setting_dict: dict, checkpoint: str):
     # Trainer
     trainer_dict = setting_dict["Trainer"]
     trainer_dict["logger"] = False
-    trainer = pl.Trainer(**trainer_dict)
+    trainer = pl.Trainer(callbacks = TQDMProgressBar(refresh_rate=10), **trainer_dict)
 
     dm.setup("test")
     

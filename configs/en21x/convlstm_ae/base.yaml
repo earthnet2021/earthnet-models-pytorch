@@ -27,7 +27,6 @@ Trainer:
     #limit_val_batches: 32
     gradient_clip_val: 1
     #val_check_interval: 0.25
-    enable_progress_bar: False
   
 Data:
     base_dir: "/scratch/vbenson/earthnet2021x/" 
