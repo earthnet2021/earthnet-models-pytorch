@@ -55,7 +55,7 @@ Task:
                 name: AdamW
                 args: 
                     betas: [0.9, 0.999]
-                lr_per_sample: 0.00001
+                lr_per_sample: 0.000001
         lr_shedule:
             -
                 name: MultiStepLR
@@ -67,7 +67,7 @@ Task:
 
 Model:
     hidden_dim: [64, 64, 64, 64]
-    kernel_size: 3
+    kernel_size: 1
     bias: True
     skip_connections: True
     num_inputs: 32

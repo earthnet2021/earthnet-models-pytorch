@@ -67,7 +67,7 @@ Task:
 
 Model:
     hidden_dim: [64, 64, 64, 64]
-    kernel_size: 3
+    kernel_size: 1
     bias: True
     skip_connections: True
     num_inputs: 32
