@@ -2,7 +2,7 @@ Architecture: "convlstm_ae"
 
 Seed: 42
 
-Setting: "en21x"
+Setting: "en23"
 
 Logger:
     save_dir: "earthnet_models_pytorch/experiments/"
@@ -17,37 +17,36 @@ Trainer:
     strategy: 'ddp'
     #deterministic: True
     log_every_n_steps: 32
-    #profiler: 'advanced'
+    profiler: 'simple'
     accumulate_grad_batches: 8
     #fast_dev_run: True
     #log_gpu_memory: 'all'
     #weights_summary: 'full'
-    max_epochs: 100
+    max_epochs: 2
     #limit_train_batches: 32
     #limit_val_batches: 32
     gradient_clip_val: 1
     #val_check_interval: 0.25
   
 Data:
-    base_dir: "/scratch/vbenson/earthnet2021x/" 
+    base_dir: "/workspace/data/s3/earthnet/earthnet2023/" 
     test_track: "iid"
     train_batch_size: 4
     val_batch_size: 4
     test_batch_size: 4
-    num_workers: 8
-    dl_cloudmask: True
+    num_workers: 4
 
 Task:
     loss:
         name: "MaskedL2NDVILoss"
-        min_lc: 10
-        max_lc: 40
+        min_lc: 40
+        max_lc: 90
         ndvi_pred_idx: 0
         ndvi_targ_idx: 0
         pred_mask_value: -1
         scale_by_std: False
-    context_length: 10
-    target_length: 20
+    context_length: 20
+    target_length: 10
     n_stochastic_preds: 1
     optimization:
         optimizer:
@@ -70,5 +69,5 @@ Model:
     kernel_size: 3
     bias: True
     skip_connections: True
-    num_inputs: 32
-    num_outputs: 5
+    num_inputs: 17
+    num_outputs: 8

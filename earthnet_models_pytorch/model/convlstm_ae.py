@@ -183,7 +183,6 @@ class ConvLSTMAE(nn.Module):
             input = torch.cat((sentinel[:, t, ...], static), dim=1)
             weather_t = weather[:, t, ...].repeat(1, 1, 128, 128)
             input = torch.cat((input, weather_t), dim=1)
-
             # First block
             h_t, c_t = self.encoder_1_convlstm(input_tensor=input, cur_state=[h_t, c_t])
             # second block
@@ -211,7 +210,6 @@ class ConvLSTMAE(nn.Module):
             weather_t = weather[:, c_l + t, ...].repeat(1, 1, 128, 128)
             pred = torch.cat((pred, static), dim=1)
             pred = torch.cat((pred, weather_t), dim=1)
-
             # first block
             h_t, c_t = self.decoder_1_convlstm(input_tensor=pred, cur_state=[h_t, c_t])
 
