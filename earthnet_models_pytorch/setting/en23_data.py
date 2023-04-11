@@ -111,7 +111,7 @@ class EarthNet2023Dataset(Dataset):
         #    "/workspace/data/s3/earthnet/earthnet2023/train/Ethiopia/37NHG5730.nc",
         # ]
         # self.filepaths = [Path(x) for x in filepaths]
-        self.filepaths = sorted(list(folder.glob("*/*.nc")))
+        self.filepaths = sorted(list(folder.glob("*/*.nc")))[3000:]
         self.type = np.float16 if fp16 else np.float32
         self.target = target
         self.variables = variables
@@ -126,15 +126,15 @@ class EarthNet2023Dataset(Dataset):
         t_len = s2_avail.shape[0]
         time = [i for i in range(4, t_len, 5)]
 
-        index_avail = np.where(s2_avail.values.astype(self.type) == 1)[0]
-        if index_avail[0] % 5 != 4:
-            raise Exception(
-                "The first available imagery of sentinel-2 is not 4 + [5]"
-                + str(index_avail)
-            )
+        # index_avail = np.where(s2_avail.values.astype(self.type) == 1)[0]
+        # if index_avail[0] % 5 != 4:
+        #    raise Exception(
+        #        "The first available imagery of sentinel-2 is not 4 + [5]"
+        #        + str(index_avail)
+        #    )
 
         # Select the days with available data
-        s2_avail = s2_avail.isel(time=time).values  # .astype(int)
+        # s2_avail = s2_avail.isel(time=time).values  # .astype(int)
 
         # Create the minicube
         # s2 is 5 days, and already rescaled [0, 1]
@@ -198,6 +198,8 @@ class EarthNet2023Dataset(Dataset):
         # NaN values handling
         s2_cube = np.where(np.isnan(s2_cube), np.zeros(1).astype(self.type), s2_cube)
         target = np.where(np.isnan(target), np.zeros(1).astype(self.type), target)
+        meteo_cube = np.where(np.isnan(meteo_cube), np.zeros(1).astype(self.type), meteo_cube
+        )
         topography = np.where(
             np.isnan(topography), np.zeros(1).astype(self.type), topography
         )

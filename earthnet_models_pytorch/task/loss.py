@@ -267,9 +267,11 @@ class MaskedL2NDVILoss(nn.Module):
             pred_mask = (
                 (ndvi_pred != self.pred_mask_value).bool().type_as(preds).max(1)[0]
             )
-            mse_lc = (mse * lc_mask * pred_mask).sum() / (lc_mask * pred_mask).sum()
+            mse_lc = (mse * lc_mask * pred_mask).sum() / (
+                (lc_mask * pred_mask).sum() + 1e-8
+            )
         elif self.use_lc:
-            mse_lc = (mse * lc_mask).sum() / lc_mask.sum()
+            mse_lc = (mse * lc_mask).sum() / (lc_mask.sum() + 1e-8)
         else:
             mse_lc = mse.mean()
 
@@ -278,10 +280,10 @@ class MaskedL2NDVILoss(nn.Module):
             print(
                 batch["filepath"],
                 mse_lc,
-                sum_squared_error.sum(),
+                ndvi_pred.sum(),
+                ndvi_targ.sum(),
                 s2_mask.sum(),
                 pred_mask.sum(),
-                mse.sum(),
                 lc_mask.sum(),
             )
             mse_lc = torch.nan_to_num(mse_lc, nan=1)
