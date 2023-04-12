@@ -104,14 +104,7 @@ class EarthNet2023Dataset(Dataset):
     ):
         if not isinstance(folder, Path):
             folder = Path(folder)
-        # filepaths = [
-        #    "/workspace/data/s3/earthnet/earthnet2023/train/Madagascar/39LUF5743.nc",
-        #    "/workspace/data/s3/earthnet/earthnet2023/train/Morocco/29SPS6703.nc",
-        #    "/workspace/data/s3/earthnet/earthnet2023/train/Angola/34LBJ3107.nc",
-        #    "/workspace/data/s3/earthnet/earthnet2023/train/Ethiopia/37NHG5730.nc",
-        # ]
-        # self.filepaths = [Path(x) for x in filepaths]
-        self.filepaths = sorted(list(folder.glob("*/*.nc")))[3000:]
+        self.filepaths = sorted(list(folder.glob("*/*.nc")))
         self.type = np.float16 if fp16 else np.float32
         self.target = target
         self.variables = variables
@@ -198,7 +191,8 @@ class EarthNet2023Dataset(Dataset):
         # NaN values handling
         s2_cube = np.where(np.isnan(s2_cube), np.zeros(1).astype(self.type), s2_cube)
         target = np.where(np.isnan(target), np.zeros(1).astype(self.type), target)
-        meteo_cube = np.where(np.isnan(meteo_cube), np.zeros(1).astype(self.type), meteo_cube
+        meteo_cube = np.where(
+            np.isnan(meteo_cube), np.zeros(1).astype(self.type), meteo_cube
         )
         topography = np.where(
             np.isnan(topography), np.zeros(1).astype(self.type), topography
@@ -212,9 +206,9 @@ class EarthNet2023Dataset(Dataset):
         data = {
             "dynamic": [
                 torch.from_numpy(satellite_data)[
-                    : 20 + 10, ...
+                    20 : 20 + 10, ...
                 ],  # ATTENTION truncature to try to accelerate the training.
-                torch.from_numpy(meteo_cube)[: 20 * 5 + 10 * 5, ...],
+                torch.from_numpy(meteo_cube)[20 * 5 : 20 * 5 + 10 * 5, ...],
             ],
             "dynamic_mask": [torch.from_numpy(s2_mask)],
             "static": [torch.from_numpy(topography)],

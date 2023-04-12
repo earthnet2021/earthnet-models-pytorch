@@ -275,19 +275,6 @@ class MaskedL2NDVILoss(nn.Module):
         else:
             mse_lc = mse.mean()
 
-        print(mse_lc)
-        if not np.isfinite(mse_lc.cpu().detach().numpy()):
-            print(
-                batch["filepath"],
-                mse_lc,
-                ndvi_pred.sum(),
-                ndvi_targ.sum(),
-                s2_mask.sum(),
-                pred_mask.sum(),
-                lc_mask.sum(),
-            )
-            mse_lc = torch.nan_to_num(mse_lc, nan=1)
-
         logs = {"loss": mse_lc}
 
         if self.extra_aux_loss_term:

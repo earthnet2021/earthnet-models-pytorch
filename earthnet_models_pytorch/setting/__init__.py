@@ -78,7 +78,7 @@ METRIC_CHECKPOINT_INFO = {
         "mode": "min",
     },
     "en23": {
-        "monitor": "veg_score",
+        "monitor": "RMSE_Veg",
         "filename": "Epoch-{epoch:02d}-veg_score-{veg_score:.4f}",
         "mode": "max",
     },

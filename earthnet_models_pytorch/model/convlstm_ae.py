@@ -181,7 +181,13 @@ class ConvLSTMAE(nn.Module):
         # encoding network
         for t in range(self.hparams.context_length):
             input = torch.cat((sentinel[:, t, ...], static), dim=1)
-            weather_t = weather[:, t, ...].repeat(1, 1, 128, 128)
+            # WARNING only for En23
+            weather_t = (
+                weather[:, t : t + 5, ...]
+                .view(weather.shape[0], 1, -1, 1, 1)
+                .squeeze(1)
+                .repeat(1, 1, 128, 128)
+            )
             input = torch.cat((input, weather_t), dim=1)
             # First block
             h_t, c_t = self.encoder_1_convlstm(input_tensor=input, cur_state=[h_t, c_t])
@@ -207,7 +213,12 @@ class ConvLSTMAE(nn.Module):
             pred_previous = torch.clone(pred)
 
             # Input
-            weather_t = weather[:, c_l + t, ...].repeat(1, 1, 128, 128)
+            weather_t = (
+                weather[:, c_l + t : c_l + t + 5, ...]
+                .view(weather.shape[0], 1, -1, 1, 1)
+                .squeeze(1)
+                .repeat(1, 1, 128, 128)
+            )
             pred = torch.cat((pred, static), dim=1)
             pred = torch.cat((pred, weather_t), dim=1)
             # first block
