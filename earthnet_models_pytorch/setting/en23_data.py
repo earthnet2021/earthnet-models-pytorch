@@ -7,11 +7,12 @@ import re
 import sys
 import pandas as pd
 from pathlib import Path
-
+import glob
 import numpy as np
 import pytorch_lightning as pl
 import torch
 import xarray as xr
+import os
 
 from torch.utils.data import Dataset, DataLoader, random_split
 
@@ -205,10 +206,11 @@ class EarthNet2023Dataset(Dataset):
         # Final minicube
         data = {
             "dynamic": [
-                torch.from_numpy(satellite_data)[
-                    20 : 20 + 10, ...
-                ],  # ATTENTION truncature to try to accelerate the training.
-                torch.from_numpy(meteo_cube)[20 * 5 : 20 * 5 + 10 * 5, ...],
+                torch.from_numpy(satellite_data),
+                #[
+                #    20 : 20 + 20 + 10, ...
+                #],  # ATTENTION truncature to try to accelerate the training.
+                torch.from_numpy(meteo_cube), #[20 * 5 : 20 * 5 + 20 * 5 + 10 * 5, ...],
             ],
             "dynamic_mask": [torch.from_numpy(s2_mask)],
             "static": [torch.from_numpy(topography)],

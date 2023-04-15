@@ -45,8 +45,8 @@ Task:
         ndvi_targ_idx: 0
         pred_mask_value: -1
         scale_by_std: False
-    context_length: 20
-    target_length: 10
+    context_length: 60
+    target_length: 30
     n_stochastic_preds: 1
     optimization:
         optimizer:
