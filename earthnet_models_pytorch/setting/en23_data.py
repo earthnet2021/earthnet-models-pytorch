@@ -13,7 +13,7 @@ import pytorch_lightning as pl
 import torch
 import xarray as xr
 import os
-
+import random
 from torch.utils.data import Dataset, DataLoader, random_split
 
 from earthnet_models_pytorch.utils import str2bool
@@ -111,34 +111,33 @@ class EarthNet2023Dataset(Dataset):
         self.variables = variables
 
     def __getitem__(self, idx: int) -> dict:
+
+        # Open the minicube
         filepath = self.filepaths[idx]
         minicube = xr.open_dataset(filepath)
 
+        # Select the days with available data
         s2_avail = np.squeeze(minicube[self.variables["s2_avail"]].to_array(), axis=0)
 
         # s2 is every 5 days
         t_len = s2_avail.shape[0]
-        time = [i for i in range(4, t_len, 5)]
+        # time = [i for i in range(4, t_len, 5)]
+        time = np.where(minicube.s2_avail.values == 1)[0]
+        
+        # TEST set to fix!
+        # beg = random.choice(range(100, len(time) - 90))
+        # time = np.array([i for i in range(beg, beg + 450, 5)])
 
-        # index_avail = np.where(s2_avail.values.astype(self.type) == 1)[0]
-        # if index_avail[0] % 5 != 4:
-        #    raise Exception(
-        #        "The first available imagery of sentinel-2 is not 4 + [5]"
-        #        + str(index_avail)
-        #    )
-
-        # Select the days with available data
-        # s2_avail = s2_avail.isel(time=time).values  # .astype(int)
 
         # Create the minicube
-        # s2 is 5 days, and already rescaled [0, 1]
+        # s2 is 10 to 5 days, and already rescaled [0, 1]
         s2_cube = (
             minicube[self.variables["s2_bands"]]
             .to_array()
             .isel(time=time)
             .values.transpose((1, 0, 2, 3))
             .astype(self.type)[:, :, :128, :128]
-        )  # (time, channels, w, h)
+        )  # shape: (time, channels, w, h)
 
         s2_mask = (
             minicube[self.variables["cloud_mask"]]
@@ -163,9 +162,9 @@ class EarthNet2023Dataset(Dataset):
         meteo_cube["era5_t2mmin"] = (meteo_cube["era5_t2mmin"] - 248) / (328 - 248)
         meteo_cube["era5_t2mmax"] = (meteo_cube["era5_t2mmax"] - 248) / (328 - 248)
 
-        meteo_cube = (
-            meteo_cube.to_array().values.transpose((1, 0)).astype(self.type)
-        )  # t, c
+        meteo_cube = (meteo_cube.to_array().values.transpose((1, 0)).astype(self.type))[
+            time[0] : time[-1] + 5, :
+        ]  # t, c
         meteo_cube[np.isnan(meteo_cube)] = 0
 
         # TODO NaN values are replaces by the mean of each variable.
@@ -207,10 +206,12 @@ class EarthNet2023Dataset(Dataset):
         data = {
             "dynamic": [
                 torch.from_numpy(satellite_data),
-                #[
+                # [
                 #    20 : 20 + 20 + 10, ...
-                #],  # ATTENTION truncature to try to accelerate the training.
-                torch.from_numpy(meteo_cube), #[20 * 5 : 20 * 5 + 20 * 5 + 10 * 5, ...],
+                # ],  # ATTENTION truncature to try to accelerate the training.
+                torch.from_numpy(
+                    meteo_cube
+                ),  # [20 * 5 : 20 * 5 + 20 * 5 + 10 * 5, ...],
             ],
             "dynamic_mask": [torch.from_numpy(s2_mask)],
             "static": [torch.from_numpy(topography)],
@@ -219,6 +220,7 @@ class EarthNet2023Dataset(Dataset):
             "landcover": torch.from_numpy(landcover),
             "filepath": str(filepath),
             "cubename": self.__name_getter(filepath),
+            "time": torch.from_numpy(time),
         }
 
         return data
@@ -246,6 +248,7 @@ class EarthNet2023Dataset(Dataset):
     def target_computation(self, minicube):
         """Compute the vegetation index (VI) target"""
         if self.target == "ndvi":
+
             targ = (minicube.s2_B8A - minicube.s2_B04) / (
                 minicube.s2_B8A + minicube.s2_B04 + 1e-6
             )
@@ -261,7 +264,18 @@ class EarthNet2023Dataset(Dataset):
                 ** 2
             ) / np.tanh(1)
 
-        # TODO add ndvi normalized, for each measurement, need to select the good month in ndviclim
+        if self.target == "anomalie_ndvi":
+            targ = (minicube.s2_B8A - minicube.s2_B04) / (
+                minicube.s2_B8A + minicube.s2_B04 + 1e-6
+            )
+            for i in range(1, 13):
+                indices = targ.groupby("time.month").groups[i]
+                index_month = minicube.ndviclim_mean.groupby("time_clim.month").groups[
+                    i
+                ]
+                targ[indices] = (
+                    targ[indices].values - minicube.ndviclim_mean[index_month].values
+                )
         return targ
 
 

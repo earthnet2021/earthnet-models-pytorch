@@ -235,7 +235,7 @@ class ConvLSTMAE(nn.Module):
                 pred = pred + pred_previous
 
             # Output
-            pred = self.activation_output(pred)
+            pred = (self.activation_output(pred) - 0.5) * 2
             output += [pred.unsqueeze(1)]
 
         output = torch.cat(output, dim=1)  # .unsqueeze(2)

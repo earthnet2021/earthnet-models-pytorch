@@ -463,24 +463,66 @@ class SpatioTemporalTask(pl.LightningModule):
                     # pred_cube.to_netcdf(pred_path)
 
                 else:
+
                     cubename = batch["cubename"][j]
                     cube_dir = self.pred_dir / cubename[:5]
                     cube_dir.mkdir(parents=True, exist_ok=True)
                     cube_path = cube_dir / f"pred{i+1}_{cubename}"
-                    np.savez_compressed(
-                        cube_path,
-                        highresdynamic=preds[j, ...]
-                        .permute(2, 3, 1, 0)
-                        .detach()
-                        .cpu()
-                        .numpy()
+
+                    targ_path = Path(batch["filepath"][j])
+                    targ_cube = xr.open_dataset(targ_path)
+                    lon = targ_cube["lon"].values
+                    lat = targ_cube["lat"].values
+                    hrd = (
+                        preds[j, :, 0, ...].permute(1, 2, 0).detach().cpu().numpy()
                         if "full" not in aux
                         else aux["full"][j, ...]
                         .permute(2, 3, 1, 0)
                         .detach()
                         .cpu()
-                        .numpy(),
+                        .numpy()
                     )
+                    pred_cube = xr.Dataset(
+                        {
+                            "ndvi_pred": xr.DataArray(
+                                data=hrd,
+                                coords={
+                                    "time": targ_cube.time.isel(
+                                        time=batch["time"][
+                                            j,
+                                            self.context_length : self.context_length
+                                            + self.target_length,
+                                        ]
+                                        .detach()
+                                        .cpu()
+                                    ),
+                                    "latitude": lat,
+                                    "longitude": lon,
+                                },
+                                dims=["latitude", "longitude", "time"],
+                            )
+                        }
+                    )
+                    if not cube_path.is_file():
+                        pred_cube.to_netcdf(
+                            cube_path,
+                            encoding={"ndvi_pred": {"dtype": "float32"}},
+                        )
+
+                    # np.savez_compressed(
+                    #     cube_path,
+                    #     highresdynamic=preds[j, ...]
+                    #     .permute(2, 3, 1, 0)
+                    #     .detach()
+                    #     .cpu()
+                    #     .numpy()
+                    #     if "full" not in aux
+                    #     else aux["full"][j, ...]
+                    #     .permute(2, 3, 1, 0)
+                    #     .detach()
+                    #     .cpu()
+                    #     .numpy(),
+                    # )
 
             if self.hparams.compute_metric_on_test:
                 self.metric.compute_on_step = True
