@@ -2,6 +2,7 @@
 from typing import Optional, Union
 
 import abc
+import math
 
 class WeightShedule:
     def __init__(self, initial_weight = 0, increase_from_step = 4000, weight_step = 1e-10, max_weight = 1, decreasing = False):
@@ -37,5 +38,33 @@ class CyclicShedule:
                 self.value = self.min_value
         return self.value
 
+class ReverseSheduleSamplingExp:
+    def __init__(self, r_sampling_step_1 = 25000, r_sampling_step_2 = 50000, r_exp_alpha = 2500):
+        self.r_sampling_step_1 = r_sampling_step_1
+        self.r_sampling_step_2 = r_sampling_step_2
+        self.r_exp_alpha = r_exp_alpha
 
-SHEDULERS = {"cyclic": CyclicShedule, "linear": WeightShedule}
+    def __call__(self, current_step = None):
+
+        if current_step:
+            if current_step < self.r_sampling_step_1:
+                r_eta = 0.5
+            elif current_step < self.r_sampling_step_2:
+                r_eta = 1.0 - 0.5 * math.exp(-float(current_step - self.r_sampling_step_1) / self.r_exp_alpha)
+            else:
+                r_eta = 1.0
+
+            if current_step < self.r_sampling_step_1:
+                eta = 0.5
+            elif current_step < self.r_sampling_step_2:
+                eta = 0.5 - (0.5 / (self.r_sampling_step_2 - self.r_sampling_step_1)) * (current_step - self.r_sampling_step_1)
+            else:
+                eta = 0.0
+        else:
+            r_eta = 1.0
+            eta = 0.0
+
+        return r_eta, eta
+
+
+SHEDULERS = {"cyclic": CyclicShedule, "linear": WeightShedule, "reverse_exp": ReverseSheduleSamplingExp}

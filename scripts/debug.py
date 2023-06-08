@@ -13,6 +13,7 @@ import copy
 import sys 
 import torch
 import pytorch_lightning as pl
+from pytorch_lightning.strategies import DDPStrategy
 
 from earthnet_models_pytorch.model import MODELS, MODELTASKS
 from earthnet_models_pytorch.setting import DATASETS
@@ -49,8 +50,9 @@ def fast_dev_run(setting_dict: dict):
     # Trainer
     trainer_dict = setting_dict["Trainer"]
     trainer_dict["logger"] = False
+    # trainer_dict["strategy"]=DDPStrategy(find_unused_parameters=False)
     trainer_dict["fast_dev_run"] = 2  # number of batch
-    trainer_dict["log_gpu_memory"] = 'all'
+    #trainer_dict["log_gpu_memory"] = 'all'
     if "profiler" in trainer_dict:
         trainer_dict["profiler"] = pl.profiler.AdvancedProfiler(output_filename="curr_profile") #TODO better output filename...  # performance analysis
 
@@ -103,6 +105,7 @@ def overfit_model(setting_dict: dict):
     trainer_dict["overfit_batches"] = 2  # Uses this much data of the training set.
     trainer_dict["check_val_every_n_epoch"] = 50  #Check val every n train epochs.
     trainer_dict["max_epochs"] = 10
+    # trainer_dict["strategy"]=DDPStrategy(find_unused_parameters=False)
     #trainer_dict["num_sanity_val_steps"] = 0  #Sanity check runs n batches of val before starting the training routine
     if "profiler" in trainer_dict:
         trainer_dict["profiler"] = pl.profiler.AdvancedProfiler(output_filename="curr_profile")

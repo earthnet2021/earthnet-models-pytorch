@@ -8,7 +8,7 @@ from torchmetrics import Metric
 
 class NNSEVeg(Metric):
     # Each state variable should be called using self.add_state(...)
-    def __init__(self, compute_on_step: bool = False, dist_sync_on_step: bool = False, process_group = None, dist_sync_fn = None, lc_min = 10., lc_max = 30., ndvi_pred_idx = 0, ndvi_targ_idx = 0):
+    def __init__(self, compute_on_step: bool = False, dist_sync_on_step: bool = False, process_group = None, dist_sync_fn = None, lc_min = 10., lc_max = 40., ndvi_pred_idx = 0, ndvi_targ_idx = 0):
         super().__init__(
             compute_on_step=compute_on_step,
             dist_sync_on_step=dist_sync_on_step,
@@ -53,7 +53,9 @@ class NNSEVeg(Metric):
         lc = batch["landcover"]
 
         s2_mask = (batch["dynamic_mask"][0][:,-t_pred:,...] < 1.).bool().type_as(preds)  # b t c h w
-        lc_mask = ((lc >= self.lc_min).bool() & (lc <= self.lc_max).bool()).type_as(preds)  # b c h w
+
+        #lc_mask = ((lc >= self.lc_min).bool() & (lc <= self.lc_max).bool()).type_as(preds)  # b c h w
+
 
         ndvi_targ = batch["dynamic"][0][:, -t_pred:, self.ndvi_targ_idx,...].unsqueeze(2) # b t c h w
 
@@ -66,6 +68,8 @@ class NNSEVeg(Metric):
         sum_squared_deviation = (((ndvi_targ - mean_ndvi_targ) * s2_mask)**2).sum(1)  # b c h w
 
         nse = (1 - sum_squared_error / (sum_squared_deviation + 1e-8))  # b c h w
+
+        lc_mask = ((lc >= self.lc_min).bool() & (lc <= self.lc_max).bool() & (ndvi_targ.min(1)[0] > 0.0) & (s2_mask.sum(1) >= 10) & (((sum_squared_deviation / s2_mask.sum(1))**0.5) > 0.1)).type_as(preds)  # b c h w
 
         nnse = (1 / (2 - nse)) * lc_mask  # b c h w
 
