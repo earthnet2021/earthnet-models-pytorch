@@ -15,6 +15,7 @@ from timm.models.layers import DropPath, to_2tuple, trunc_normal_
 from earthnet_models_pytorch.utils import str2bool
 from earthnet_models_pytorch.model.enc_dec_layer import get_encoder_decoder, ACTIVATIONS
 from earthnet_models_pytorch.model.conditioning_layer import Identity_Conditioning,Cat_Conditioning,Cat_Project_Conditioning,CrossAttention_Conditioning,FiLMBlock
+from earthnet_models_pytorch.model.layer_utils import inverse_permutation
 
 class Mlp(nn.Module):
     def __init__(self, in_features, hidden_features=None, out_features=None, act_layer=nn.GELU, drop=0.):
@@ -465,6 +466,9 @@ class SimVP(nn.Module):
         #     self.cond_after_enc = CrossAttention_Conditioning(proc_in_channels, self.hparams.weather_in_channels * self.hparams.target_length, n_tokens_c=self.n_tokens_c, hidden_dim = 16, n_heads = 16, act = self.hparams.encdec_act, norm = "layer", mlp_after_attn=self.hparams.mlp_after_attn)
         #     self.cond_after_proc = CrossAttention_Conditioning(proc_out_channels, self.hparams.weather_in_channels * self.hparams.target_length, n_tokens_c=self.n_tokens_c, hidden_dim = 16, n_heads = 16, act = self.hparams.encdec_act, norm = "layer", mlp_after_attn=self.hparams.mlp_after_attn)
 
+        if self.hparams.weather_conditioning_loc == "latent_proc":
+            enc_dec_proc_conditioning = self.hparams.weather_conditioning
+
         proc_in_channels = self.hparams.encdec_hid_channels * self.hparams.context_length
         proc_out_channels = self.hparams.encdec_hid_channels * self.hparams.target_length
 
@@ -507,6 +511,7 @@ class SimVP(nn.Module):
         parser.add_argument("--encdec_act", type = str, default = None)
         parser.add_argument("--encdec_readoutact", type = str, default = None)
         parser.add_argument("--mlp_after_attn", type = str2bool, default = False)
+        parser.add_argument("--spatial_shuffle", type = str2bool, default = False)
 
         return parser
 
@@ -520,7 +525,7 @@ class SimVP(nn.Module):
 
         B, T, C, H, W = hr_dynamic_inputs.shape
 
-        static_inputs = data["static"][0][:, :3, ...].unsqueeze(1).repeat(1, T, 1, 1, 1)
+        static_inputs = data["static"][0][:, :3, ...]#.unsqueeze(1).repeat(1, T, 1, 1, 1)
 
 
         meso_dynamic_inputs = data["dynamic"][1]#[:,c_l:,...]
@@ -534,10 +539,28 @@ class SimVP(nn.Module):
             meso_dynamic_inputs = meso_dynamic_inputs.reshape(B, t_m//5, 5, c_m, h_m, w_m).mean(2)[:,:,:,39:41,39:41].mean(-1).mean(-1)#.repeat(1, 1, 1, H, W)
 
 
+        if self.hparams.spatial_shuffle:
+            perm = torch.randperm(B*H*W, device=hr_dynamic_inputs.device)
+            invperm = inverse_permutation(perm)
+
+            meso_dynamic_inputs = meso_dynamic_inputs.unsqueeze(-1).unsqueeze(-1)
+            if meso_dynamic_inputs.shape[-1] == 1:
+                meso_dynamic_inputs = meso_dynamic_inputs.expand(-1, -1, -1, H,W)
+            else:
+                meso_dynamic_inputs = nn.functional.interpolate(meso_dynamic_inputs, size = (H,W), mode='nearest-exact')
+
+            hr_dynamic_inputs = hr_dynamic_inputs.permute(1, 2, 0, 3, 4).reshape(T,C, B*H*W)[:, :, perm].reshape(T, C, B, H, W).permute(2, 0, 1, 3, 4)
+            meso_dynamic_inputs = meso_dynamic_inputs.permute(1, 2, 0, 3, 4).reshape(t_m, c_m, B*H*W)[:, :, perm].reshape(t_m, c_m, B,H,W).permute(2, 0, 1, 3, 4).contiguous()
+            static_inputs = static_inputs.permute(1, 0, 2, 3).reshape(3, B*H*W)[:, perm].reshape(3, B,H,W).permute(1, 0, 2, 3)
+
+        static_inputs = static_inputs.unsqueeze(1).repeat(1, T, 1, 1, 1)
+
         x = torch.cat([hr_dynamic_inputs, static_inputs], dim = 2)
 
         if self.hparams.weather_conditioning == "xAttn":
             c = meso_dynamic_inputs.reshape(B, t_m, c_m//self.n_tokens_c, self.n_tokens_c).permute(0, 3, 1, 2).reshape(B, t_m * c_m)
+        elif self.hparams.spatial_shuffle:
+            c = meso_dynamic_inputs.reshape(B, t_m*c_m, H, W)
         else:
             c = meso_dynamic_inputs.reshape(B, t_m*c_m)
 
@@ -563,9 +586,12 @@ class SimVP(nn.Module):
         
         else:
             x = x.reshape(B*T, self.hparams.enc_in_channels, H, W)
-            c = c.unsqueeze(1).repeat(1, T, 1, 1, 1).reshape(B*T, t_m*c_m)
+            if not self.hparams.spatial_shuffle:
+                c = c.unsqueeze(1).repeat(1, T, 1, 1, 1).reshape(B*T, t_m*c_m)
 
-            x = self.early_conditioning(x, c)
+                x = self.early_conditioning(x, c)
+            else:
+                c = None
             
             embed, skips = self.enc(x, c)
             _, C_, H_, W_ = embed.shape
@@ -574,6 +600,8 @@ class SimVP(nn.Module):
 
         if self.hparams.weather_conditioning == "xAttn":
             c = meso_dynamic_inputs.reshape(B, t_m, c_m//self.n_tokens_c, self.n_tokens_c).permute(0, 3, 1, 2).reshape(B, t_m * c_m)
+        elif self.hparams.spatial_shuffle:
+            c = meso_dynamic_inputs.reshape(B, t_m*c_m, H, W)
         else:
             c = meso_dynamic_inputs.reshape(B, t_m*c_m)
 
@@ -618,6 +646,8 @@ class SimVP(nn.Module):
 
             if self.hparams.weather_conditioning == "xAttn":
                 c = meso_dynamic_inputs[:,-self.hparams.target_length:].reshape(B, self.hparams.target_length, c_m//self.n_tokens_c, self.n_tokens_c).permute(0, 3, 1, 2).reshape(B*self.hparams.target_length,c_m)
+            elif self.hparams.spatial_shuffle:
+                c = None
             else:
                 c = meso_dynamic_inputs[:,-self.hparams.target_length:].reshape(B*self.hparams.target_length,c_m)
 
@@ -625,6 +655,8 @@ class SimVP(nn.Module):
             Y = self.dec(hid, skips, c) 
             Y = Y.reshape(B, self.hparams.target_length, self.hparams.dec_out_channels, H, W)
 
+        if self.hparams.spatial_shuffle:
+            Y = Y.permute(1, 2, 0, 3, 4).reshape(self.hparams.target_length, self.hparams.dec_out_channels, B*H*W)[:, :, invperm].reshape(self.hparams.target_length, self.hparams.dec_out_channels, B,H,W).permute(2, 0, 1, 3, 4)
 
         return Y, {}
     

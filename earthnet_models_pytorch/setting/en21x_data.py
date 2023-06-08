@@ -26,7 +26,7 @@ class EarthNet2021XDataset(Dataset):
         if not isinstance(folder, Path):
             folder = Path(folder)
 
-        if allow_fastaccess and (folder.stem in ["train", "test_chopped", "iid_chopped", "ood-t_chopped", "ood-st_chopped", "ood-s_chopped", "iid"]) and (folder.parent/f"{folder.stem}_fastaccess").exists():
+        if allow_fastaccess and (folder.stem in ["train", "test_chopped", "iid_chopped", "ood-t_chopped", "ood-st_chopped", "ood-s_chopped", "iid", "val_chopped", "flux_chopped"]) and (folder.parent/f"{folder.stem}_fastaccess").exists():
             folder = folder.parent/f"{folder.stem}_fastaccess"
             print("Fast Access Dataloading enabled")
             self.fast_access = True
@@ -198,10 +198,7 @@ class EarthNet2021XDataModule(pl.LightningDataModule):
 
             if self.hparams.new_valset:
                 self.earthnet_train = EarthNet2021XDataset(self.base_dir/"train", fp16 = self.hparams.fp16, dl_cloudmask = self.hparams.dl_cloudmask, allow_fastaccess = self.hparams.allow_fastaccess)
-                valcorpus = EarthNet2021XDataset("/Net/Groups/BGI/work_1/scratch/EarthNet2021/data/datasets/en21x/test_chopped/", fp16 = self.hparams.fp16, dl_cloudmask = self.hparams.dl_cloudmask, allow_fastaccess = False)
-                val_size = 1000
-                train_size = len(valcorpus) - val_size
-                _, self.earthnet_val = random_split(valcorpus, [train_size, val_size], generator=torch.Generator().manual_seed(int(self.hparams.val_split_seed)))
+                self.earthnet_val = EarthNet2021XDataset(self.base_dir/"ood-t_chopped/", fp16 = self.hparams.fp16, dl_cloudmask = self.hparams.dl_cloudmask, allow_fastaccess = self.hparams.allow_fastaccess)
             else:
                 earthnet_corpus = EarthNet2021XDataset(self.base_dir/"train", fp16 = self.hparams.fp16, dl_cloudmask = self.hparams.dl_cloudmask, allow_fastaccess = self.hparams.allow_fastaccess)
 

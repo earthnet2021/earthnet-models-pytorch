@@ -13,6 +13,7 @@ import torch.nn.functional as F
 from earthnet_models_pytorch.utils import str2bool
 from earthnet_models_pytorch.model.enc_dec_layer import get_encoder_decoder, ACTIVATIONS
 from earthnet_models_pytorch.model.conditioning_layer import Identity_Conditioning,Cat_Conditioning,Cat_Project_Conditioning,CrossAttention_Conditioning,FiLMBlock
+from earthnet_models_pytorch.model.layer_utils import inverse_permutation
 
 class SpatioTemporalLSTMCell(nn.Module):
     def __init__(self, in_channel, num_hidden, width, filter_size, stride, layer_norm, conditioning = None, condition_x_not_h = False, c_channels = None,n_tokens_c = 8):
@@ -259,6 +260,7 @@ class PredRNN(nn.Module):
         parser.add_argument("--encdec_act", type = str, default = None)
         parser.add_argument("--encdec_readoutact", type = str, default = None)
         parser.add_argument("--mlp_after_attn", type = str2bool, default = False)
+        parser.add_argument("--spatial_shuffle", type = str2bool, default = False)
 
         return parser
 
@@ -287,11 +289,27 @@ class PredRNN(nn.Module):
 
             meso_dynamic_inputs = meso_dynamic_inputs.reshape(b, t_m//5, 5, c_m, h_m, w_m).mean(2)[:,:,:,39:41,39:41]#.repeat(1, 1, 1, self.width, self.width)
 
+
+        if self.hparams.spatial_shuffle:
+            perm = torch.randperm(b*h*w, device=hr_dynamic_inputs.device)
+            invperm = inverse_permutation(perm)
+
+            if meso_dynamic_inputs.shape[-1] == 1:
+                meso_dynamic_inputs = meso_dynamic_inputs.expand(-1, -1, -1, h, w)
+            else:
+                meso_dynamic_inputs = nn.functional.interpolate(meso_dynamic_inputs, size = (h, w), mode='nearest-exact')
+
+            hr_dynamic_inputs = hr_dynamic_inputs.permute(1, 2, 0, 3, 4).reshape(t,c, b*h*w)[:, :, perm].reshape(t, c, b, h, w).permute(2, 0, 1, 3, 4)
+            meso_dynamic_inputs = meso_dynamic_inputs.permute(1, 2, 0, 3, 4).reshape(t_m, c_m, b*h*w)[:, :, perm].reshape(t_m, c_m, b,h,w).permute(2, 0, 1, 3, 4).contiguous()
+            static_inputs = static_inputs.permute(1, 0, 2, 3).reshape(3, b*h*w)[:, perm].reshape(3, b,h,w).permute(1, 0, 2, 3)
+
+
         # [batch, length, height, width, channel] -> [batch, length, channel, height, width]
         #frames = all_frames.permute(0, 1, 4, 2, 3).contiguous()
         input_frames = hr_dynamic_inputs.contiguous()#frames[:, :, :self.hparams.num_inputs, :, :]
         input_actions = meso_dynamic_inputs.contiguous()#frames[:, :, self.hparams.num_inputs:, :, :]
         #mask_true = mask_true.permute(0, 1, 4, 2, 3).contiguous()
+
 
         next_frames = []
         h_t = []
@@ -335,7 +353,7 @@ class PredRNN(nn.Module):
             action = input_actions[:, i+1]
 
             if self.hparams.weather_conditioning == "action":
-                action = self.action_conv_input1(action.repeat(1, 1, self.width, self.width))
+                action = self.action_conv_input1(action.expand(-1, -1, h, w))
                 action = self.relu(action)
                 action = self.action_conv_input2(action)
 
@@ -394,4 +412,8 @@ class PredRNN(nn.Module):
         next_frames = torch.stack(next_frames, dim=0).permute(1, 0, 2, 3, 4).contiguous()[:, -self.hparams.target_length:, :1, ...]
         # loss = self.MSE_criterion(next_frames, all_frames[:, 1:, :, :, :next_frames.shape[4]]) + self.beta * decouple_loss
         # next_frames = next_frames[:, :, :, :, :self.hparams.num_inputs]
+
+        if self.hparams.spatial_shuffle:
+            next_frames = next_frames.permute(1, 2, 0, 3, 4).reshape(self.hparams.target_length, 1, b*h*w)[:, :, invperm].reshape(self.hparams.target_length, 1, b, h, w).permute(2, 0, 1, 3, 4)
+
         return next_frames, {"decouple_loss": decouple_loss}

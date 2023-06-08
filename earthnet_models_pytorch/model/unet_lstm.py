@@ -31,7 +31,10 @@ class UNetLSTM(nn.Module):
 
         self.embed_weather = MLP2d(self.hparams.n_weather_inputs, self.hparams.hid_channels, self.hparams.hid_channels, act = self.hparams.act)
 
-        self.lstm = nn.LSTM(self.hparams.hid_channels, self.hparams.hid_channels, self.hparams.n_lstm_layers, batch_first = True)
+        if self.hparams.use_gru:
+            self.gru = nn.GRU(self.hparams.hid_channels, self.hparams.hid_channels, self.hparams.n_lstm_layers, batch_first = True)
+        else:
+            self.lstm = nn.LSTM(self.hparams.hid_channels, self.hparams.hid_channels, self.hparams.n_lstm_layers, batch_first = True)
 
         self.spatial_head = nn.Conv2d(self.hparams.hid_channels * 2 * self.hparams.n_lstm_layers, self.hparams.hid_channels, 1, stride=1, padding=0, bias=False)
 
@@ -70,7 +73,7 @@ class UNetLSTM(nn.Module):
         parser.add_argument("--lc_max", type = int, default = 40)     
         parser.add_argument("--train_lstm_npixels", type = int, default = 512)
         parser.add_argument("--val_n_splits", type = int, default = 32)
-
+        parser.add_argument("--use_gru", type = str2bool, default = False)
 
         return parser
 
@@ -150,7 +153,10 @@ class UNetLSTM(nn.Module):
             h0 = h0[:, idxs, ...]
             c0 = c0[:, idxs, ...]
             
-            output, (hn, cn) = self.lstm(c, (h0, c0))
+            if self.hparams.use_gru:
+                output, _  = self.gru(c, h0)
+            else:
+                output, (hn, cn) = self.lstm(c, (h0, c0))
 
             tmp_out = -2*torch.ones((B*H*W, t_m, self.hparams.hid_channels)).type_as(output)
             tmp_out[idxs, :, :] = output
@@ -162,7 +168,10 @@ class UNetLSTM(nn.Module):
             c0 = torch.chunk(c0, self.hparams.val_n_splits, dim = 1)
             c = torch.chunk(c, self.hparams.val_n_splits, dim = 0)
             for i in range(self.hparams.val_n_splits):
-                out_arr.append(self.lstm(c[i].contiguous(),(h0[i].contiguous(), c0[i].contiguous()))[0])
+                if self.hparams.use_gru:
+                    out_arr.append(self.gru(c[i].contiguous(),h0[i].contiguous())[0])
+                else:
+                    out_arr.append(self.lstm(c[i].contiguous(),(h0[i].contiguous(), c0[i].contiguous()))[0])
             output = torch.cat(out_arr, dim = 0)
 
         preds_tmp = output.reshape(B, H, W, t_m, self.hparams.hid_channels).permute(0, 3, 4, 1, 2)[:, -self.hparams.target_length:,...].reshape(B*self.hparams.target_length, self.hparams.hid_channels, H, W)

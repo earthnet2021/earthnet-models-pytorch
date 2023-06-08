@@ -162,7 +162,7 @@ class BaseLoss(nn.Module):
 
 class MaskedL2NDVILoss(nn.Module):
 
-    def __init__(self, min_lc = None, max_lc = None, ndvi_pred_idx = 0, ndvi_targ_idx = 0, pred_mask_value = None, scale_by_std = False, extra_aux_loss_term = None, extra_aux_loss_weight = 1, **kwargs):
+    def __init__(self, min_lc = None, max_lc = None, ndvi_pred_idx = 0, ndvi_targ_idx = 0, pred_mask_value = None, scale_by_std = False, weight_by_std = False, extra_aux_loss_term = None, extra_aux_loss_weight = 1, **kwargs):
         super().__init__()
         
         self.min_lc = min_lc if min_lc else 0
@@ -172,6 +172,7 @@ class MaskedL2NDVILoss(nn.Module):
         self.ndvi_targ_idx = ndvi_targ_idx
         self.pred_mask_value = pred_mask_value
         self.scale_by_std = scale_by_std
+        self.weight_by_std = weight_by_std
         if self.scale_by_std:
             print(f"Using Masked L2/Std NDVI Loss with Landcover boundaries ({self.min_lc, self.max_lc}).")
         else:
@@ -203,6 +204,10 @@ class MaskedL2NDVILoss(nn.Module):
             mean_ndvi_targ = (ndvi_targ[:, -t_pred:,...] * s2_mask).sum(1).unsqueeze(1) / (s2_mask.sum(1).unsqueeze(1) + 1e-8)  # b t c h w
             sum_squared_deviation = (((ndvi_targ[:, -t_pred:,...] - mean_ndvi_targ) * s2_mask)**2).sum(1)  # b c h w
             mse = sum_squared_error / sum_squared_deviation.clip(min = 0.01) # b c h w
+        elif self.weight_by_std:
+            mean_ndvi_targ = (ndvi_targ[:, -t_pred:,...] * s2_mask).sum(1).unsqueeze(1) / (s2_mask.sum(1).unsqueeze(1) + 1e-8)  # b t c h w
+            sum_squared_deviation = (((ndvi_targ[:, -t_pred:,...] - mean_ndvi_targ) * s2_mask)**2).sum(1)  # b c h w
+            mse = sum_squared_error * (((sum_squared_deviation/(s2_mask.sum(1)+1e-8))**0.5)/0.1).clip(min = 0.01, max = 100.0) # b c h w
 
         if self.pred_mask_value:
             pred_mask = (ndvi_pred != self.pred_mask_value).bool().type_as(preds).max(1)[0]

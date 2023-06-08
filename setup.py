@@ -39,7 +39,7 @@ setup(name='earthnet-models-pytorch',
                 "License :: OSI Approved :: MIT License",
                 "Programming Language :: Python :: 3"
                  ],
-        packages=find_packages(),
+        packages=["earthnet_models_pytorch"],#find_packages(),
         scripts=scripts,
         install_requires=install_requires,
         )

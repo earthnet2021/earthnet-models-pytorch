@@ -24,7 +24,7 @@ conda create -n emp python=3.10
 conda activate emp
 conda install -c conda-forge mamba
 mamba install -c pytorch -c conda-forge pytorch torchvision torchaudio cudatoolkit=11.3 tensorboard
-mamba install -c conda-forge numpy matplotlib pillow xarray zarr netcdf4
+mamba install -c conda-forge numpy matplotlib pillow xarray zarr netcdf4 scipy imageio networkx scikit-image s3fs pyproj pyarrow seaborn cartopy
 pip install pytorch-lightning earthnet segmentation-models-pytorch
 ```
 

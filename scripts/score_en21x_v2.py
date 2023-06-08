@@ -6,6 +6,9 @@ import pandas as pd
 import xarray as xr
 import dask.dataframe as dd
 
+from scipy.stats import wilcoxon
+from statsmodels.stats.descriptivestats import sign_test
+
 from pathlib import Path
 from tqdm import tqdm
 
@@ -28,7 +31,7 @@ def compute_metrics(targ, pred, name_ndvi_pred = "ndvi_pred", subset_hq = True):
 
     targ_ndvi_full = ((nir - red) / (nir + red + 1e-8)).where(mask_full == 1, np.NaN).clip(-1, 1)
     targ_ndvi = targ_ndvi_full.sel(time = pred.time)
-    pred_ndvi = pred[name_ndvi_pred].clip(-1, 1)
+    pred_ndvi = pred[name_ndvi_pred].clip(-1, 1).fillna(0.5)
 
 
     mse = ((targ_ndvi - pred_ndvi)**2).mean("time")
@@ -105,10 +108,11 @@ def score_over_dataset(testset_dir, pred_dir, score_dir, name_ndvi_pred = "ndvi_
         for targetfile in targetfiles:
             cubename = targetfile.name
             predfile = pred_dir/region/cubename
-            predfiles.append(predfile)
-            inputargs.append([targetfile, predfile, name_ndvi_pred])
-        
-        
+            if predfile.is_file():
+                predfiles.append(predfile)
+                inputargs.append([targetfile, predfile, name_ndvi_pred])
+            
+            
 
         with ProcessPoolExecutor(max_workers = num_workers) as pool:
             if verbose:
@@ -127,13 +131,13 @@ def score_over_dataset(testset_dir, pred_dir, score_dir, name_ndvi_pred = "ndvi_
 
     return
 
-def summarize_scores(score_dir, verbose = True):
+def summarize_scores(score_dir, compare_dir = None, verbose = True):
     score_dir = Path(score_dir)
     df = dd.read_parquet(score_dir/"scores_en21x_*.parquet")
-    nnse_per_landcover = (df.groupby(["landcover"])["nnse"].mean()).compute()
-    rmse_per_landcover = (df.groupby(["landcover"])["rmse"].mean()).compute()
-    R2_per_landcover = (df.groupby(["landcover"])["r"].apply(lambda x: (x**2).mean(), meta = ("R2", float))).compute()
-    biasabs_per_landcover = (df.groupby(["landcover"])["bias"].apply(lambda x: x.abs().mean(), meta = ("biasabs", float))).compute()
+    nnse_per_landcover = (df.groupby(["id", "landcover"])["nnse"].mean()).compute().groupby(["landcover"]).mean()
+    rmse_per_landcover = (df.groupby(["id", "landcover"])["rmse"].mean()).compute().groupby(["landcover"]).mean()
+    R2_per_landcover = (df.groupby(["id", "landcover"])["r"].apply(lambda x: (x**2).mean(), meta = ("R2", float))).compute().groupby(["landcover"]).mean()
+    biasabs_per_landcover = (df.groupby(["id", "landcover"])["bias"].apply(lambda x: x.abs().mean(), meta = ("biasabs", float))).compute().groupby(["landcover"]).mean()
     metrics = {
         "nse": 2- 1/nnse_per_landcover.mean(),
         "rmse": rmse_per_landcover.mean(),
@@ -145,8 +149,39 @@ def summarize_scores(score_dir, verbose = True):
         metrics[f"rmse_{landcover}"] = rmse_per_landcover.loc[lc_val]
         metrics[f"R2_{landcover}"] = R2_per_landcover.loc[lc_val]
         metrics[f"biasabs_{landcover}"] = biasabs_per_landcover.loc[lc_val]
+
+    metrics["rmse_0_5"] = (df.groupby(["id", "landcover"])["rmse_0_5"].mean()).compute().groupby(["landcover"]).mean().mean()
+    metrics["rmse_5_10"] = (df.groupby(["id", "landcover"])["rmse_5_10"].mean()).compute().groupby(["landcover"]).mean().mean()
+    metrics["rmse_10_15"] = (df.groupby(["id", "landcover"])["rmse_10_15"].mean()).compute().groupby(["landcover"]).mean().mean()
+    metrics["rmse_15_20"] = (df.groupby(["id", "landcover"])["rmse_15_20"].mean()).compute().groupby(["landcover"]).mean().mean()
+
+    if compare_dir:
+        compare_dir = Path(compare_dir)
+        df_compare = dd.read_parquet(compare_dir/"scores_en21x_*.parquet")
+        dff = df[["lat", "lon", "id", "season", "landcover", "nnse", "r", "rmse", "bias"]].compute()
+        dff_compare = df_compare[["lat", "lon", "id", "season", "landcover", "nnse", "r", "rmse", "bias"]].compute()
+        gain_nnse = -1/dff.set_index(["lon", "lat", "id", "season", "landcover"]).nnse + 1/dff_compare.set_index(["lon", "lat", "id", "season", "landcover"]).nnse
+        gain_R2 = (dff.set_index(["lon", "lat", "id", "season", "landcover"]).r**2)  - (dff_compare.set_index(["lon", "lat", "id", "season", "landcover"]).r**2)
+        gain_rmse = dff_compare.set_index(["lon", "lat", "id", "season", "landcover"]).rmse - dff.set_index(["lon", "lat", "id", "season", "landcover"]).rmse
+        gain_biasabs = dff_compare.set_index(["lon", "lat", "id", "season", "landcover"]).bias.abs() - dff.set_index(["lon", "lat", "id", "season", "landcover"]).bias.abs()
+
+        for metric_name, metric_df in zip(["nnse", "R2", "rmse", "biasabs"], [gain_nnse, gain_R2, gain_rmse, gain_biasabs]):
+
+            metrics[f"gain_{metric_name}_mean"] = metric_df.groupby(["id", "landcover"]).mean().groupby("landcover").mean().mean()
+            metrics[f"gain_{metric_name}_std"] = metric_df.groupby(["id", "landcover"]).mean().groupby("landcover").std().mean()
+            metrics[f"gain_{metric_name}_q25"] = metric_df.groupby(["id", "landcover"]).mean().groupby("landcover").quantile(0.25).mean()
+            metrics[f"gain_{metric_name}_q50"] = metric_df.groupby(["id", "landcover"]).mean().groupby("landcover").quantile(0.50).mean()
+            metrics[f"gain_{metric_name}_q75"] = metric_df.groupby(["id", "landcover"]).mean().groupby("landcover").quantile(0.75).mean()
+            metrics[f"gain_{metric_name}_p_wilcoxon"] = wilcoxon(metric_df, alternative = "greater")[1]
+            metrics[f"gain_{metric_name}_p_sign"] = sign_test(metric_df)[1]
+        
+        metrics[f"gain_outperform"] = (((gain_rmse.groupby(["id", "landcover"]).mean() > 0.01).astype(float) + (gain_nnse.groupby(["id", "landcover"]).mean() > 0.05).astype(float) + (gain_R2.groupby(["id", "landcover"]).mean() > 0.05).astype(float) + (gain_biasabs.groupby(["id", "landcover"]).mean() > 0.01).astype(float)) > 2).mean()
+
+
+
     pd.DataFrame.from_dict(metrics, orient = "index").to_csv(score_dir/"metrics_en21x.csv")
     if verbose:
+        print(score_dir)
         print(metrics)
     return metrics
 
@@ -156,8 +191,11 @@ if __name__ == "__main__":
     parser.add_argument('testset_dir', type = str)
     parser.add_argument('pred_dir', type = str)
     parser.add_argument('score_dir', type = str)
+    parser.add_argument('--compare_dir', type = str, default = "experiments/en21x/climatology/scores_loo/")
     
     args = parser.parse_args()
 
     score_over_dataset(testset_dir=args.testset_dir, pred_dir=args.pred_dir, score_dir=args.score_dir, verbose = True, num_workers=20)
-    summarize_scores(args.score_dir)
+
+    dataset = Path(args.score_dir).stem
+    summarize_scores(args.score_dir, compare_dir = Path(args.compare_dir)/f"{dataset}")
