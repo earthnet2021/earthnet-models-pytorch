@@ -55,7 +55,6 @@ class MaskedLoss(nn.Module):
                 (mask > 0).sum() + 1
             )  # (input, target, reduction: Specifies the reduction to apply to the output)
         elif self.distance_type == "L1":
-
             return F.l1_loss(predsmasked, targetsmasked, reduction="sum") / (
                 (mask > 0).sum() + 1
             )
@@ -221,11 +220,11 @@ class MaskedL2NDVILoss(nn.Module):
         self.extra_aux_loss_weight = extra_aux_loss_weight
 
     def forward(self, preds, batch, aux, current_step=None):
-
         t_pred = preds.shape[1]
 
         lc = batch["landcover"]
 
+        # Mask, False the data is missing
         s2_mask = (
             (batch["dynamic_mask"][0][:, -t_pred:, ...] < 1.0).bool().type_as(preds)
         )  # b t c h w
@@ -288,7 +287,6 @@ class MaskedL2NDVILoss(nn.Module):
 
 
 def setup_loss(args):
-
     if args["name"] == "MaskedL2NDVILoss":
         return MaskedL2NDVILoss(**args)
 

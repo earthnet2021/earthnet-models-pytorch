@@ -111,30 +111,31 @@ class EarthNet2023Dataset(Dataset):
         self.variables = variables
 
     def __getitem__(self, idx: int) -> dict:
-
         # Open the minicube
         filepath = self.filepaths[idx]
         minicube = xr.open_dataset(filepath)
 
         # Select the days with available data
-        s2_avail = np.squeeze(minicube[self.variables["s2_avail"]].to_array(), axis=0)
+        indexes_avail = np.where(minicube.s2_avail.values == 1)[0]
+        time = [minicube.time.values[i] for i in range(4, 450, 5)]
+        dates = [minicube.time.values[i] for i in (indexes_avail)]
+        # Condition to check that the every 5 days inclus all the dates available (+ missing day)
+        if not set(dates) <= set(time):
+            raise AssertionError("ERROR: time indexes ", filepath)
 
         # s2 is every 5 days
-        t_len = s2_avail.shape[0]
+        # t_len = s2_avail.shape[0]
         # time = [i for i in range(4, t_len, 5)]
-        time = np.where(minicube.s2_avail.values == 1)[0]
-        
         # TEST set to fix!
         # beg = random.choice(range(100, len(time) - 90))
         # time = np.array([i for i in range(beg, beg + 450, 5)])
-
 
         # Create the minicube
         # s2 is 10 to 5 days, and already rescaled [0, 1]
         s2_cube = (
             minicube[self.variables["s2_bands"]]
             .to_array()
-            .isel(time=time)
+            .sel(time=time)
             .values.transpose((1, 0, 2, 3))
             .astype(self.type)[:, :, :128, :128]
         )  # shape: (time, channels, w, h)
@@ -142,14 +143,14 @@ class EarthNet2023Dataset(Dataset):
         s2_mask = (
             minicube[self.variables["cloud_mask"]]
             .to_array()
-            .isel(time=time)
+            .sel(time=time)
             .values.transpose((1, 0, 2, 3))
             .astype(self.type)[:, :, :128, :128]
         )  # (time, 1, w, h)
 
         target = (
             self.target_computation(minicube)
-            .isel(time=time)
+            .sel(time=time)
             .values[:, None, ...]
             .astype(self.type)[:, :, :128, :128]
         )
@@ -161,10 +162,8 @@ class EarthNet2023Dataset(Dataset):
         meteo_cube["era5_t2m"] = (meteo_cube["era5_t2m"] - 248) / (328 - 248)
         meteo_cube["era5_t2mmin"] = (meteo_cube["era5_t2mmin"] - 248) / (328 - 248)
         meteo_cube["era5_t2mmax"] = (meteo_cube["era5_t2mmax"] - 248) / (328 - 248)
-
-        meteo_cube = (meteo_cube.to_array().values.transpose((1, 0)).astype(self.type))[
-            time[0] : time[-1] + 5, :
-        ]  # t, c
+  
+        meteo_cube = (meteo_cube.to_array().values.transpose((1, 0)).astype(self.type))
         meteo_cube[np.isnan(meteo_cube)] = 0
 
         # TODO NaN values are replaces by the mean of each variable.
@@ -220,9 +219,14 @@ class EarthNet2023Dataset(Dataset):
             "landcover": torch.from_numpy(landcover),
             "filepath": str(filepath),
             "cubename": self.__name_getter(filepath),
-            "time": torch.from_numpy(time),
+            #"time": torch.from_numpy(time),
         }
-
+        print(
+            data["dynamic"][0].shape,
+            data["dynamic"][1].shape,
+            data["dynamic_mask"][0].shape,
+            # data["time"][0].shape,
+         )
         return data
 
     def __len__(self) -> int:
@@ -248,14 +252,13 @@ class EarthNet2023Dataset(Dataset):
     def target_computation(self, minicube):
         """Compute the vegetation index (VI) target"""
         if self.target == "ndvi":
-
             targ = (minicube.s2_B8A - minicube.s2_B04) / (
                 minicube.s2_B8A + minicube.s2_B04 + 1e-6
             )
 
         if (
             self.target == "kndvi"
-        ):  # TODO the the denominator is not optimal, needs to be improved accordingly to the original paper
+        ):  # TODO the denominator is not optimal, needs to be improved accordingly to the original paper
             targ = np.tanh(
                 (
                     (minicube.s2_B08 - minicube.s2_B04)
