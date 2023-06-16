@@ -6,7 +6,6 @@ from earthnet_models_pytorch.model.simvp import SimVP
 from earthnet_models_pytorch.model.predrnn import PredRNN
 from earthnet_models_pytorch.model.convlstm import ConvLSTM
 from earthnet_models_pytorch.model.nextframe_resnet import NextFrameResNet
-from earthnet_models_pytorch.task import TASKS
 
 MODELS = {
     "local-rnn": LocalRNN,
@@ -19,30 +18,3 @@ MODELS = {
     "nf_resnet": NextFrameResNet,
 }
 
-MODELTASKS = {
-    "channel-u-net": TASKS["spatio-temporal"],
-    "local-rnn": TASKS["spatio-temporal"],
-    "rnn": TASKS["spatio-temporal"],
-    "convlstm_ae": TASKS["spatio-temporal"],
-    "u-net-convlstm": TASKS["spatio-temporal"],
-    "dumby-mlp": TASKS["spatio-temporal"],
-    "convlstm-lstm": TASKS["spatio-temporal"],
-    "simvp": TASKS["spatio-temporal"],
-    "predrnn": TASKS["spatio-temporal"],
-    "nf_resnet": TASKS["spatio-temporal"],
-    "convlstm": TASKS["spatio-temporal"],
-}
-
-MODELTASKNAMES = {
-    "channel-u-net": "spatio-temporal",
-    "local-rnn": "spatio-temporal",
-    "rnn": "spatio-temporal",
-    "context-convlstm": "spatio-temporal",
-    "u-net-convlstm": "spatio-temporal",
-    "dumby-mlp": "spatio-temporal",
-    "convlstm-lstm": "spatio-temporal",
-    "simvp": "spatio-temporal",
-    "predrnn": "spatio-temporal",
-    "nf_resnet": "spatio-temporal",
-    "convlstm": "spatio-temporal",
-}

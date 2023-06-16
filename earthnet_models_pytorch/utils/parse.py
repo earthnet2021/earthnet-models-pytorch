@@ -7,9 +7,8 @@ parse setting implements copying of global attributes to the particular subcateg
 from pathlib import Path
 import yaml
 import warnings
-from earthnet_models_pytorch.setting import SETTINGS, METRIC_CHECKPOINT_INFO
-from earthnet_models_pytorch.model import MODELS, MODELTASKNAMES
-#from earthnet_models_pytorch.task import TRACK_INFO
+from earthnet_models_pytorch.datamodule import SETTINGS, METRIC_CHECKPOINT_INFO
+from earthnet_models_pytorch.model import MODELS
 
 def parse_setting(setting_file, track = None):
 

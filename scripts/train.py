@@ -3,22 +3,18 @@
 """
 
 from argparse import ArgumentParser
-import shutil
 import os
 import time
 import yaml
-import sys
 
-# from torchsummary import summary
-import torch
 import pytorch_lightning as pl
-from pytorch_lightning.plugins import DDPPlugin
 from pytorch_lightning.callbacks import TQDMProgressBar
 
 
-from earthnet_models_pytorch.model import MODELS, MODELTASKS
+from earthnet_models_pytorch.model import MODELS
+from earthnet_models_pytorch.task.workflow import SpatioTemporalTask
 
-from earthnet_models_pytorch.setting import DATASETS
+from earthnet_models_pytorch.datamodule import DATASETS
 from earthnet_models_pytorch.utils import parse_setting
 
 
@@ -51,11 +47,11 @@ def train_model(setting_dict: dict, setting_file: str = None):
         "--{}={}".format(key, value) for key, value in setting_dict["Task"].items()
     ]
     task_parser = ArgumentParser()
-    task_parser = MODELTASKS[setting_dict["Architecture"]].add_task_specific_args(
+    task_parser = SpatioTemporalTask.add_task_specific_args(
         task_parser
     )
     task_params = task_parser.parse_args(task_args)
-    task = MODELTASKS[setting_dict["Architecture"]](model=model, hparams=task_params)
+    task = SpatioTemporalTask(model=model, hparams=task_params)
 
     # task.load_from_checkpoint(checkpoint_path = "experiments/en22/context-convlstm/baseline_convlstm_bigger/full_train/checkpoints/last.ckpt", context_length = setting_dict["Task"]["context_length"], target_length = setting_dict["Task"]["target_length"], model = model, hparams = task_params)
 
@@ -71,8 +67,7 @@ def train_model(setting_dict: dict, setting_file: str = None):
         with open(os.path.join(logger.log_dir, "setting.yaml"), "w") as fp:
             yaml.dump(setting_dict, fp)
 
-    # Checkpointing
-
+    # Checkpoint
     checkpoint_callback = pl.callbacks.ModelCheckpoint(**setting_dict["Checkpointer"])
 
     # Trainer

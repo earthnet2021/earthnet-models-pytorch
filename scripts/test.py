@@ -13,7 +13,7 @@ import pytorch_lightning as pl
 import json, sys
 
 from earthnet_models_pytorch.model import MODELS, MODELTASKS, MODELTASKNAMES
-from earthnet_models_pytorch.setting import DATASETS
+from earthnet_models_pytorch.datamodule import DATASETS
 from earthnet_models_pytorch.utils import parse_setting
 #from torchsummary import summary
 #from earthnet_models_pytorch.task import TRACK_INFO

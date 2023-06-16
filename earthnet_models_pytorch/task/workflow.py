@@ -15,20 +15,19 @@ import pytorch_lightning as pl
 
 from earthnet_models_pytorch.utils import str2bool, log_viz
 from earthnet_models_pytorch.task import setup_loss, SHEDULERS
-from earthnet_models_pytorch.setting import METRICS
+from earthnet_models_pytorch.metric import METRICS
 
 
 class SpatioTemporalTask(pl.LightningModule):
     def __init__(self, model: nn.Module, hparams: argparse.Namespace):
         super().__init__()
 
-        if hasattr(
-            self, "save_hyperparameters"
-        ):  # SpatioTemporalTask herite from the LightningModule
-            self.save_hyperparameters(copy.deepcopy(hparams))
+        if hasattr(self, "save_hyperparameters"):
+            self.save_hyperparameters(
+                copy.deepcopy(hparams)
+            )  # SpatioTemporalTask herite from the LightningModule, save the parameters in a file
         else:
             self.hparams = copy.deepcopy(hparams)
-        self.model = model
 
         if hparams.pred_dir is None:
             self.pred_dir = (
@@ -39,6 +38,7 @@ class SpatioTemporalTask(pl.LightningModule):
         else:
             self.pred_dir = Path(self.hparams.pred_dir)
 
+        self.model = model
         self.loss = setup_loss(hparams.loss)
 
         self.context_length = hparams.context_length
@@ -146,7 +146,7 @@ class SpatioTemporalTask(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         """compute and return the training loss and some additional metrics for e.g. the progress bar or logger"""
         kwargs = {}
-        for (shedule_name, shedule) in self.model_shedules:
+        for shedule_name, shedule in self.model_shedules:
             kwargs[shedule_name] = shedule(self.global_step)
 
         # Predictions generation
@@ -456,7 +456,6 @@ class SpatioTemporalTask(pl.LightningModule):
                     # pred_cube.to_netcdf(pred_path)
 
                 else:
-
                     cubename = batch["cubename"][j]
                     cube_dir = self.pred_dir / cubename[:5]
                     cube_dir.mkdir(parents=True, exist_ok=True)

@@ -15,7 +15,7 @@ import torch
 import pytorch_lightning as pl
 
 from earthnet_models_pytorch.model import MODELS, MODELTASKS
-from earthnet_models_pytorch.setting import DATASETS
+from earthnet_models_pytorch.datamodule import DATASETS
 from earthnet_models_pytorch.utils import parse_setting
 
 

@@ -5,8 +5,8 @@ import torch
 import os
 from pathlib import Path
 from earthnet_models_pytorch.model import MODELS
-from earthnet_models_pytorch.task.spatio_temporal import SpatioTemporalTask
-from earthnet_models_pytorch.setting import DATASETS
+from earthnet_models_pytorch.task.workflow import SpatioTemporalTask
+from earthnet_models_pytorch.datamodule import DATASETS
 
 # from earthnet_models_pytorch.setting import NormalizedNashSutcliffeEfficiency
 from earthnet_models_pytorch.utils import parse_setting

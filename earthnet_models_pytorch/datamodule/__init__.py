@@ -1,22 +1,11 @@
-from earthnet_models_pytorch.setting.en21_data import EarthNet2021DataModule
-from earthnet_models_pytorch.setting.en22_data import EarthNet2022DataModule
-from earthnet_models_pytorch.setting.en21x_data import EarthNet2021XDataModule
-from earthnet_models_pytorch.setting.en21x_data_old import (
+from earthnet_models_pytorch.datamodule.en21_data import EarthNet2021DataModule
+from earthnet_models_pytorch.datamodule.en22_data import EarthNet2022DataModule
+from earthnet_models_pytorch.datamodule.en21x_data import EarthNet2021XDataModule
+from earthnet_models_pytorch.datamodule.en21x_data_old import (
     EarthNet2021XOldDataModule,
     EarthNet2021XpxOldDataModule,
 )
-from earthnet_models_pytorch.setting.en23_data import EarthNet2023DataModule
-
-from earthnet_models_pytorch.setting.en21_std_metric import EarthNetScore
-from earthnet_models_pytorch.setting.en21_veg_metric import (
-    RootMeanSquaredError as RMSEVegScore,
-)
-from earthnet_models_pytorch.setting.en21_veg_metric import (
-    RMSE_ens21x,
-    RMSE_ens22,
-    RMSE_ens23,
-)
-from earthnet_models_pytorch.setting.nnse_metric import NNSEVeg
+from earthnet_models_pytorch.datamodule.en23_data import EarthNet2023DataModule
 
 SETTINGS = [
     "en21-std",
@@ -28,15 +17,7 @@ SETTINGS = [
     "en22",
     "en23",
 ]
-METRICS = {
-    "en21-std": EarthNetScore,
-    "en21-veg": RMSEVegScore,
-    "en21x": NNSEVeg,
-    "en21xold": RMSE_ens21x,
-    "en21x-pxold": RMSE_ens21x,
-    "en22": RMSE_ens22,
-    "en23": RMSE_ens23,
-}
+
 DATASETS = {
     "en21-std": EarthNet2021DataModule,
     "en21-veg": EarthNet2021DataModule,

@@ -149,10 +149,9 @@ class ConvLSTMAE(nn.Module):
         parser.add_argument("--skip_connections", type=str2bool, default=False)
         return parser
 
-    def forward(self, data, prediction_start: int = 0, n_preds: Optional[int] = None):
+    def forward(self, data, pred_start: int = 0, n_preds: Optional[int] = None):
 
-        context_length = self.hparams.context_length if self.training or (prediction_start < self.hparams.context_length) else prediction_start
-
+        context_length = self.hparams.context_length if self.training or (pred_start < self.hparams.context_length) else pred_start
 
         # k = torch.tensor([1])
         # TODO definir correctement la valeur de k + regarder shape decay k = max step ? + remove teacher forcing dans val et test
@@ -173,7 +172,6 @@ class ConvLSTMAE(nn.Module):
         h_t2, c_t2 = self.encoder_2_convlstm.init_hidden(
             batch_size=b, height=h, width=w
         )
-        (c_l - self.hparams.context_length):c_l
 
         output = []
 

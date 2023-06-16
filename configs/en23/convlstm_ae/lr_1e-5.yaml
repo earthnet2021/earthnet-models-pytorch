@@ -2,8 +2,10 @@ Architecture: "convlstm_ae"
 
 Seed: 42
 
+# Dataset setting
 Setting: "en23"
 
+# Logger for Tensorboard
 Logger:
     save_dir: "experiments/"
 
@@ -13,7 +15,7 @@ Checkpointer:
     every_n_epochs: 1
 
 Trainer:
-    gpus: 0
+    gpus: 1
     strategy: 'ddp_find_unused_parameters_false'
     #deterministic: True
     log_every_n_steps: 32
@@ -29,16 +31,19 @@ Trainer:
     #val_check_interval: 0.25
   
 Data:
-    base_dir: "/scratch/crobin/earthnet2023/" #"/workspace/data/s3/earthnet/earthnet2023/"
+    base_dir: "/workspace/data/s3/earthnet/earthnet2023/" #"/scratch/crobin/earthnet2023/" #
     test_track: "iid"
+    target: "ndvi"
+    # With a batch of size N, a DPP strategy with D devices, and accumulate_grad_batches = K, the effective batch size = K*D*N. 
+    # With a DP strategy, the effective batch size= K*N.
     train_batch_size: 4
     val_batch_size: 4
     test_batch_size: 4
-    num_workers: 4
+    num_workers: 4 # Common bottleneck during the training, increase until saturation. 
 
 Task:
     loss:
-        name: "MaskedL2NDVILoss"
+        name: "MaskedL2NDVILoss"  # loss computed with the non-vegetation pixels masked.
         min_lc: 40
         max_lc: 90
         ndvi_pred_idx: 0
@@ -57,10 +62,9 @@ Task:
                 lr_per_sample: 0.000001
         lr_shedule:
             -
-                name: MultiStepLR
+                name:  ExponentialLR  # ReduceLROnPlateau factor: 0.1, patience: 3
                 args:
-                    milestones: [160,190] #[2, 20, 50, 90]
-                    gamma: 0.1
+                    gamma: 0.99
     n_log_batches: 2
     compute_metric_on_test: True
 
