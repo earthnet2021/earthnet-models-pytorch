@@ -1,15 +1,7 @@
-import sys
-
-from typing import Optional, Union
-
 import torch
-import numpy as np
-
 from torch import nn
 import torch.nn.functional as F
 import torch.distributions as distrib
-
-from earthnet_models_pytorch.task.shedule import WeightShedule
 
 
 def make_normal_from_raw_params(raw_params, scale_stddev=1, dim=-1, eps=1e-8):
@@ -200,6 +192,109 @@ class MaskedL2NDVILoss(nn.Module):
     ):
         super().__init__()
 
+        self.min_lc = min_lc if min_lc else 0   # landcover boudaries of vegetation (to select only pixel with vegetation)
+        self.max_lc = max_lc if max_lc else 1000
+        self.use_lc = (min_lc != 0) & (max_lc != 1000)
+        self.ndvi_pred_idx = ndvi_pred_idx      # index of the NDVI band
+        self.ndvi_targ_idx = ndvi_targ_idx      # index of the NDVI band
+        self.pred_mask_value = pred_mask_value
+        self.scale_by_std = scale_by_std
+        if self.scale_by_std:
+            print(
+                f"Using Masked L2/Std NDVI Loss with Landcover boundaries ({self.min_lc, self.max_lc})."
+            )
+        else:
+            print(
+                f"Using Masked L2 NDVI Loss with Landcover boundaries ({self.min_lc, self.max_lc})."
+            )
+
+        self.extra_aux_loss_term = extra_aux_loss_term
+        self.extra_aux_loss_weight = extra_aux_loss_weight
+
+    def forward(self, preds, batch, aux, current_step=None):
+        t_pred = preds.shape[1]
+        # print("loss", t_pred)
+
+        lc = batch["landcover"]
+
+        # Mask, 
+
+        s2_mask = (
+            (batch["dynamic_mask"][0][:, -t_pred:, ...] < 1.0).bool().type_as(preds)
+        )  # b t c h w
+
+        lc_mask = ((lc >= self.min_lc).bool() & (lc <= self.max_lc).bool()).type_as(
+            preds
+        )  # b c h w
+        ndvi_targ = batch["dynamic"][0][:, :, self.ndvi_targ_idx, ...].unsqueeze(
+            2
+        )  # b t c h w
+
+        ndvi_pred = preds[:, :, self.ndvi_pred_idx, ...].unsqueeze(2)  # b t c h w
+        # print(s2_mask.shape, ndvi_pred.shape, ndvi_targ.shape)
+
+        sum_squared_error = (
+            ((ndvi_targ[:, -t_pred:, ...] - ndvi_pred) * s2_mask) ** 2
+        ).sum(
+            1
+        )  # b c h w
+
+        mse = sum_squared_error / (s2_mask.sum(1) + 1e-8)  # b c h w
+
+        if self.scale_by_std:
+            mean_ndvi_targ = (ndvi_targ[:, -t_pred:, ...] * s2_mask).sum(1).unsqueeze(
+                1
+            ) / (
+                s2_mask.sum(1).unsqueeze(1) + 1e-8
+            )  # b t c h w
+            sum_squared_deviation = (
+                ((ndvi_targ[:, -t_pred:, ...] - mean_ndvi_targ) * s2_mask) ** 2
+            ).sum(
+                1
+            )  # b c h w
+            mse = sum_squared_error / sum_squared_deviation.clip(
+                min=0.01
+            )  # mse b c h w
+
+        if self.pred_mask_value:  # what is that?
+            pred_mask = (
+                (ndvi_pred != self.pred_mask_value).bool().type_as(preds).max(1)[0]
+            )
+            mse_lc = (mse * lc_mask * pred_mask).sum() / (
+                (lc_mask * pred_mask).sum() + 1e-8
+            )
+        elif self.use_lc:
+            mse_lc = (mse * lc_mask).sum() / (lc_mask.sum() + 1e-8)
+        else:
+            mse_lc = mse.mean()
+
+        logs = {"loss": mse_lc}
+
+        if self.extra_aux_loss_term:
+            extra_loss = aux[self.extra_aux_loss_term]
+            logs["mse_lc"] = mse_lc
+            logs[self.extra_aux_loss_term] = extra_loss
+            mse_lc += self.extra_aux_loss_weight * extra_loss
+            logs["loss"] = mse_lc
+
+        return mse_lc, logs
+
+
+class MaskedL2NDVILoss_En23(nn.Module):
+    def __init__(
+        self,
+        min_lc=None,
+        max_lc=None,
+        ndvi_pred_idx=0,
+        ndvi_targ_idx=0,
+        pred_mask_value=None,
+        scale_by_std=False,
+        extra_aux_loss_term=None,
+        extra_aux_loss_weight=1,
+        **kwargs,
+    ):
+        super().__init__()
+
         self.min_lc = min_lc if min_lc else 0
         self.max_lc = max_lc if max_lc else 1000
         self.use_lc = (min_lc != 0) & (max_lc != 1000)
@@ -220,19 +315,22 @@ class MaskedL2NDVILoss(nn.Module):
         self.extra_aux_loss_weight = extra_aux_loss_weight
 
     def forward(self, preds, batch, aux, current_step=None):
+        print("loss")
         t_pred = preds.shape[1]
 
         lc = batch["landcover"]
 
-        # Mask, False the data is missing
+        # Mask, 
+
         s2_mask = (
             (batch["dynamic_mask"][0][:, -t_pred:, ...] < 1.0).bool().type_as(preds)
         )  # b t c h w
+        print(s2_mask.shape, print(t_pred))
 
         lc_mask = ((lc >= self.min_lc).bool() & (lc <= self.max_lc).bool()).type_as(
             preds
         )  # b c h w
-
+        print(self.ndvi_targ_idx)
         ndvi_targ = batch["dynamic"][0][:, :, self.ndvi_targ_idx, ...].unsqueeze(
             2
         )  # b t c h w
@@ -284,7 +382,6 @@ class MaskedL2NDVILoss(nn.Module):
             logs["loss"] = mse_lc
 
         return mse_lc, logs
-
 
 def setup_loss(args):
     if args["name"] == "MaskedL2NDVILoss":

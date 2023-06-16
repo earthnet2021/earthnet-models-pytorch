@@ -84,10 +84,6 @@ class ConvLSTMAE(nn.Module):
 
         self.hparams = hparams
 
-        # En22
-        # input_encoder = 21  # 4 s2 bands, 1 target, 15 weather variables, 1 topography
-        # input_decoder = 17  # 1 target, 15 weather variables, 1 topography
-
         self.encoder_1_convlstm = ConvLSTMCell(
             input_dim=self.hparams.num_inputs,
             hidden_dim=self.hparams.hidden_dim[0],
@@ -140,10 +136,9 @@ class ConvLSTMAE(nn.Module):
 
         parser = argparse.ArgumentParser(parents=parent_parser, add_help=False)
 
-        # parser.add_argument("--input_dim", type=int, default=6)
         parser.add_argument(
             "--hidden_dim", type=ast.literal_eval, default=[64, 64, 64, 64]
-        )  # TODO find a better type ? list(int)
+        )  
         parser.add_argument("--kernel_size", type=int, default=3)
         parser.add_argument("--bias", type=str2bool, default=True)
         parser.add_argument("--setting", type=str, default="en22")
@@ -154,8 +149,11 @@ class ConvLSTMAE(nn.Module):
         parser.add_argument("--skip_connections", type=str2bool, default=False)
         return parser
 
-    def forward(self, data, pred_start: int = 0, n_preds: Optional[int] = None):
-        c_l = self.hparams.context_length if self.training else pred_start
+    def forward(self, data, prediction_start: int = 0, n_preds: Optional[int] = None):
+
+        context_length = self.hparams.context_length if self.training or (prediction_start < self.hparams.context_length) else prediction_start
+
+
         # k = torch.tensor([1])
         # TODO definir correctement la valeur de k + regarder shape decay k = max step ? + remove teacher forcing dans val et test
         # teacher_forcing_decay = k / (k + torch.exp(step / k))
@@ -175,11 +173,12 @@ class ConvLSTMAE(nn.Module):
         h_t2, c_t2 = self.encoder_2_convlstm.init_hidden(
             batch_size=b, height=h, width=w
         )
+        (c_l - self.hparams.context_length):c_l
 
         output = []
 
-        # encoding network
-        for t in range(self.hparams.context_length):
+        # Encoding network
+        for t in range(context_length):
             input = torch.cat((sentinel[:, t, ...], static), dim=1)
             # WARNING only for En23
             weather_t = (
@@ -209,12 +208,12 @@ class ConvLSTMAE(nn.Module):
             # if teacher_forcing:
             #    pred = target[:, c_l + t, ...]
 
-            # for skip connection
+            # Skip connection
             pred_previous = torch.clone(pred)
 
             # Input
             weather_t = (
-                weather[:, c_l + t : c_l + t + 5, ...]
+                weather[:, context_length + t : context_length + t + 5, ...]
                 .view(weather.shape[0], 1, -1, 1, 1)
                 .squeeze(1)
                 .repeat(1, 1, 128, 128)
@@ -237,6 +236,5 @@ class ConvLSTMAE(nn.Module):
             # Output
             pred = (self.activation_output(pred) - 0.5) * 2
             output += [pred.unsqueeze(1)]
-
         output = torch.cat(output, dim=1)  # .unsqueeze(2)
         return output, {}

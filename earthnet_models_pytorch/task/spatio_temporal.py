@@ -1,24 +1,17 @@
 from typing import Optional, Union
+from pathlib import Path
 
 import argparse
 import ast
 import copy
 import json
-import sys
-
-import numpy as np
-import matplotlib.colors as clr
-import xarray as xr
-
 import torch
-import torchvision
+from torch import nn
+import numpy as np
+import xarray as xr
 
 import pytorch_lightning as pl
 
-from torch import nn
-
-from pathlib import Path
-import shutil
 
 from earthnet_models_pytorch.utils import str2bool, log_viz
 from earthnet_models_pytorch.task import setup_loss, SHEDULERS
@@ -131,9 +124,9 @@ class SpatioTemporalTask(pl.LightningModule):
         self, data, pred_start: int = 0, n_preds: Optional[int] = None, kwargs={}
     ):
         """
-        data is a dict with tensors
-        pred_start is the first index that shall be predicted, defaults to zero.
-        n_preds is the length of the prediction, could also be None.
+        data: dict with tensors
+        pred_start: first index that shall be predicted, defaults to zero.
+        n_preds: the number of predictions, used for statistical model, can also be None.
         kwargs are optional keyword arguments parsed to the model, right now these are model shedulers.
         """
         return self.model(data, pred_start=pred_start, n_preds=n_preds, **kwargs)

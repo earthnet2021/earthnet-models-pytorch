@@ -105,27 +105,29 @@ class EarthNet2023Dataset(Dataset):
     ):
         if not isinstance(folder, Path):
             folder = Path(folder)
-        self.filepaths = sorted(list(folder.glob("*/*.nc")))
+        self.filepaths = sorted(list(folder.glob("*.nc"))) if len(sorted(list(folder.glob("*.nc")))) > 0 else sorted(list(folder.glob("*/*.nc")))
         self.type = np.float16 if fp16 else np.float32
         self.target = target
         self.variables = variables
 
     def __getitem__(self, idx: int) -> dict:
+
         # Open the minicube
         filepath = self.filepaths[idx]
         minicube = xr.open_dataset(filepath)
 
         # Select the days with available data
         indexes_avail = np.where(minicube.s2_avail.values == 1)[0]
+        # s2 is every 5 days
         time = [minicube.time.values[i] for i in range(4, 450, 5)]
         dates = [minicube.time.values[i] for i in (indexes_avail)]
+
         # Condition to check that the every 5 days inclus all the dates available (+ missing day)
         if not set(dates) <= set(time):
-            raise AssertionError("ERROR: time indexes ", filepath)
+            raise AssertionError("ERROR: time indexes of the minicubes are not consistant ", filepath)
 
-        # s2 is every 5 days
-        # t_len = s2_avail.shape[0]
-        # time = [i for i in range(4, t_len, 5)]
+        
+
         # TEST set to fix!
         # beg = random.choice(range(100, len(time) - 90))
         # time = np.array([i for i in range(beg, beg + 450, 5)])
@@ -162,8 +164,8 @@ class EarthNet2023Dataset(Dataset):
         meteo_cube["era5_t2m"] = (meteo_cube["era5_t2m"] - 248) / (328 - 248)
         meteo_cube["era5_t2mmin"] = (meteo_cube["era5_t2mmin"] - 248) / (328 - 248)
         meteo_cube["era5_t2mmax"] = (meteo_cube["era5_t2mmax"] - 248) / (328 - 248)
-  
-        meteo_cube = (meteo_cube.to_array().values.transpose((1, 0)).astype(self.type))
+
+        meteo_cube = meteo_cube.to_array().values.transpose((1, 0)).astype(self.type)
         meteo_cube[np.isnan(meteo_cube)] = 0
 
         # TODO NaN values are replaces by the mean of each variable.
@@ -174,6 +176,8 @@ class EarthNet2023Dataset(Dataset):
         topography = (
             minicube[self.variables["elevation"]].to_array() / 2000
         )  # c h w, rescaling
+
+        # TODO  [:, :128, :128] and mean to remove?
         topography = topography.values.astype(self.type)[:, :128, :128]
         topography[np.isnan(topography)] = np.mean(
             topography
@@ -187,6 +191,7 @@ class EarthNet2023Dataset(Dataset):
 
         # TODO transform landcover in categoritcal variables if used for training
 
+        # TODO to remove?
         # NaN values handling
         s2_cube = np.where(np.isnan(s2_cube), np.zeros(1).astype(self.type), s2_cube)
         target = np.where(np.isnan(target), np.zeros(1).astype(self.type), target)
@@ -205,12 +210,9 @@ class EarthNet2023Dataset(Dataset):
         data = {
             "dynamic": [
                 torch.from_numpy(satellite_data),
-                # [
-                #    20 : 20 + 20 + 10, ...
-                # ],  # ATTENTION truncature to try to accelerate the training.
                 torch.from_numpy(
                     meteo_cube
-                ),  # [20 * 5 : 20 * 5 + 20 * 5 + 10 * 5, ...],
+                ),
             ],
             "dynamic_mask": [torch.from_numpy(s2_mask)],
             "static": [torch.from_numpy(topography)],
@@ -219,14 +221,14 @@ class EarthNet2023Dataset(Dataset):
             "landcover": torch.from_numpy(landcover),
             "filepath": str(filepath),
             "cubename": self.__name_getter(filepath),
-            #"time": torch.from_numpy(time),
+            # "time": torch.from_numpy(time),
         }
-        print(
-            data["dynamic"][0].shape,
-            data["dynamic"][1].shape,
-            data["dynamic_mask"][0].shape,
-            # data["time"][0].shape,
-         )
+        # print(
+        #     data["dynamic"][0].shape,
+        #     data["dynamic"][1].shape,
+        #     data["dynamic_mask"][0].shape,
+        #     # data["time"][0].shape,
+        #  )
         return data
 
     def __len__(self) -> int:
