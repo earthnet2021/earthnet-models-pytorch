@@ -3,7 +3,7 @@ import os
 from tqdm import tqdm
 import json
 
-file = open("Data_analysis/missing_value_train_from2016.json")
+file = open("Data_analysis/missing_value_test_from2016.json")
 data = json.load(file)
 
 os.mkdir("/scratch/crobin/earthnet2023/earthnet2023_preprocessed/")

@@ -7,11 +7,10 @@ import json
 
 # Paths
 basepath = Path("/scratch/crobin/earthnet2023/")
-train_paths = list(basepath.glob("train/*/*.nc"))
+train_paths = list(basepath.glob("test/*/*.nc"))
 
 print("len of the dataset: ", len(train_paths))
 
-missing_file = open("missing_values.txt", "w")
 data = {}
 
 for i, file in enumerate(tqdm(train_paths)):
@@ -44,6 +43,6 @@ for i, file in enumerate(tqdm(train_paths)):
             data[str(file)] = {"total_missing": s, "serie_missing": serie_nan}
 
 
-with open("Data_analysis/missing_value_train_from2016.json", "w") as fp:
+with open("Data_analysis/missing_value_test_from2016.json", "w") as fp:
     json.dump(data, fp)
 
