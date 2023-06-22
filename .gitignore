@@ -156,3 +156,4 @@ plots/*
 checkpoints 
 checkpoints/*
 *.out
+*.json

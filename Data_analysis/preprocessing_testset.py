@@ -9,7 +9,7 @@ import os
 import json
 
 # Paths
-basepath = Path("/Net/Groups/BGI/work_1/scratch/s3/earthnet/earthnet2023/test/")
+basepath = Path("/scratch/crobin/earthnet2023/test/")
 dst_path = "/scratch/crobin/earthnet2023_preprocessed/test/"
 if not os.path.exists(dst_path):
                 os.mkdir(dst_path)
@@ -48,7 +48,7 @@ for i, file in enumerate(tqdm(paths)):
             print("ERROR: ", file)
 
         # Transform
-        mask.values[mask.values > 1] = np.nan
+        mask.values[mask.values > 0] = np.nan
 
         # Computation of the NaN values
         total_missing = np.sum(np.isnan(mask), axis=(0, 1, 2)).values.tolist()

@@ -31,7 +31,7 @@ Trainer:
     #val_check_interval: 0.25
   
 Data:
-    base_dir: "/workspace/data/s3/earthnet/earthnet2023/" #"/scratch/crobin/earthnet2023/" #
+    base_dir: "/scratch/crobin/earthnet2023_preprocessed/" 
     test_track: "iid"
     target: "ndvi"
     # With a batch of size N, a DPP strategy with D devices, and accumulate_grad_batches = K, the effective batch size = K*D*N. 

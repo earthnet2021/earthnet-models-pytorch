@@ -6,6 +6,7 @@ Setting: "en23"
 
 Logger:
     save_dir: "experiments/"
+    
 
 Checkpointer:
     save_top_k: 1
@@ -29,7 +30,7 @@ Trainer:
     #val_check_interval: 0.25
   
 Data:
-    base_dir: "/scratch/crobin/earthnet2023_preprocessed/" # "/workspace/data/s3/earthnet/earthnet2023/" #
+    base_dir: "/scratch/crobin/earthnet2023_preprocessed/" 
     test_track: "iid"
     train_batch_size: 4
     val_batch_size: 4
@@ -70,4 +71,4 @@ Model:
     bias: True
     skip_connections: True
     num_inputs: 49
-    num_outputs: 8
+    num_outputs: 1 #8

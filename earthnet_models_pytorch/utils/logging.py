@@ -89,6 +89,7 @@ def log_viz(tensorboard_logger, viz_data, batch, batch_idx, current_epoch, mode 
                 ndvi = veg_colorize((preds[j,:,3,...] - preds[j,:,2,...])/(preds[j,:,3,...] + preds[j,:,2,...]+1e-6), mask = None if "landcover" not in batch else lc[j,...].repeat(preds.shape[1],1,1), mode = "ndvi")
                 grid = torchvision.utils.make_grid(ndvi, nrow = nrow)
             else:
+                
                 ndvi = veg_colorize(preds[j,...].squeeze(), mask = None if "landcover" not in batch else lc[j,...].repeat(preds.shape[1],1,1), mode = mode)
                 text = f"Cube: {scores[j]['name']} Score: {scores[j]['rmse' if 'rmse' in scores[j] else 'veg_score']:.4f}" 
                 grid = torchvision.utils.make_grid(ndvi, nrow = nrow)

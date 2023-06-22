@@ -6,7 +6,7 @@ from tqdm import tqdm
 import json
 
 # Paths
-basepath = Path("/scratch/crobin/earthnet2023/")
+basepath = Path("/Net/Groups/BGI/work_1/scratch/s3/earthnet/earthnet2023/")
 train_paths = list(basepath.glob("test/*/*.nc"))
 
 print("len of the dataset: ", len(train_paths))
@@ -16,9 +16,9 @@ data = {}
 for i, file in enumerate(tqdm(train_paths)):
     minicube = xr.open_dataset(file).load()
     # Subset of period with the 2 satellite and only 5 days gap
-    # minicube = minicube.where(
-    #    minicube.time.dt.date > datetime.date(2017, 6, 30), drop=True
-    #)
+    minicube = minicube.where(
+        minicube.time.dt.date > datetime.date(2017, 6, 30), drop=True
+    )
     if len(minicube.time.dt.date.values) > 0:
         # Subset of every 5 days
         indexes_avail = np.where(minicube.s2_avail.values == 1)[0]
@@ -35,7 +35,7 @@ for i, file in enumerate(tqdm(train_paths)):
                 print("ERROR: ", file)
 
             # Transform
-            mask.values[mask.values > 1] = np.nan
+            mask.values[mask.values > 0] = np.nan
 
             # Computation of the NaN values
             s = np.sum(np.isnan(mask), axis=(0, 1, 2)).values.tolist()
@@ -43,6 +43,6 @@ for i, file in enumerate(tqdm(train_paths)):
             data[str(file)] = {"total_missing": s, "serie_missing": serie_nan}
 
 
-with open("Data_analysis/missing_value_test_from2016.json", "w") as fp:
+with open("Data_analysis/missing_value_test_from2017.json", "w") as fp:
     json.dump(data, fp)
 

@@ -99,7 +99,7 @@ class ConvLSTMAE(nn.Module):
         )
 
         self.decoder_1_convlstm = ConvLSTMCell(
-            input_dim=self.hparams.num_inputs,
+            input_dim=42, #self.hparams.num_inputs,
             hidden_dim=self.hparams.hidden_dim[0],
             kernel_size=self.hparams.kernel_size,
             bias=self.hparams.bias,
@@ -162,7 +162,7 @@ class ConvLSTMAE(nn.Module):
         # sentinel 2 bands
         sentinel = data["dynamic"][0]
         weather = data["dynamic"][1].unsqueeze(3).unsqueeze(4)
-        static = data["static"][0][:, :3, ...]
+        static = data["static"][0] if data["static"][0].ndim == 4 else data["static"][0][... ,0]
 
         # Shape: batch size, temporal size, number of channels, height, width
         b, t, _, h, w = sentinel.shape
@@ -197,10 +197,9 @@ class ConvLSTMAE(nn.Module):
         pred = self.conv(h_t2)
         # add the last frame of the context period
         if self.hparams.skip_connections:
-            pred = pred + sentinel[:, -1, 0, ...].unsqueeze(1)
+            pred = pred + sentinel[:, t, 0, ...].unsqueeze(1)
 
         pred = self.activation_output(pred)
-
         # forecasting network
         for t in range(self.hparams.target_length):
             # if teacher_forcing:

@@ -36,18 +36,17 @@ class RootMeanSquaredError(Metric):
         self.lc_min = lc_min
         self.lc_max = lc_max
 
-        self.comp_ndvi = comp_ndvi
-
     @torch.jit.unused
     def forward(self, *args, **kwargs):
         """
         Automatically calls ``update()``. Returns the metric value over inputs if ``compute_on_step`` is True.
         """
+        
         # add current step
         with torch.no_grad():
             self.update(*args, **kwargs)  # accumulate the metrics
         self._forward_cache = None
-
+        print("forward", self.compute_on_step)
         if self.compute_on_step:
             kwargs["just_return"] = True
             out_cache = self.update(*args, **kwargs)  # compute and return the rmse
@@ -56,12 +55,14 @@ class RootMeanSquaredError(Metric):
 
     def update(self, preds, targs, just_return=False):
         """Any code needed to update the state given any inputs to the metric."""
-
+        print("update", just_return)
         lc = targs["landcover"]
 
         # Masks
         if len(targs["dynamic_mask"]) > 0:
             masks = targs["dynamic_mask"][0][:, -preds.shape[1] :, 0, ...].unsqueeze(2)
+            if lc.ndim == 5:
+                lc = lc[..., 0]
             masks = torch.where(
                 masks.bool(),
                 ((lc >= self.lc_min).bool() & (lc <= self.lc_max).bool())
@@ -70,6 +71,7 @@ class RootMeanSquaredError(Metric):
                 .repeat(1, preds.shape[1], 1, 1, 1),
                 masks,
             )  # if error change bool by byte
+
         else:
             masks = (
                 ((lc >= self.lc_min).bool() & (lc <= self.lc_max).bool())
@@ -83,15 +85,15 @@ class RootMeanSquaredError(Metric):
 
         # Targets
         targets = targs["dynamic"][0][:, -preds.shape[1] :, ...]
-        if targets.shape[2] >= 3 and self.comp_ndvi:
-            targets = (
-                (targets[:, :, 3, ...] - targets[:, :, 2, ...])
-                / (targets[:, :, 3, ...] + targets[:, :, 2, ...] + 1e-6)
-            ).unsqueeze(
-                2
-            )  # NDVI computation
-        elif targets.shape[2] >= 3:
-            targets = targets[:, :, 0, ...].unsqueeze(2)
+        # if targets.shape[2] >= 3 and self.comp_ndvi:
+        #     targets = (
+        #         (targets[:, :, 3, ...] - targets[:, :, 2, ...])
+        #         / (targets[:, :, 3, ...] + targets[:, :, 2, ...] + 1e-6)
+        #     ).unsqueeze(
+        #         2
+        #     )  # NDVI computation
+        # elif targets.shape[2] >= 3:
+        targets = targets[:, :, 0, ...].unsqueeze(2)
 
         # MSE computation
         if len(masks.shape) == 5:
@@ -106,8 +108,13 @@ class RootMeanSquaredError(Metric):
             n_obs = (masks != 0).sum((1, 2))
 
         if just_return:
+            print("just_return")
             cubenames = targs["cubename"]
             rmse = torch.sqrt(sum_squared_error / n_obs)
+            print(cubenames, rmse)
+            print( [
+                {"name": cubenames[i], "rmse": rmse[i]} for i in range(len(cubenames))
+            ])
             return [
                 {"name": cubenames[i], "rmse": rmse[i]} for i in range(len(cubenames))
             ]
@@ -120,6 +127,7 @@ class RootMeanSquaredError(Metric):
         Computes a final value from the state of the metric.
         Computes mean squared error over state.
         """
+        print("compute", torch.sqrt(self.sum_squared_error / self.total))
         return {"RMSE_Veg": torch.sqrt(self.sum_squared_error / self.total)}
 
 
@@ -156,7 +164,6 @@ class RMSE_ens22(RootMeanSquaredError):
             dist_sync_fn=dist_sync_fn,
             lc_min=2,
             lc_max=6,
-            comp_ndvi=False,
         )
 
 
@@ -175,5 +182,4 @@ class RMSE_ens23(RootMeanSquaredError):
             dist_sync_fn=dist_sync_fn,
             lc_min=40,
             lc_max=90,
-            comp_ndvi=False,
         )

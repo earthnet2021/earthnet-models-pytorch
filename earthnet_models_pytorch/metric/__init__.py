@@ -9,5 +9,5 @@ METRICS = {
     "en21x": RootMeanSquaredError,
     "en21x-px": RootMeanSquaredError,
     "en22": RMSE_ens22,
-    "en23": NormalizedNashSutcliffeEfficiency,
+    "en23": RootMeanSquaredError, #NormalizedNashSutcliffeEfficiency,
 }

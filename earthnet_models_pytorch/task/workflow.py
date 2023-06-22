@@ -149,9 +149,19 @@ class SpatioTemporalTask(pl.LightningModule):
         for shedule_name, shedule in self.model_shedules:
             kwargs[shedule_name] = shedule(self.global_step)
 
+        # Context data for the context period
+        data = copy.deepcopy(batch)
+        data["dynamic"][0] = data["dynamic"][0][
+            :, : self.context_length, ...
+        ]  # selection only the context data
+        if len(data["dynamic_mask"]) > 0:
+            data["dynamic_mask"][0] = data["dynamic_mask"][0][
+                :, : self.context_length, ...
+            ]
+
         # Predictions generation
         preds, aux = self(
-            batch, n_preds=self.context_length + self.target_length, kwargs=kwargs
+            data, n_preds=self.context_length + self.target_length, kwargs=kwargs
         )
         loss, logs = self.loss(preds, batch, aux, current_step=self.global_step)
 
@@ -193,14 +203,12 @@ class SpatioTemporalTask(pl.LightningModule):
             if np.isfinite(mse_lc.cpu().detach().numpy()):
                 all_logs.append(logs)
 
-            # if self.loss.distance.rescale:
-            #    preds = ((preds - 0.2)/0.6)
-
             if batch_idx < self.hparams.n_log_batches:
                 self.metric.compute_on_step = True
                 scores = self.metric(
                     preds, batch
                 )  # Returns the metric value over inputs if ``compute_on_step`` is True
+                print("scores, workflow", scores)
                 self.metric.compute_on_step = False
                 all_viz.append((preds, scores))
             else:
@@ -266,7 +274,7 @@ class SpatioTemporalTask(pl.LightningModule):
                 json.dump(scores, fp)
 
     def test_step(self, batch, batch_idx):
-        """Operates on a single batch of data from the test set. In this step you d normally generate examples or calculate anything of interest such as accuracy."""
+        """Operates on a single batch of data from the test set. In this step you generate examples or calculate anything of interest such as accuracy."""
         scores = []
 
         for i in range(self.n_stochastic_preds):
@@ -393,6 +401,7 @@ class SpatioTemporalTask(pl.LightningModule):
                             )
                         }
                     )
+                   
                     pred_cube["ndvi_target"] = xr.DataArray(
                         data=targ_cube["ndvi_target"]
                         .isel(
@@ -479,14 +488,10 @@ class SpatioTemporalTask(pl.LightningModule):
                             "ndvi_pred": xr.DataArray(
                                 data=hrd,
                                 coords={
-                                    "time": targ_cube.time.isel(
-                                        time=batch["time"][
-                                            j,
-                                            self.context_length : self.context_length
-                                            + self.target_length,
-                                        ]
-                                        .detach()
-                                        .cpu()
+                                    "time": targ_cube.time.isel(time=slice(
+                                            self.context_length,
+                                            self.context_length + self.target_length,
+                                        )
                                     ),
                                     "latitude": lat,
                                     "longitude": lon,

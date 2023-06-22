@@ -213,7 +213,6 @@ class MaskedL2NDVILoss(nn.Module):
 
     def forward(self, preds, batch, aux, current_step=None):
         t_pred = preds.shape[1]
-        # print("loss", t_pred)
 
         lc = batch["landcover"]
 

@@ -106,6 +106,7 @@ class EarthNet2023Dataset(Dataset):
         if not isinstance(folder, Path):
             folder = Path(folder)
         self.filepaths = sorted(list(folder.glob("*.nc"))) if len(sorted(list(folder.glob("*.nc")))) > 0 else sorted(list(folder.glob("*/*.nc")))
+        print(folder)
         self.type = np.float16 if fp16 else np.float32
         self.target = target
         self.variables = variables
@@ -125,12 +126,6 @@ class EarthNet2023Dataset(Dataset):
         # Condition to check that the every 5 days inclus all the dates available (+ missing day)
         if not set(dates) <= set(time):
             raise AssertionError("ERROR: time indexes of the minicubes are not consistant ", filepath)
-
-        
-
-        # TEST set to fix!
-        # beg = random.choice(range(100, len(time) - 90))
-        # time = np.array([i for i in range(beg, beg + 450, 5)])
 
         # Create the minicube
         # s2 is 10 to 5 days, and already rescaled [0, 1]
@@ -205,6 +200,7 @@ class EarthNet2023Dataset(Dataset):
             np.isnan(landcover), np.zeros(1).astype(self.type), landcover
         )
         satellite_data = np.concatenate((target, s2_cube), axis=1)
+        
 
         # Final minicube
         data = {
@@ -221,7 +217,7 @@ class EarthNet2023Dataset(Dataset):
             "landcover": torch.from_numpy(landcover),
             "filepath": str(filepath),
             "cubename": self.__name_getter(filepath),
-            # "time": torch.from_numpy(time),
+            #"time": torch.from_numpy([i for i in range(4, 450, 5)]),
         }
         # print(
         #     data["dynamic"][0].shape,
