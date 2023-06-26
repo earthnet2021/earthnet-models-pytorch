@@ -43,25 +43,28 @@ class RootMeanSquaredError(Metric):
         """
         
         # add current step
-        with torch.no_grad():
-            self.update(*args, **kwargs)  # accumulate the metrics
-        self._forward_cache = None
-        print("forward", self.compute_on_step)
-        if self.compute_on_step:
-            kwargs["just_return"] = True
-            out_cache = self.update(*args, **kwargs)  # compute and return the rmse
-            kwargs.pop("just_return", None)
-            return out_cache
+        # with torch.no_grad():
+         # accumulate the metric
+        self.update(*args, **kwargs)  
+        self._forward_cache = None # I don't know for what is this
+
+        # if self.compute_on_step:
+        #    kwargs["just_return"] = True
+        #    out_cache = self.update()  # compute and return the rmse
+        #    kwargs.pop("just_return", None)
+
+        return self.compute()
 
     def update(self, preds, targs, just_return=False):
         """Any code needed to update the state given any inputs to the metric."""
-        print("update", just_return)
-        lc = targs["landcover"]
 
-        # Masks
-        if len(targs["dynamic_mask"]) > 0:
+        # Masks on the non vegetation pixels
+        if len(targs["dynamic_mask"]) > 0: # cloud dynamic mask  
             masks = targs["dynamic_mask"][0][:, -preds.shape[1] :, 0, ...].unsqueeze(2)
-            if lc.ndim == 5:
+
+            # Landcover mask
+            lc = targs["landcover"]
+            if lc.ndim == 5: # En23 has a weird dimension, temporary patch
                 lc = lc[..., 0]
             masks = torch.where(
                 masks.bool(),
@@ -70,14 +73,15 @@ class RootMeanSquaredError(Metric):
                 .unsqueeze(1)
                 .repeat(1, preds.shape[1], 1, 1, 1),
                 masks,
-            )  # if error change bool by byte
+            ) 
 
         else:
             masks = (
                 ((lc >= self.lc_min).bool() & (lc <= self.lc_max).bool())
                 .type_as(preds)
                 .unsqueeze(1)
-            )  # if error change bool by byte
+            )  
+            # TODO what is that?
             if len(masks.shape) == 5:  # spacial dimentions
                 masks = masks.repeat(1, preds.shape[1], 1, 1, 1)
             else:
@@ -85,14 +89,6 @@ class RootMeanSquaredError(Metric):
 
         # Targets
         targets = targs["dynamic"][0][:, -preds.shape[1] :, ...]
-        # if targets.shape[2] >= 3 and self.comp_ndvi:
-        #     targets = (
-        #         (targets[:, :, 3, ...] - targets[:, :, 2, ...])
-        #         / (targets[:, :, 3, ...] + targets[:, :, 2, ...] + 1e-6)
-        #     ).unsqueeze(
-        #         2
-        #     )  # NDVI computation
-        # elif targets.shape[2] >= 3:
         targets = targets[:, :, 0, ...].unsqueeze(2)
 
         # MSE computation
@@ -107,29 +103,30 @@ class RootMeanSquaredError(Metric):
             )
             n_obs = (masks != 0).sum((1, 2))
 
-        if just_return:
-            print("just_return")
-            cubenames = targs["cubename"]
-            rmse = torch.sqrt(sum_squared_error / n_obs)
-            print(cubenames, rmse)
-            print( [
-                {"name": cubenames[i], "rmse": rmse[i]} for i in range(len(cubenames))
-            ])
-            return [
-                {"name": cubenames[i], "rmse": rmse[i]} for i in range(len(cubenames))
-            ]
-        else:
-            self.sum_squared_error += sum_squared_error.sum()
-            self.total += n_obs.sum()
+        # Update the states variables
+        self.sum_squared_error += sum_squared_error.sum()
+        self.total += n_obs.sum()
 
     def compute(self):
         """
         Computes a final value from the state of the metric.
         Computes mean squared error over state.
         """
-        print("compute", torch.sqrt(self.sum_squared_error / self.total))
         return {"RMSE_Veg": torch.sqrt(self.sum_squared_error / self.total)}
 
+    def compute_sample(self, targs):
+        """
+        Computes a final value for each sample over the state of the metric.
+        """
+        cubenames = targs["cubename"]
+        veg_score = torch.sqrt(self.sum_squared_error / self.total)
+        return [
+            {
+                "name": cubenames[i],
+                "rmse": veg_score[i],
+            }  # "rmse" is Legacy, update logging before
+            for i in range(len(cubenames))
+        ]
 
 class RMSE_ens21x(RootMeanSquaredError):
     def __init__(

@@ -27,7 +27,7 @@ Trainer:
     #limit_val_batches: 32
     gradient_clip_val: 1
     #val_check_interval: 0.25
-  
+
 Data:
     base_dir: "/scratch/vbenson/earthnet2021x/" 
     test_track: "iid"
@@ -55,7 +55,7 @@ Task:
                 name: AdamW
                 args: 
                     betas: [0.9, 0.999]
-                lr_per_sample: 0.000001
+                lr_per_sample: 0.00001
         lr_shedule:
             -
                 name: MultiStepLR

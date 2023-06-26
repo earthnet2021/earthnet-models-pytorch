@@ -39,6 +39,7 @@ class SpatioTemporalTask(pl.LightningModule):
             self.pred_dir = Path(self.hparams.pred_dir)
 
         self.model = model
+        # TODO to improve for a proper loss
         self.loss = setup_loss(hparams.loss)
 
         self.context_length = hparams.context_length
@@ -51,20 +52,18 @@ class SpatioTemporalTask(pl.LightningModule):
 
         self.current_filepaths = []
 
-        self.metric = METRICS[self.hparams.setting]()
-        self.ndvi_pred = (
-            self.hparams.setting == "en21-veg"
-        )  # TODO: Legacy, remove this...  #TODO: what is mean ?
-
-        self.pred_mode = {
-            "en21-veg": "ndvi",
-            "en21-std": "rgb",
-            "en21x": "ndvi",
-            "en21xold": "kndvi",
-            "en21x-px": "kndvi",
-            "en22": "kndvi",
-            "en23": "ndvi",
-        }[self.hparams.setting]
+        self.metric_val = METRICS[self.hparams.setting]()
+        self.metric_test = METRICS[self.hparams.setting]()
+        #
+        # self.pred_mode = {
+        #     "en21-veg": "ndvi",
+        #     "en21-std": "rgb",
+        #     "en21x": "ndvi",
+        #     "en21xold": "kndvi",
+        #     "en21x-px": "kndvi",
+        #     "en22": "kndvi",
+        #     "en23": "ndvi",
+        # }[self.hparams.setting]
 
         self.model_shedules = []
         for shedule in self.hparams.model_shedules:
@@ -151,13 +150,7 @@ class SpatioTemporalTask(pl.LightningModule):
 
         # Context data for the context period
         data = copy.deepcopy(batch)
-        data["dynamic"][0] = data["dynamic"][0][
-            :, : self.context_length, ...
-        ]  # selection only the context data
-        if len(data["dynamic_mask"]) > 0:
-            data["dynamic_mask"][0] = data["dynamic_mask"][0][
-                :, : self.context_length, ...
-            ]
+        data["dynamic"][0] = data["dynamic"][0][:, : self.context_length, ...]
 
         # Predictions generation
         preds, aux = self(
@@ -181,8 +174,10 @@ class SpatioTemporalTask(pl.LightningModule):
 
     def validation_step(self, batch, batch_idx):
         """Operates on a single batch of data from the validation set. In this step you d might generate examples or calculate anything of interest like accuracy."""
+
         data = copy.deepcopy(batch)
 
+        # Select only the context data List of dictionaries with metrics logged during the validation phasefor the model
         data["dynamic"][0] = data["dynamic"][0][
             :, : self.context_length, ...
         ]  # selection only the context data
@@ -194,25 +189,27 @@ class SpatioTemporalTask(pl.LightningModule):
         all_logs = []
         all_viz = []
 
-        for i in range(self.n_stochastic_preds):  # several predictions
+        for i in range(
+            self.n_stochastic_preds
+        ):  # several predictions for statistical models
+            # Predictions of the model
             preds, aux = self(
                 data, pred_start=self.context_length, n_preds=self.target_length
-            )  # output model
+            )
 
             mse_lc, logs = self.loss(preds, batch, aux)
             if np.isfinite(mse_lc.cpu().detach().numpy()):
                 all_logs.append(logs)
-
-            if batch_idx < self.hparams.n_log_batches:
-                self.metric.compute_on_step = True
-                scores = self.metric(
-                    preds, batch
-                )  # Returns the metric value over inputs if ``compute_on_step`` is True
-                print("scores, workflow", scores)
-                self.metric.compute_on_step = False
-                all_viz.append((preds, scores))
-            else:
-                self.metric(preds, batch)
+            #
+            # if batch_idx < self.hparams.n_log_batches:
+            #     self.metric_val.compute_on_step = True
+            #     scores = self.metric(
+            #         preds, batch
+            #     )  # Returns the metric value over inputs if ``compute_on_step`` is True
+            #     self.metric_val.compute_on_step = False
+            #     all_viz.append((preds, scores))
+            # else:
+            self.metric_val.update(preds, batch)
 
         mean_logs = {
             l: torch.tensor(
@@ -242,14 +239,13 @@ class SpatioTemporalTask(pl.LightningModule):
                     batch,
                     batch_idx,
                     self.current_epoch,
-                    mode=self.pred_mode,
                     setting=self.hparams.setting,
                 )  # , lc_min = 82 if not self.hparams.setting == "en22" else 2, lc_max = 104 if not self.hparams.setting == "en22" else 6)
 
     def validation_epoch_end(self, validation_step_outputs):
-        current_scores = self.metric.compute()
+        current_scores = self.metric_val.compute()
         self.log_dict(current_scores, sync_dist=True)
-        self.metric.reset()
+        self.metric_val.reset()
         if (
             self.logger is not None
             and type(self.logger.experiment).__name__ != "DummyExperiment"
@@ -401,7 +397,7 @@ class SpatioTemporalTask(pl.LightningModule):
                             )
                         }
                     )
-                   
+
                     pred_cube["ndvi_target"] = xr.DataArray(
                         data=targ_cube["ndvi_target"]
                         .isel(
@@ -488,7 +484,8 @@ class SpatioTemporalTask(pl.LightningModule):
                             "ndvi_pred": xr.DataArray(
                                 data=hrd,
                                 coords={
-                                    "time": targ_cube.time.isel(time=slice(
+                                    "time": targ_cube.time.isel(
+                                        time=slice(
                                             self.context_length,
                                             self.context_length + self.target_length,
                                         )
@@ -578,3 +575,4 @@ class SpatioTemporalTask(pl.LightningModule):
                 with open(self.pred_dir / f"individual_scores.json", "w") as fp:
                     json.dump(out, fp)
         return
+
