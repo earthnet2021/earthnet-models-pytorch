@@ -43,14 +43,15 @@ Data:
 Task:
     loss:
         name: "MaskedL2NDVILoss"
-        min_lc: 40
-        max_lc: 90
-        ndvi_pred_idx: 0
-        ndvi_targ_idx: 0
+        lc_min: 40
+        lc_max: 90
+        ndvi_pred_idx: 0 # index of the NDVI band
+        ndvi_targ_idx: 0 # index of the NDVI band
         pred_mask_value: -1
         scale_by_std: False
     context_length: 60
     target_length: 30
+    metric: "RMSE"
     n_stochastic_preds: 2
     optimization:
         optimizer:
@@ -74,4 +75,4 @@ Model:
     bias: True
     skip_connections: True
     num_inputs: 49
-    num_outputs: 1 #8
+    num_outputs: 1 

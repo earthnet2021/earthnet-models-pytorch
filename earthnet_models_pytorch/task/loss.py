@@ -60,8 +60,8 @@ class PixelwiseLoss(nn.Module):
         super().__init__()
 
         self.distance = LOSSES[setting["name"]](**setting["args"])
-        self.min_lc = 82 if "min_lc" not in setting else setting["min_lc"]
-        self.max_lc = 104 if "max_lc" not in setting else setting["max_lc"]
+        self.lc_min = 82 if "lc_min" not in setting else setting["lc_min"]
+        self.lc_max = 104 if "lc_max" not in setting else setting["lc_max"]
 
     def forward(self, preds, batch, aux, current_step=None):
         logs = {}
@@ -73,7 +73,7 @@ class PixelwiseLoss(nn.Module):
         lc = batch["landcover"]
 
         masks = (
-            ((lc >= self.min_lc).bool() & (lc <= self.max_lc).bool())
+            ((lc >= self.lc_min).bool() & (lc <= self.lc_max).bool())
             .type_as(preds)
             .unsqueeze(1)
             .repeat(1, preds.shape[1], 1, 1, 1)
@@ -100,8 +100,8 @@ class BaseLoss(nn.Module):
         # self.lambda_l2_res =  WeightShedule(**setting["residuals_shedule"])
         self.dist_scale = 1 if "dist_scale" not in setting else setting["dist_scale"]
         self.ndvi = False if "ndvi" not in setting else setting["ndvi"]
-        self.min_lc = 82 if "min_lc" not in setting else setting["min_lc"]
-        self.max_lc = 104 if "max_lc" not in setting else setting["max_lc"]
+        self.lc_min = 82 if "lc_min" not in setting else setting["lc_min"]
+        self.lc_max = 104 if "lc_max" not in setting else setting["lc_max"]
         self.comp_ndvi = True if "comp_ndvi" not in setting else setting["comp_ndvi"]
 
     def forward(self, preds, batch, aux, current_step=None):
@@ -120,7 +120,7 @@ class BaseLoss(nn.Module):
             lc = batch["landcover"]
             if masks is None:
                 masks = (
-                    ((lc >= self.min_lc).bool() & (lc <= self.max_lc).bool())
+                    ((lc >= self.lc_min).bool() & (lc <= self.lc_max).bool())
                     .type_as(preds)
                     .unsqueeze(1)
                     .repeat(1, preds.shape[1], 1, 1, 1)
@@ -128,7 +128,7 @@ class BaseLoss(nn.Module):
             else:
                 masks = torch.where(
                     masks.bool(),
-                    ((lc >= self.min_lc).bool() & (lc <= self.max_lc).bool())
+                    ((lc >= self.lc_min).bool() & (lc <= self.lc_max).bool())
                     .type_as(masks)
                     .unsqueeze(1)
                     .repeat(1, preds.shape[1], 1, 1, 1),
@@ -180,8 +180,8 @@ class BaseLoss(nn.Module):
 class MaskedL2NDVILoss(nn.Module):
     def __init__(
         self,
-        min_lc=None,
-        max_lc=None,
+        lc_min=None,
+        lc_max=None,
         ndvi_pred_idx=0,
         ndvi_targ_idx=0,
         pred_mask_value=None,
@@ -192,20 +192,22 @@ class MaskedL2NDVILoss(nn.Module):
     ):
         super().__init__()
 
-        self.min_lc = min_lc if min_lc else 0   # landcover boudaries of vegetation (to select only pixel with vegetation)
-        self.max_lc = max_lc if max_lc else 1000
-        self.use_lc = (min_lc != 0) & (max_lc != 1000)
+        self.lc_min = lc_min if lc_min else None   # landcover boudaries of vegetation (to select only pixel with vegetation)
+        self.lc_max = lc_max if lc_max else None
+        self.use_lc = lc_min & lc_max
+        if not self.use_lc:
+            print(f"WARNING. The boundaries of the landcover map are not definite. Loss calculated on all pixels including non-vegetation pixels.")
         self.ndvi_pred_idx = ndvi_pred_idx      # index of the NDVI band
         self.ndvi_targ_idx = ndvi_targ_idx      # index of the NDVI band
         self.pred_mask_value = pred_mask_value
         self.scale_by_std = scale_by_std
         if self.scale_by_std:
             print(
-                f"Using Masked L2/Std NDVI Loss with Landcover boundaries ({self.min_lc, self.max_lc})."
+                f"Using Masked L2/Std NDVI Loss with Landcover boundaries ({self.lc_min, self.lc_max})."
             )
         else:
             print(
-                f"Using Masked L2 NDVI Loss with Landcover boundaries ({self.min_lc, self.max_lc})."
+                f"Using Masked L2 NDVI Loss with Landcover boundaries ({self.lc_min, self.lc_max})."
             )
 
         self.extra_aux_loss_term = extra_aux_loss_term
@@ -216,13 +218,14 @@ class MaskedL2NDVILoss(nn.Module):
 
         lc = batch["landcover"]
 
+
         # Mask, 
 
         s2_mask = (
             (batch["dynamic_mask"][0][:, -t_pred:, ...] < 1.0).bool().type_as(preds)
         )  # b t c h w
 
-        lc_mask = ((lc >= self.min_lc).bool() & (lc <= self.max_lc).bool()).type_as(
+        lc_mask = ((lc >= self.lc_min).bool() & (lc <= self.lc_max).bool()).type_as(
             preds
         )  # b c h w
         ndvi_targ = batch["dynamic"][0][:, :, self.ndvi_targ_idx, ...].unsqueeze(

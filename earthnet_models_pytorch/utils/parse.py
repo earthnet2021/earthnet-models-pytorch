@@ -119,8 +119,8 @@ def parse_setting(setting_file, track = None):
     setting_dict["Task"]["val_batch_size"] = setting_dict["Data"]["val_batch_size"]
     setting_dict["Task"]["test_batch_size"] = setting_dict["Data"]["test_batch_size"]
 
-    setting_dict["Task"]["min_lc"] = setting_dict["Task"]["loss"]["min_lc"]
-    setting_dict["Task"]["max_lc"] = setting_dict["Task"]["loss"]["max_lc"]
+    setting_dict["Task"]["lc_min"] = setting_dict["Task"]["loss"]["lc_min"]
+    setting_dict["Task"]["lc_max"] = setting_dict["Task"]["loss"]["lc_max"]
     
 
     return setting_dict

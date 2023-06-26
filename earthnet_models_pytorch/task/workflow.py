@@ -43,13 +43,13 @@ class SpatioTemporalTask(pl.LightningModule):
         self.context_length = hparams.context_length
         self.target_length = hparams.target_length
 
-        self.min_lc = hparams.min_lc
-        self.max_lc = hparams.max_lc
+        self.lc_min = hparams.lc_min
+        self.lc_max = hparams.lc_max
 
         self.n_stochastic_preds = hparams.n_stochastic_preds
 
-        self.metric_val = METRICS[self.hparams.setting]()
-        self.metric_test = METRICS[self.hparams.setting]()
+        self.metric_val = METRICS[hparams.metric](lc_min=self.lc_min, lc_max=self.lc_max)
+        self.metric_test = METRICS[hparams.metric](lc_min=self.lc_min, lc_max=self.lc_max)
 
         self.shedulers = []
         for shedule in self.hparams.shedulers:
@@ -73,20 +73,25 @@ class SpatioTemporalTask(pl.LightningModule):
         # Path of the directory to save the prediction
         parser.add_argument("--pred_dir", type=str, default=None)
 
+        # Name of the dataset, involves major differences in the variables available and the tasks to be performed.
+        parser.add_argument("--setting", type=str, default="en21-std")
+
         # Dictionnary of the loss name and the distance norm used.
         parser.add_argument(
             "--loss",
             type=ast.literal_eval,
             default='{"name": "masked", "args": {"distance_type": "L1"}}',
         )
+        # Metric used for the test set and the validation set.
+        parser.add_argument("--metric", type=str, default="RMSE")
 
         # Context and target length for temporal model. A temporal model use a context period to learn the temporal dependencies and predict the target period.
         parser.add_argument("--context_length", type=int, default=10)
         parser.add_argument("--target_length", type=int, default=20)
 
         # Landcover bounds. Used as mask on the non-vegetation pixel.
-        parser.add_argument("--min_lc", type=int, default=10)
-        parser.add_argument("--max_lc", type=int, default=20)
+        parser.add_argument("--lc_min", type=int, default=10)
+        parser.add_argument("--lc_max", type=int, default=20)
 
         # Number of stochastic prediction for statistical models.
         parser.add_argument("--n_stochastic_preds", type=int, default=1)
@@ -106,9 +111,6 @@ class SpatioTemporalTask(pl.LightningModule):
         )
         # Sheduler: methods to adjust the learning rate based on the number of epochs
         parser.add_argument("--shedulers", type=ast.literal_eval, default="[]")
-
-        # Name of the dataset, involves major differences in the variables available and the tasks to be performed.
-        parser.add_argument("--setting", type=str, default="en21-std")
 
         parser.add_argument("--compute_metric_on_test", type=str2bool, default=False)
         return parser
@@ -209,31 +211,26 @@ class SpatioTemporalTask(pl.LightningModule):
                 scores = self.metric_val.compute_batch(batch) 
                 viz_logs.append((preds, scores))
 
-        # TODO to optiöize, not ideal, only one value in mean logs
-        # print(loss_logs)
-        # print("loss_logs 0", loss_logs[0])
-        print("lst ", [[log[l].mean() for log in loss_logs] for l in loss_logs[0]])
         mean_logs = {
-            l: torch.tensor(
-                [log[l].mean() for log in loss_logs],
+            log_name: torch.tensor(
+                [log[log_name] for log in loss_logs],
                 dtype=torch.float32,
                 device=self.device,
             ).mean()
-            for l in loss_logs[0]
-        } # 
-        print("mean log", mean_logs)
-        batch_size = torch.tensor(self.hparams.val_batch_size, dtype=torch.int64)
+            for log_name in loss_logs[0]
+        } 
 
+        batch_size = torch.tensor(self.hparams.val_batch_size, dtype=torch.int64)
         # loss_val
         self.log_dict(
-            {l + "_val": mean_logs[l] for l in mean_logs},
+            {log_name + "_val": mean_logs[log_name] for log_name in mean_logs},
             sync_dist=True,
             batch_size=batch_size,
         )
         # self.log("loss", loss_logs)
 
 
-        # Visualisation of the prediction
+        # Visualisation of the prediction for the n first batches
         if batch_idx < self.hparams.n_log_batches and len(preds.shape) == 5:
             if self.logger is not None and preds.shape[2] == 1:
                 log_viz(
@@ -347,7 +344,7 @@ class SpatioTemporalTask(pl.LightningModule):
 
                     # Masks
                     masks = (
-                        (lc >= self.min_lc).bool() & (lc <= self.max_lc).bool()
+                        (lc >= self.lc_min).bool() & (lc <= self.lc_max).bool()
                     ).type_as(
                         preds
                     )  # mask for outlayers using lc threshold   # mask for outlayers using lc threshold

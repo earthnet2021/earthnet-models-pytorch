@@ -13,20 +13,19 @@ class RootMeanSquaredError(Metric):
     # Each state variable should be called using self.add_state(...)
     def __init__(
         self,
+        lc_min: int,
+        lc_max: int,
         compute_on_step: bool = False,
         dist_sync_on_step: bool = False,
         process_group=None,
         dist_sync_fn=None,
-        lc_min=73,
-        lc_max=104,
-        comp_ndvi=True,
     ):
         super().__init__(
             # Advanced metric settings
             compute_on_step=compute_on_step,
-            dist_sync_on_step=dist_sync_on_step,    # distributed environment, if the metric should synchronize between different devices every time forward is called
-            process_group=process_group,    # distributed environment, by default we synchronize across the world i.e. all processes being computed on. Specify exactly what devices should be synchronized over
-            dist_sync_fn=dist_sync_fn,      # distributed environment, by default we use torch.distributed.all_gather() to perform the synchronization between devices.
+            dist_sync_on_step=dist_sync_on_step,  # distributed environment, if the metric should synchronize between different devices every time forward is called
+            process_group=process_group,  # distributed environment, by default we synchronize across the world i.e. all processes being computed on. Specify exactly what devices should be synchronized over
+            dist_sync_fn=dist_sync_fn,  # distributed environment, by default we use torch.distributed.all_gather() to perform the synchronization between devices.
         )
 
         self.add_state(
@@ -37,12 +36,14 @@ class RootMeanSquaredError(Metric):
 
         self.lc_min = lc_min
         self.lc_max = lc_max
+        print(
+                f"Using Masked RootMeanSquaredError metric Loss with Landcover boundaries ({self.lc_min, self.lc_max})."
+            )
 
-    # @torch.jit.unused
-    # def forward(self, *args, **kwargs):       
+    # def forward(self, *args, **kwargs):
     #     # accumulate the metric
-    #     print("forward")
-    #     self.update(*args, **kwargs)  
+    #     with torch.no_grad():
+    #       self.update(*args, **kwargs)
     #     # self._forward_cache = None # I don't know for what is this, I think is not anymore necessary?
     #     return self.compute()
 
@@ -51,13 +52,13 @@ class RootMeanSquaredError(Metric):
 
         # Masks on the non vegetation pixels
         # Dynamic cloud mask available
-        if len(targs["dynamic_mask"]) > 0:   
+        if len(targs["dynamic_mask"]) > 0:
             masks = targs["dynamic_mask"][0][:, -preds.shape[1] :, 0, ...].unsqueeze(2)
 
             # Landcover mask
             lc = targs["landcover"]
 
-            if lc.ndim == 5: # En23 has a weird dimension, temporary patch
+            if lc.ndim == 5:  # En23 has a weird dimension, temporary patch
                 lc = lc[..., 0]
 
             masks = torch.where(
@@ -67,14 +68,14 @@ class RootMeanSquaredError(Metric):
                 .unsqueeze(1)
                 .repeat(1, preds.shape[1], 1, 1, 1),
                 masks,
-            ) 
+            )
 
         else:
             masks = (
                 ((lc >= self.lc_min).bool() & (lc <= self.lc_max).bool())
                 .type_as(preds)
                 .unsqueeze(1)
-            )  
+            )
             # TODO what is that?
             if len(masks.shape) == 5:  # spacial dimentions
                 masks = masks.repeat(1, preds.shape[1], 1, 1, 1)
@@ -102,7 +103,6 @@ class RootMeanSquaredError(Metric):
         self.sum_squared_error += sum_squared_error.sum()
         self.total += n_obs.sum()
 
-
     def compute(self):
         """
         Computes a final value from the state of the metric.
@@ -123,55 +123,3 @@ class RootMeanSquaredError(Metric):
             for i in range(len(cubenames))
         ]
 
-class RMSE_ens21x(RootMeanSquaredError):
-    def __init__(
-        self,
-        compute_on_step: bool = False,
-        dist_sync_on_step: bool = False,
-        process_group=None,
-        dist_sync_fn=None,
-    ):
-        super().__init__(
-            compute_on_step=compute_on_step,
-            dist_sync_on_step=dist_sync_on_step,
-            process_group=process_group,
-            dist_sync_fn=dist_sync_fn,
-            lc_min=82,
-            lc_max=104,
-        )
-
-
-class RMSE_ens22(RootMeanSquaredError):
-    def __init__(
-        self,
-        compute_on_step: bool = False,
-        dist_sync_on_step: bool = False,
-        process_group=None,
-        dist_sync_fn=None,
-    ):
-        super().__init__(
-            compute_on_step=compute_on_step,
-            dist_sync_on_step=dist_sync_on_step,
-            process_group=process_group,
-            dist_sync_fn=dist_sync_fn,
-            lc_min=2,
-            lc_max=6,
-        )
-
-
-class RMSE_ens23(RootMeanSquaredError):
-    def __init__(
-        self,
-        compute_on_step: bool = False,
-        dist_sync_on_step: bool = False,
-        process_group=None,
-        dist_sync_fn=None,
-    ):
-        super().__init__(
-            compute_on_step=compute_on_step,
-            dist_sync_on_step=dist_sync_on_step,
-            process_group=process_group,
-            dist_sync_fn=dist_sync_fn,
-            lc_min=40,
-            lc_max=90,
-        )
