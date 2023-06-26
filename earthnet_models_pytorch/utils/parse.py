@@ -104,10 +104,6 @@ def parse_setting(setting_file, track = None):
             optimizer["args"]["lr"] = lr
         
     if track is not None: 
-
-        # setting_dict["Task"]["context_length"] = TRACK_INFO[setting_dict["Setting"]][track]["context_length"]
-        # setting_dict["Task"]["target_length"] =TRACK_INFO[setting_dict["Setting"]][track]["target_length"]
-        
         setting_dict["Data"]["test_track"] = track
 
         if "pred_dir" not in setting_dict["Task"]:

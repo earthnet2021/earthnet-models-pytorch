@@ -22,50 +22,44 @@ class RootMeanSquaredError(Metric):
         comp_ndvi=True,
     ):
         super().__init__(
+            # Advanced metric settings
             compute_on_step=compute_on_step,
-            dist_sync_on_step=dist_sync_on_step,
-            process_group=process_group,
-            dist_sync_fn=dist_sync_fn,
+            dist_sync_on_step=dist_sync_on_step,    # distributed environment, if the metric should synchronize between different devices every time forward is called
+            process_group=process_group,    # distributed environment, by default we synchronize across the world i.e. all processes being computed on. Specify exactly what devices should be synchronized over
+            dist_sync_fn=dist_sync_fn,      # distributed environment, by default we use torch.distributed.all_gather() to perform the synchronization between devices.
         )
 
         self.add_state(
             "sum_squared_error", default=torch.tensor(0.0), dist_reduce_fx="sum"
         )
         self.add_state("total", default=torch.tensor(0), dist_reduce_fx="sum")
+        self.add_state("current_scores", default=torch.tensor(0), dist_reduce_fx=None)
 
         self.lc_min = lc_min
         self.lc_max = lc_max
 
-    @torch.jit.unused
-    def forward(self, *args, **kwargs):
-        """
-        Automatically calls ``update()``. Returns the metric value over inputs if ``compute_on_step`` is True.
-        """
-        
-        # add current step
-        # with torch.no_grad():
-         # accumulate the metric
-        self.update(*args, **kwargs)  
-        self._forward_cache = None # I don't know for what is this
+    # @torch.jit.unused
+    # def forward(self, *args, **kwargs):       
+    #     # accumulate the metric
+    #     print("forward")
+    #     self.update(*args, **kwargs)  
+    #     # self._forward_cache = None # I don't know for what is this, I think is not anymore necessary?
+    #     return self.compute()
 
-        # if self.compute_on_step:
-        #    kwargs["just_return"] = True
-        #    out_cache = self.update()  # compute and return the rmse
-        #    kwargs.pop("just_return", None)
-
-        return self.compute()
-
-    def update(self, preds, targs, just_return=False):
+    def update(self, preds, targs):
         """Any code needed to update the state given any inputs to the metric."""
 
         # Masks on the non vegetation pixels
-        if len(targs["dynamic_mask"]) > 0: # cloud dynamic mask  
+        # Dynamic cloud mask available
+        if len(targs["dynamic_mask"]) > 0:   
             masks = targs["dynamic_mask"][0][:, -preds.shape[1] :, 0, ...].unsqueeze(2)
 
             # Landcover mask
             lc = targs["landcover"]
+
             if lc.ndim == 5: # En23 has a weird dimension, temporary patch
                 lc = lc[..., 0]
+
             masks = torch.where(
                 masks.bool(),
                 ((lc >= self.lc_min).bool() & (lc <= self.lc_max).bool())
@@ -104,8 +98,10 @@ class RootMeanSquaredError(Metric):
             n_obs = (masks != 0).sum((1, 2))
 
         # Update the states variables
+        self.current_scores = sum_squared_error / n_obs
         self.sum_squared_error += sum_squared_error.sum()
         self.total += n_obs.sum()
+
 
     def compute(self):
         """
@@ -114,16 +110,15 @@ class RootMeanSquaredError(Metric):
         """
         return {"RMSE_Veg": torch.sqrt(self.sum_squared_error / self.total)}
 
-    def compute_sample(self, targs):
+    def compute_batch(self, targs):
         """
-        Computes a final value for each sample over the state of the metric.
+        Computes a final value for each sample of a batch over the state of the metric.
         """
         cubenames = targs["cubename"]
-        veg_score = torch.sqrt(self.sum_squared_error / self.total)
         return [
             {
                 "name": cubenames[i],
-                "rmse": veg_score[i],
+                "rmse": self.current_scores[i],
             }  # "rmse" is Legacy, update logging before
             for i in range(len(cubenames))
         ]

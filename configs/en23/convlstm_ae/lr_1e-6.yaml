@@ -27,7 +27,10 @@ Trainer:
     #limit_train_batches: 32
     #limit_val_batches: 32
     gradient_clip_val: 1
-    #val_check_interval: 0.25
+    # check_val_every_n_epoch: 1 # default setting
+    # Whether to use torch.inference_mode() or torch.no_grad() mode during evaluation
+    # inference_mode: True # if False use 'torch.no_grad' instead. 
+    val_check_interval: 0.001 #0.005 # 
   
 Data:
     base_dir: "/scratch/crobin/earthnet2023_preprocessed/" 
@@ -48,7 +51,7 @@ Task:
         scale_by_std: False
     context_length: 60
     target_length: 30
-    n_stochastic_preds: 1
+    n_stochastic_preds: 2
     optimization:
         optimizer:
             - 

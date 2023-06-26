@@ -23,9 +23,8 @@ class SpatioTemporalTask(pl.LightningModule):
         super().__init__()
 
         if hasattr(self, "save_hyperparameters"):
-            self.save_hyperparameters(
-                copy.deepcopy(hparams)
-            )  # SpatioTemporalTask herite from the LightningModule, save the parameters in a file
+            # SpatioTemporalTask herite from the LightningModule, save the parameters in a file
+            self.save_hyperparameters(copy.deepcopy(hparams))
         else:
             self.hparams = copy.deepcopy(hparams)
 
@@ -39,7 +38,6 @@ class SpatioTemporalTask(pl.LightningModule):
             self.pred_dir = Path(self.hparams.pred_dir)
 
         self.model = model
-        # TODO to improve for a proper loss
         self.loss = setup_loss(hparams.loss)
 
         self.context_length = hparams.context_length
@@ -50,24 +48,12 @@ class SpatioTemporalTask(pl.LightningModule):
 
         self.n_stochastic_preds = hparams.n_stochastic_preds
 
-        self.current_filepaths = []
-
         self.metric_val = METRICS[self.hparams.setting]()
         self.metric_test = METRICS[self.hparams.setting]()
-        #
-        # self.pred_mode = {
-        #     "en21-veg": "ndvi",
-        #     "en21-std": "rgb",
-        #     "en21x": "ndvi",
-        #     "en21xold": "kndvi",
-        #     "en21x-px": "kndvi",
-        #     "en22": "kndvi",
-        #     "en23": "ndvi",
-        # }[self.hparams.setting]
 
-        self.model_shedules = []
-        for shedule in self.hparams.model_shedules:
-            self.model_shedules.append(
+        self.shedulers = []
+        for shedule in self.hparams.shedulers:
+            self.shedulers.append(
                 (shedule["call_name"], SHEDULERS[shedule["name"]](**shedule["args"]))
             )
 
@@ -84,36 +70,44 @@ class SpatioTemporalTask(pl.LightningModule):
             parents=parent_parser, add_help=False
         )  # parents - A list of ArgumentParser objects whose arguments should also be included
 
+        # Path of the directory to save the prediction
         parser.add_argument("--pred_dir", type=str, default=None)
 
+        # Dictionnary of the loss name and the distance norm used.
         parser.add_argument(
             "--loss",
             type=ast.literal_eval,
             default='{"name": "masked", "args": {"distance_type": "L1"}}',
         )
 
+        # Context and target length for temporal model. A temporal model use a context period to learn the temporal dependencies and predict the target period.
         parser.add_argument("--context_length", type=int, default=10)
         parser.add_argument("--target_length", type=int, default=20)
 
+        # Landcover bounds. Used as mask on the non-vegetation pixel.
         parser.add_argument("--min_lc", type=int, default=10)
         parser.add_argument("--max_lc", type=int, default=20)
 
-        parser.add_argument("--n_stochastic_preds", type=int, default=10)
+        # Number of stochastic prediction for statistical models.
+        parser.add_argument("--n_stochastic_preds", type=int, default=1)
 
+        # Number of batches to be displayed in the logger
         parser.add_argument("--n_log_batches", type=int, default=2)
 
         parser.add_argument("--train_batch_size", type=int, default=1)
         parser.add_argument("--val_batch_size", type=int, default=1)
         parser.add_argument("--test_batch_size", type=int, default=1)
 
+        # optimizer: Function that adjusts the attributes of the neural network, such as weights and learning rates.
         parser.add_argument(
             "--optimization",
             type=ast.literal_eval,
             default='{"optimizer": [{"name": "Adam", "args:" {"lr": 0.0001, "betas": (0.9, 0.999)} }], "lr_shedule": [{"name": "multistep", "args": {"milestones": [25, 40], "gamma": 0.1} }]}',
         )
+        # Sheduler: methods to adjust the learning rate based on the number of epochs
+        parser.add_argument("--shedulers", type=ast.literal_eval, default="[]")
 
-        parser.add_argument("--model_shedules", type=ast.literal_eval, default="[]")
-
+        # Name of the dataset, involves major differences in the variables available and the tasks to be performed.
         parser.add_argument("--setting", type=str, default="en21-std")
 
         parser.add_argument("--compute_metric_on_test", type=str2bool, default=False)
@@ -131,21 +125,25 @@ class SpatioTemporalTask(pl.LightningModule):
         return self.model(data, pred_start=pred_start, n_preds=n_preds, **kwargs)
 
     def configure_optimizers(self):
+        "define and load optimizers and shedulers"
         optimizers = [
             getattr(torch.optim, o["name"])(self.parameters(), **o["args"])
             for o in self.hparams.optimization["optimizer"]
-        ]  # This gets any (!) torch.optim optimizer
+        ]
+
         # torch.optim.lr_scheduler provides several methods to adjust the learning rate based on the number of epochs.
         shedulers = [
             getattr(torch.optim.lr_scheduler, s["name"])(optimizers[i], **s["args"])
             for i, s in enumerate(self.hparams.optimization["lr_shedule"])
-        ]  # This gets any(!) torch.optim.lr_scheduler - but only those with standard callback will work (i.e. not the Plateau one)
+        ]  
         return optimizers, shedulers
 
     def training_step(self, batch, batch_idx):
         """compute and return the training loss and some additional metrics for e.g. the progress bar or logger"""
+
+        # Learning rate scheduling should be applied after optimizer’s update
         kwargs = {}
-        for shedule_name, shedule in self.model_shedules:
+        for shedule_name, shedule in self.shedulers:
             kwargs[shedule_name] = shedule(self.global_step)
 
         # Context data for the context period
@@ -168,16 +166,19 @@ class SpatioTemporalTask(pl.LightningModule):
         logs["batch_size"] = torch.tensor(
             self.hparams.train_batch_size, dtype=torch.float32
         )
+        # Metric logging method 
         self.log_dict(logs)
 
         return loss
 
     def validation_step(self, batch, batch_idx):
-        """Operates on a single batch of data from the validation set. In this step you d might generate examples or calculate anything of interest like accuracy."""
+        """Perform one evaluation epoch over the validation set. Operates on a single batch of data from the validation set. In this step you d might generate examples or calculate anything of interest like accuracy.
+        Return  a List of dictionaries with metrics logged during the validation phase
+        """
 
         data = copy.deepcopy(batch)
 
-        # Select only the context data List of dictionaries with metrics logged during the validation phasefor the model
+        # Select only the context data for the model
         data["dynamic"][0] = data["dynamic"][0][
             :, : self.context_length, ...
         ]  # selection only the context data
@@ -186,43 +187,42 @@ class SpatioTemporalTask(pl.LightningModule):
                 :, : self.context_length, ...
             ]
 
-        all_logs = []
-        all_viz = []
+        loss_logs = []  # list of loss values
+        viz_logs = [] # list of (preds, scores)
 
-        for i in range(
-            self.n_stochastic_preds
-        ):  # several predictions for statistical models
+        # nb of predictions for statistical models
+        for i in range(self.n_stochastic_preds):
             # Predictions of the model
             preds, aux = self(
                 data, pred_start=self.context_length, n_preds=self.target_length
             )
-
+            # Loss computation
             mse_lc, logs = self.loss(preds, batch, aux)
             if np.isfinite(mse_lc.cpu().detach().numpy()):
-                all_logs.append(logs)
-            #
-            # if batch_idx < self.hparams.n_log_batches:
-            #     self.metric_val.compute_on_step = True
-            #     scores = self.metric(
-            #         preds, batch
-            #     )  # Returns the metric value over inputs if ``compute_on_step`` is True
-            #     self.metric_val.compute_on_step = False
-            #     all_viz.append((preds, scores))
-            # else:
+                loss_logs.append(logs)
+            
+            # Update of the metric
             self.metric_val.update(preds, batch)
 
+            # compute the scores for the n_batches that can be visualized in the logger
+            if batch_idx < self.hparams.n_log_batches:
+                scores = self.metric_val.compute_batch(batch) 
+                viz_logs.append((preds, scores))
+
+        # TODO to optiöize, not ideal, only one value in mean logs
+        # print(loss_logs)
+        # print("loss_logs 0", loss_logs[0])
+        print("lst ", [[log[l].mean() for log in loss_logs] for l in loss_logs[0]])
         mean_logs = {
             l: torch.tensor(
-                [log[l].mean() for log in all_logs],
+                [log[l].mean() for log in loss_logs],
                 dtype=torch.float32,
                 device=self.device,
             ).mean()
-            for l in all_logs[0]
-        }
-
-        batch_size = torch.tensor(
-            self.hparams.val_batch_size, dtype=torch.int64
-        )  # float32)
+            for l in loss_logs[0]
+        } # 
+        print("mean log", mean_logs)
+        batch_size = torch.tensor(self.hparams.val_batch_size, dtype=torch.int64)
 
         # loss_val
         self.log_dict(
@@ -230,22 +230,25 @@ class SpatioTemporalTask(pl.LightningModule):
             sync_dist=True,
             batch_size=batch_size,
         )
+        # self.log("loss", loss_logs)
 
+
+        # Visualisation of the prediction
         if batch_idx < self.hparams.n_log_batches and len(preds.shape) == 5:
             if self.logger is not None and preds.shape[2] == 1:
                 log_viz(
                     self.logger.experiment,
-                    all_viz,
+                    viz_logs,
                     batch,
                     batch_idx,
                     self.current_epoch,
                     setting=self.hparams.setting,
-                )  # , lc_min = 82 if not self.hparams.setting == "en22" else 2, lc_max = 104 if not self.hparams.setting == "en22" else 6)
+                )
 
     def validation_epoch_end(self, validation_step_outputs):
         current_scores = self.metric_val.compute()
         self.log_dict(current_scores, sync_dist=True)
-        self.metric_val.reset()
+        #self.metric_val.reset() # lagacy? To remove, shoudl me managed by the logger?
         if (
             self.logger is not None
             and type(self.logger.experiment).__name__ != "DummyExperiment"
@@ -419,26 +422,7 @@ class SpatioTemporalTask(pl.LightningModule):
                         },
                         dims=["latitude", "longitude", "time"],
                     )
-                    pred_cube["mask"] = xr.DataArray(
-                        data=masks[:, :, 0],
-                        coords={"latitude": y, "longitude": x},
-                        dims=["latitude", "longitude"],
-                    )
-                    pred_cube["landcover"] = xr.DataArray(
-                        data=landcover[:, :, 0],
-                        coords={"latitude": y, "longitude": x},
-                        dims=["latitude", "longitude"],
-                    )
-                    pred_cube["geomorphons"] = xr.DataArray(
-                        data=geom,
-                        coords={"latitude": y, "longitude": x},
-                        dims=["latitude", "longitude"],
-                    )
-                    pred_cube["SRTM"] = xr.DataArray(
-                        data=static[:, :, 0],
-                        coords={"latitude": y, "longitude": x},
-                        dims=["latitude", "longitude"],
-                    )
+
 
                     if not pred_path.is_file():
                         pred_cube.to_netcdf(
@@ -575,4 +559,3 @@ class SpatioTemporalTask(pl.LightningModule):
                 with open(self.pred_dir / f"individual_scores.json", "w") as fp:
                     json.dump(out, fp)
         return
-
