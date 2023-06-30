@@ -500,16 +500,15 @@ class SpatioTemporalTask(pl.LightningModule):
                     # )
 
             if self.hparams.compute_metric_on_test:
-                self.metric.compute_on_step = True
-                scores.append(self.metric(preds, batch))
-                self.metric.compute_on_step = False
-
+                self.metric_test.update(preds, batch)
+                scores.append(self.metric_test.compute_batch(batch))
         return scores
 
     def test_epoch_end(self, test_step_outputs):
         """Called at the end of a test epoch with the output of all test steps."""
         if self.hparams.compute_metric_on_test:
             self.pred_dir.mkdir(parents=True, exist_ok=True)
+            print(self.pred_dir)
             with open(
                 self.pred_dir / f"individual_scores_{self.global_rank}.json", "w"
             ) as fp:
@@ -526,7 +525,7 @@ class SpatioTemporalTask(pl.LightningModule):
                     fp,
                 )
 
-            scores = self.metric.compute()
+            scores = self.metric_test.compute()
             if self.trainer.is_global_zero:
                 with open(self.pred_dir / "total_score.json", "w") as fp:
                     json.dump(

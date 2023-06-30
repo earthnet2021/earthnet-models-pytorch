@@ -10,7 +10,7 @@ import json
 
 # Paths
 basepath = Path("/scratch/crobin/earthnet2023/test/")
-dst_path = "/scratch/crobin/earthnet2023_preprocessed/test/"
+dst_path = "/scratch/crobin/earthnet2023_test/test/"
 if not os.path.exists(dst_path):
                 os.mkdir(dst_path)
 
@@ -47,20 +47,20 @@ for i, file in enumerate(tqdm(paths)):
         else:
             print("ERROR: ", file)
 
-        # Transform
-        mask.values[mask.values > 0] = np.nan
-
-        # Computation of the NaN values
-        total_missing = np.sum(np.isnan(mask), axis=(0, 1, 2)).values.tolist()
-        serie_missing = np.sum(np.isnan(mask), axis=(1, 2)).values.tolist()
-        data[str(file)] = {"total_missing": total_missing, "serie_missing": serie_missing}
-
-        if total_missing / (len(serie_missing) * 128 * 128) < 0.15:
-            path = os.path.join(dst_path, str(file)[len(str(basepath))+1:-13])
-            if not os.path.exists(path):
-                os.mkdir(path)
-            name = os.path.join(path, str(file)[-12:])
-            minicube.to_netcdf(name)
+        # # Transform
+        # mask.values[mask.values > 0] = np.nan
+# 
+        # # Computation of the NaN values
+        # total_missing = np.sum(np.isnan(mask), axis=(0, 1, 2)).values.tolist()
+        # serie_missing = np.sum(np.isnan(mask), axis=(1, 2)).values.tolist()
+        # data[str(file)] = {"total_missing": total_missing, "serie_missing": serie_missing}
+# 
+        # if total_missing / (len(serie_missing) * 128 * 128) < 0.25:
+        path = os.path.join(dst_path, str(file)[len(str(basepath))+1:-13])
+        if not os.path.exists(path):
+            os.mkdir(path)
+        name = os.path.join(path, str(file)[-12:])
+        minicube.to_netcdf(name)
     
-with open("Data_analysis/missing_value_test_from2016.json", "w") as fp:
-    json.dump(data, fp)
+# with open("Data_analysis/missing_value_test_from2016.json", "w") as fp:
+ #   json.dump(data, fp)

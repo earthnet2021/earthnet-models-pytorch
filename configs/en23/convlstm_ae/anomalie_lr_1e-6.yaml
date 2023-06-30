@@ -6,6 +6,7 @@ Setting: "en23"
 
 Logger:
     save_dir: "experiments/"
+    
 
 Checkpointer:
     save_top_k: 1
@@ -26,10 +27,13 @@ Trainer:
     #limit_train_batches: 32
     #limit_val_batches: 32
     gradient_clip_val: 1
-    #val_check_interval: 0.25
+    # check_val_every_n_epoch: 1 # default setting
+    # Whether to use torch.inference_mode() or torch.no_grad() mode during evaluation
+    # inference_mode: True # if False use 'torch.no_grad' instead. 
+    val_check_interval: 0.25 #0.005 # 
   
 Data:
-    base_dir: "/scratch/crobin/earthnet2023/" # "/workspace/data/s3/earthnet/earthnet2023/" # 
+    base_dir: "/scratch/crobin/earthnet2023/" 
     test_track: "iid"
     target: "anomalie_ndvi"
     train_batch_size: 4
@@ -40,15 +44,16 @@ Data:
 Task:
     loss:
         name: "MaskedL2NDVILoss"
-        min_lc: 40
-        max_lc: 90
-        ndvi_pred_idx: 0
-        ndvi_targ_idx: 0
+        lc_min: 40
+        lc_max: 90
+        ndvi_pred_idx: 0 # index of the NDVI band
+        ndvi_targ_idx: 0 # index of the NDVI band
         pred_mask_value: -1
         scale_by_std: False
     context_length: 60
     target_length: 30
-    n_stochastic_preds: 1
+    metric: "RMSE"
+    n_stochastic_preds: 2
     optimization:
         optimizer:
             - 
@@ -60,7 +65,7 @@ Task:
             -
                 name: MultiStepLR
                 args:
-                    milestones: [100, 150] #[2, 20, 50, 90]
+                    milestones: [160,190] #[2, 20, 50, 90]
                     gamma: 0.1
     n_log_batches: 2
     compute_metric_on_test: True
@@ -71,4 +76,4 @@ Model:
     bias: True
     skip_connections: True
     num_inputs: 49
-    num_outputs: 8
+    num_outputs: 1 
