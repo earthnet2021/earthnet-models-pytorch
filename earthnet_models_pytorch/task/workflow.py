@@ -283,7 +283,7 @@ class SpatioTemporalTask(pl.LightningModule):
             static = batch["static"][0]
 
             for j in range(preds.shape[0]):
-                if self.hparams.setting in ["en21x"]:
+                if self.hparams.setting in ["en21x", "en23"]:
                     # Targets
                     targ_path = Path(batch["filepath"][j])
                     targ_cube = xr.open_dataset(targ_path)
@@ -398,27 +398,6 @@ class SpatioTemporalTask(pl.LightningModule):
                         }
                     )
 
-                    pred_cube["ndvi_target"] = xr.DataArray(
-                        data=targ_cube["ndvi_target"]
-                        .isel(
-                            time=slice(
-                                self.context_length,
-                                self.context_length + self.target_length,
-                            )
-                        )
-                        .values,
-                        coords={
-                            "time": targ_cube.time.isel(
-                                time=slice(
-                                    self.context_length,
-                                    self.context_length + self.target_length,
-                                )
-                            ),
-                            "latitude": y,
-                            "longitude": x,
-                        },
-                        dims=["latitude", "longitude", "time"],
-                    )
 
 
                     if not pred_path.is_file():
@@ -434,12 +413,7 @@ class SpatioTemporalTask(pl.LightningModule):
                             },
                         )
 
-                    # Vitus code
-                    # pred_cube = xr.Dataset({"kndvi_pred": xr.DataArray(data = (np.tanh(1) * hrd[:,:,0,:]).clip(0, np.tanh(1)), coords = {"time": targ_cube.time.isel(time = slice(9,45)), "y": y, "x": x}, dims = ["y", "x", "time"])})
-                    # pred_cube["kndvi"] = xr.DataArray(data = targ_cube["kndvi"].isel(time = slice(9,45)).values, coords = {"time": targ_cube.time.isel(time = slice(9,45)), "y": y, "x": x}, dims = ["y", "x", "time"])
-
-                    # if not pred_path.is_file():
-                    # pred_cube.to_netcdf(pred_path)
+ 
 
                 else:
                     cubename = batch["cubename"][j]
@@ -467,8 +441,9 @@ class SpatioTemporalTask(pl.LightningModule):
                                 coords={
                                     "time": targ_cube.time.isel(
                                         time=slice(
-                                            self.context_length,
-                                            self.context_length + self.target_length,
+                                            4 + 5 * self.context_length,
+                                            4 + 5 * self.target_length,
+                                            5
                                         )
                                     ),
                                     "latitude": lat,
