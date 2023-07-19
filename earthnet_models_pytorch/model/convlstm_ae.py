@@ -2,7 +2,7 @@
     ConvLSTM with an encoding-decoding architecture
 """
 from typing import Optional, Union
-
+import sys
 import argparse
 import ast
 import torch.nn as nn
@@ -99,7 +99,7 @@ class ConvLSTMAE(nn.Module):
         )
 
         self.decoder_1_convlstm = ConvLSTMCell(
-            input_dim=42, #self.hparams.num_inputs,
+            input_dim=self.hparams.num_inputs - 7,  # nb of s2 bands.
             hidden_dim=self.hparams.hidden_dim[0],
             kernel_size=self.hparams.kernel_size,
             bias=self.hparams.bias,
@@ -138,7 +138,7 @@ class ConvLSTMAE(nn.Module):
 
         parser.add_argument(
             "--hidden_dim", type=ast.literal_eval, default=[64, 64, 64, 64]
-        )  
+        )
         parser.add_argument("--kernel_size", type=int, default=3)
         parser.add_argument("--bias", type=str2bool, default=True)
         parser.add_argument("--setting", type=str, default="en22")
@@ -147,22 +147,40 @@ class ConvLSTMAE(nn.Module):
         parser.add_argument("--context_length", type=int, default=9)
         parser.add_argument("--target_length", type=int, default=36)
         parser.add_argument("--skip_connections", type=str2bool, default=False)
+        parser.add_argument("--teacher_forcing", type=str2bool, default=False)
         return parser
 
-    def forward(self, data, pred_start: int = 0, n_preds: Optional[int] = None):
+    def forward(
+        self,
+        data,
+        pred_start: int = 0,
+        n_preds: Optional[int] = None,
+        step: Optional[int] = None,
+    ):
+        context_length = (
+            self.hparams.context_length
+            if self.training or (pred_start < self.hparams.context_length)
+            else pred_start
+        )
+        # teacher forcing coefficient
+        if self.hparams.teacher_forcing:
+            k = torch.tensor(0.1 * 10 * 12000)
 
-        context_length = self.hparams.context_length if self.training or (pred_start < self.hparams.context_length) else pred_start
-
-        # k = torch.tensor([1])
-        # TODO definir correctement la valeur de k + regarder shape decay k = max step ? + remove teacher forcing dans val et test
-        # teacher_forcing_decay = k / (k + torch.exp(step / k))
-        # teacher_forcing = torch.bernoulli(teacher_forcing_decay)
+            teacher_forcing_decay = k / (k + torch.exp(step + (120000 / 2) / k))
+        else:
+            teacher_forcing_decay = 0
 
         # Data
         # sentinel 2 bands
-        sentinel = data["dynamic"][0]
+        sentinel = data["dynamic"][0][:, :context_length, ...]
+
+        if self.hparams.teacher_forcing and self.training:
+            target = data["dynamic"][0][
+                :, context_length : context_length + self.hparams.target_length, ...
+            ]
+
         weather = data["dynamic"][1].unsqueeze(3).unsqueeze(4)
-        static = data["static"][0] if data["static"][0].ndim == 4 else data["static"][0][... ,0]
+        static = data["static"][0]
 
         # Shape: batch size, temporal size, number of channels, height, width
         b, t, _, h, w = sentinel.shape
@@ -186,6 +204,7 @@ class ConvLSTMAE(nn.Module):
                 .repeat(1, 1, 128, 128)
             )
             input = torch.cat((input, weather_t), dim=1)
+
             # First block
             h_t, c_t = self.encoder_1_convlstm(input_tensor=input, cur_state=[h_t, c_t])
             # second block
@@ -200,11 +219,9 @@ class ConvLSTMAE(nn.Module):
             pred = pred + sentinel[:, t, 0, ...].unsqueeze(1)
 
         pred = self.activation_output(pred)
+
         # forecasting network
         for t in range(self.hparams.target_length):
-            # if teacher_forcing:
-            #    pred = target[:, c_l + t, ...]
-
             # Skip connection
             pred_previous = torch.clone(pred)
 
@@ -215,6 +232,15 @@ class ConvLSTMAE(nn.Module):
                 .squeeze(1)
                 .repeat(1, 1, 128, 128)
             )
+
+            # Teacher forcing scheduled sampling
+            if (
+                self.hparams.teacher_forcing
+                and self.training
+                and torch.bernoulli(teacher_forcing_decay)
+            ):
+                pred = target[:, t, 0, ...].unsqueeze(1)
+
             pred = torch.cat((pred, static), dim=1)
             pred = torch.cat((pred, weather_t), dim=1)
             # first block
@@ -231,7 +257,7 @@ class ConvLSTMAE(nn.Module):
                 pred = pred + pred_previous
 
             # Output
-            pred = (self.activation_output(pred) - 0.5) * 2
+            pred = self.activation_output(pred)
             output += [pred.unsqueeze(1)]
-        output = torch.cat(output, dim=1)  # .unsqueeze(2)
+        output = torch.cat(output, dim=1)
         return output, {}

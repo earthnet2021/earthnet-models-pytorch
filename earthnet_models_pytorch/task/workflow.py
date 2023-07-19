@@ -9,7 +9,7 @@ import torch
 from torch import nn
 import numpy as np
 import xarray as xr
-
+import sys
 import pytorch_lightning as pl
 
 
@@ -48,8 +48,18 @@ class SpatioTemporalTask(pl.LightningModule):
 
         self.n_stochastic_preds = hparams.n_stochastic_preds
 
-        self.metric_val = METRICS[hparams.metric](lc_min=self.lc_min, lc_max=self.lc_max)
-        self.metric_test = METRICS[hparams.metric](lc_min=self.lc_min, lc_max=self.lc_max)
+        self.metric_val = METRICS[hparams.metric](
+            lc_min=self.lc_min,
+            lc_max=self.lc_max,
+            context_length=self.context_length,
+            target_length=self.target_length,
+        )
+        self.metric_test = METRICS[hparams.metric](
+            lc_min=self.lc_min,
+            lc_max=self.lc_max,
+            context_length=self.context_length,
+            target_length=self.target_length,
+        )
 
         self.shedulers = []
         for shedule in self.hparams.shedulers:
@@ -124,7 +134,13 @@ class SpatioTemporalTask(pl.LightningModule):
         n_preds: the number of predictions, used for statistical model, can also be None.
         kwargs are optional keyword arguments parsed to the model, right now these are model shedulers.
         """
-        return self.model(data, pred_start=pred_start, n_preds=n_preds, **kwargs)
+        return self.model(
+            data,
+            pred_start=pred_start,
+            n_preds=n_preds,
+            step=self.global_step,
+            **kwargs,
+        )
 
     def configure_optimizers(self):
         "define and load optimizers and shedulers"
@@ -137,7 +153,7 @@ class SpatioTemporalTask(pl.LightningModule):
         shedulers = [
             getattr(torch.optim.lr_scheduler, s["name"])(optimizers[i], **s["args"])
             for i, s in enumerate(self.hparams.optimization["lr_shedule"])
-        ]  
+        ]
         return optimizers, shedulers
 
     def training_step(self, batch, batch_idx):
@@ -150,13 +166,12 @@ class SpatioTemporalTask(pl.LightningModule):
 
         # Context data for the context period
         data = copy.deepcopy(batch)
-        data["dynamic"][0] = data["dynamic"][0][:, : self.context_length, ...]
 
         # Predictions generation
         preds, aux = self(
             data, n_preds=self.context_length + self.target_length, kwargs=kwargs
         )
-        loss, logs = self.loss(preds, batch, aux, current_step=self.global_step)
+        loss, logs = self.loss(preds, data, aux, current_step=self.global_step)
 
         # Logs
         for shedule_name in kwargs:
@@ -168,7 +183,7 @@ class SpatioTemporalTask(pl.LightningModule):
         logs["batch_size"] = torch.tensor(
             self.hparams.train_batch_size, dtype=torch.float32
         )
-        # Metric logging method 
+        # Metric logging method
         self.log_dict(logs)
 
         return loss
@@ -179,18 +194,17 @@ class SpatioTemporalTask(pl.LightningModule):
         """
 
         data = copy.deepcopy(batch)
+        batch_size = torch.tensor(self.hparams.val_batch_size, dtype=torch.int64)
 
         # Select only the context data for the model
-        data["dynamic"][0] = data["dynamic"][0][
-            :, : self.context_length, ...
-        ]  # selection only the context data
+        data["dynamic"][0] = data["dynamic"][0][:, : self.context_length, ...]
         if len(data["dynamic_mask"]) > 0:
             data["dynamic_mask"][0] = data["dynamic_mask"][0][
                 :, : self.context_length, ...
             ]
 
         loss_logs = []  # list of loss values
-        viz_logs = [] # list of (preds, scores)
+        viz_logs = []  # list of (preds, scores)
 
         # nb of predictions for statistical models
         for i in range(self.n_stochastic_preds):
@@ -202,13 +216,13 @@ class SpatioTemporalTask(pl.LightningModule):
             mse_lc, logs = self.loss(preds, batch, aux)
             if np.isfinite(mse_lc.cpu().detach().numpy()):
                 loss_logs.append(logs)
-            
+
             # Update of the metric
             self.metric_val.update(preds, batch)
 
             # compute the scores for the n_batches that can be visualized in the logger
             if batch_idx < self.hparams.n_log_batches:
-                scores = self.metric_val.compute_batch(batch) 
+                scores = self.metric_val.compute_batch(batch)
                 viz_logs.append((preds, scores))
 
         mean_logs = {
@@ -218,9 +232,8 @@ class SpatioTemporalTask(pl.LightningModule):
                 device=self.device,
             ).mean()
             for log_name in loss_logs[0]
-        } 
+        }
 
-        batch_size = torch.tensor(self.hparams.val_batch_size, dtype=torch.int64)
         # loss_val
         self.log_dict(
             {log_name + "_val": mean_logs[log_name] for log_name in mean_logs},
@@ -228,7 +241,6 @@ class SpatioTemporalTask(pl.LightningModule):
             batch_size=batch_size,
         )
         # self.log("loss", loss_logs)
-
 
         # Visualisation of the prediction for the n first batches
         if batch_idx < self.hparams.n_log_batches and len(preds.shape) == 5:
@@ -245,7 +257,7 @@ class SpatioTemporalTask(pl.LightningModule):
     def validation_epoch_end(self, validation_step_outputs):
         current_scores = self.metric_val.compute()
         self.log_dict(current_scores, sync_dist=True)
-        #self.metric_val.reset() # lagacy? To remove, shoudl me managed by the logger?
+        self.metric_val.reset()  # lagacy? To remove, shoudl me managed by the logger?
         if (
             self.logger is not None
             and type(self.logger.experiment).__name__ != "DummyExperiment"
@@ -350,9 +362,7 @@ class SpatioTemporalTask(pl.LightningModule):
                     )  # mask for outlayers using lc threshold   # mask for outlayers using lc threshold
                     masks = masks[j, ...].permute(1, 2, 0).detach().cpu().numpy()
 
-                    landcover = lc[j, ...].permute(1, 2, 0).detach().cpu().numpy()
                     static = static[j, ...].permute(1, 2, 0).detach().cpu().numpy()
-                    geom = targ_cube.geom
 
                     # Paths
                     if self.n_stochastic_preds == 1:
@@ -398,8 +408,6 @@ class SpatioTemporalTask(pl.LightningModule):
                         }
                     )
 
-
-
                     if not pred_path.is_file():
                         pred_cube.to_netcdf(
                             pred_path,
@@ -412,8 +420,6 @@ class SpatioTemporalTask(pl.LightningModule):
                                 "SRTM": {"dtype": "float32"},
                             },
                         )
-
- 
 
                 else:
                     cubename = batch["cubename"][j]
@@ -443,7 +449,7 @@ class SpatioTemporalTask(pl.LightningModule):
                                         time=slice(
                                             4 + 5 * self.context_length,
                                             4 + 5 * self.target_length,
-                                            5
+                                            5,
                                         )
                                     ),
                                     "latitude": lat,

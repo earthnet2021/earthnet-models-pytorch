@@ -9,7 +9,7 @@ import os
 import json
 
 # Paths
-basepath = Path("/Net/Groups/BGI/work_1/scratch/s3/earthnet/earthnet2023/test/")
+basepath = Path("/scratch/crobin/earthnet2023/test_original/")
 dst_path = "/scratch/crobin/earthnet2023/test/"
 if not os.path.exists(dst_path):
                 os.mkdir(dst_path)
@@ -17,13 +17,13 @@ if not os.path.exists(dst_path):
 paths = list(basepath.glob("*/*.nc"))
 print("len of the dataset: ", len(paths))
 
-data = {}
+variables = ["s2_B02", "s2_B03", "s2_B04", "s2_B05", "s2_B06", "s2_B07", "s2_B8A","s2_avail", "s2_SCL","s2_mask", "s1_vv", "s1_vh", "s1_avail"]
 
 for i, file in enumerate(tqdm(paths)):
     minicube = xr.open_dataset(file).load()
 
     # Subset of period with the 2 satellite and only 5 days gap
-    minicube = minicube.where(
+    minicube[variables] = minicube[variables].where(
         minicube.time.dt.date > datetime.date(2017, 6, 30), drop=True
     )
     if len(minicube.time.dt.date.values) > 0:

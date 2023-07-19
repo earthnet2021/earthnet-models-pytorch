@@ -2,18 +2,14 @@ from typing import Union, Optional
 
 import argparse
 import copy
+import scipy
 import multiprocessing
 import re
-import sys
-import pandas as pd
 from pathlib import Path
-import glob
 import numpy as np
 import pytorch_lightning as pl
 import torch
 import xarray as xr
-import os
-import random
 from torch.utils.data import Dataset, DataLoader, random_split
 
 from earthnet_models_pytorch.utils import str2bool
@@ -105,14 +101,17 @@ class EarthNet2023Dataset(Dataset):
     ):
         if not isinstance(folder, Path):
             folder = Path(folder)
-        self.filepaths = sorted(list(folder.glob("*.nc"))) if len(sorted(list(folder.glob("*.nc")))) > 0 else sorted(list(folder.glob("*/*.nc")))
+        self.filepaths = (
+            sorted(list(folder.glob("*.nc")))
+            if len(sorted(list(folder.glob("*.nc")))) > 0
+            else sorted(list(folder.glob("*/*.nc")))
+        )
         print(folder)
         self.type = np.float16 if fp16 else np.float32
         self.target = target
         self.variables = variables
 
     def __getitem__(self, idx: int) -> dict:
-
         # Open the minicube
         filepath = self.filepaths[idx]
         minicube = xr.open_dataset(filepath)
@@ -125,7 +124,9 @@ class EarthNet2023Dataset(Dataset):
 
         # Condition to check that the every 5 days inclus all the dates available (+ missing day)
         if not set(dates) <= set(time):
-            raise AssertionError("ERROR: time indexes of the minicubes are not consistant ", filepath)
+            raise AssertionError(
+                "ERROR: time indexes of the minicubes are not consistant ", filepath
+            )
 
         # Create the minicube
         # s2 is 10 to 5 days, and already rescaled [0, 1]
@@ -189,6 +190,7 @@ class EarthNet2023Dataset(Dataset):
         # TODO to remove?
         # NaN values handling
         s2_cube = np.where(np.isnan(s2_cube), np.zeros(1).astype(self.type), s2_cube)
+        s2_mask = np.where(np.isnan(s2_mask), np.ones(1).astype(self.type), s2_cube)
         target = np.where(np.isnan(target), np.zeros(1).astype(self.type), target)
         meteo_cube = np.where(
             np.isnan(meteo_cube), np.zeros(1).astype(self.type), meteo_cube
@@ -200,42 +202,31 @@ class EarthNet2023Dataset(Dataset):
             np.isnan(landcover), np.zeros(1).astype(self.type), landcover
         )
         satellite_data = np.concatenate((target, s2_cube), axis=1)
-        
 
         # Final minicube
         data = {
             "dynamic": [
                 torch.from_numpy(satellite_data),
-                torch.from_numpy(
-                    meteo_cube
-                ),
+                torch.from_numpy(meteo_cube),
             ],
             "dynamic_mask": [torch.from_numpy(s2_mask)],
             "static": [torch.from_numpy(topography)],
             # "target": torch.from_numpy(target),
-            # "s2_avail": torch.from_numpy(s2_avail),
             "landcover": torch.from_numpy(landcover),
             "filepath": str(filepath),
             "cubename": self.__name_getter(filepath),
-            #"time": torch.from_numpy([i for i in range(4, 450, 5)]),
         }
-        # print(
-        #     data["dynamic"][0].shape,
-        #     data["dynamic"][1].shape,
-        #     data["dynamic_mask"][0].shape,
-        #     # data["time"][0].shape,
-        #  )
+
         return data
 
     def __len__(self) -> int:
         return len(self.filepaths)
 
     def __name_getter(self, path: Path) -> str:
-        """Helper function gets Cubename from a Path
-
+        """
+        Helper function gets Cubename from a Path
         Args:
             path (Path): One of Path/to/cubename.npz and Path/to/experiment_cubename.npz
-
         Returns:
             [str]: cubename (has format tile_stuff.npz)
         """
@@ -247,7 +238,7 @@ class EarthNet2023Dataset(Dataset):
             assert bool(regex.match(components[1]))
             return "_".join(components[1:])
 
-    def target_computation(self, minicube):
+    def target_computation(self, minicube) -> str:
         """Compute the vegetation index (VI) target"""
         if self.target == "ndvi":
             targ = (minicube.s2_B8A - minicube.s2_B04) / (

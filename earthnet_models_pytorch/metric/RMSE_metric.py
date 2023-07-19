@@ -1,11 +1,5 @@
-from typing import Tuple, Optional, Sequence, Union
-
-import copy
-import multiprocessing
 import sys
-
 from torchmetrics import Metric
-import numpy as np
 import torch
 
 
@@ -15,6 +9,8 @@ class RootMeanSquaredError(Metric):
         self,
         lc_min: int,
         lc_max: int,
+        context_length: int,
+        target_length: int,
         compute_on_step: bool = False,
         dist_sync_on_step: bool = False,
         process_group=None,
@@ -34,72 +30,56 @@ class RootMeanSquaredError(Metric):
         self.add_state("total", default=torch.tensor(0), dist_reduce_fx="sum")
         self.add_state("current_scores", default=torch.tensor(0), dist_reduce_fx=None)
 
+        self.context_length = context_length
+        self.target_length = target_length
+
         self.lc_min = lc_min
         self.lc_max = lc_max
         print(
-                f"Using Masked RootMeanSquaredError metric Loss with Landcover boundaries ({self.lc_min, self.lc_max})."
-            )
-
-    # def forward(self, *args, **kwargs):
-    #     # accumulate the metric
-    #     with torch.no_grad():
-    #       self.update(*args, **kwargs)
-    #     # self._forward_cache = None # I don't know for what is this, I think is not anymore necessary?
-    #     return self.compute()
+            f"Using Masked RootMeanSquaredError metric Loss with Landcover boundaries ({self.lc_min, self.lc_max})."
+        )
 
     def update(self, preds, targs):
         """Any code needed to update the state given any inputs to the metric."""
 
+        # Targets
+        targets = targs["dynamic"][0][
+            :, self.context_length : self.context_length + self.target_length, 0, ...
+        ].unsqueeze(2)
+
         # Masks on the non vegetation pixels
         # Dynamic cloud mask available
         if len(targs["dynamic_mask"]) > 0:
-            masks = targs["dynamic_mask"][0][:, -preds.shape[1] :, 0, ...].unsqueeze(2)
-
-            # Landcover mask
-            lc = targs["landcover"]
-
-            if lc.ndim == 5:  # En23 has a weird dimension, temporary patch
-                lc = lc[..., 0]
-
-            masks = torch.where(
-                masks.bool(),
-                ((lc >= self.lc_min).bool() & (lc <= self.lc_max).bool())
-                .type_as(masks)
-                .unsqueeze(1)
-                .repeat(1, preds.shape[1], 1, 1, 1),
-                masks,
-            )
-
-        else:
-            masks = (
-                ((lc >= self.lc_min).bool() & (lc <= self.lc_max).bool())
+            s2_mask = (
+                (
+                    targs["dynamic_mask"][0][
+                        :,
+                        self.context_length : self.context_length + self.target_length,
+                        ...,
+                    ]
+                    < 1.0
+                )
+                .bool()
                 .type_as(preds)
-                .unsqueeze(1)
             )
-            # TODO what is that?
-            if len(masks.shape) == 5:  # spacial dimentions
-                masks = masks.repeat(1, preds.shape[1], 1, 1, 1)
-            else:
-                masks = masks.repeat(1, preds.shape[1], 1)
 
-        # Targets
-        targets = targs["dynamic"][0][:, -preds.shape[1] :, ...]
-        targets = targets[:, :, 0, ...].unsqueeze(2)
+        # Landcover mask
+        lc = targs["landcover"]
+        lc_mask = (
+            ((lc >= self.lc_min).bool() & (lc <= self.lc_max).bool())
+            .type_as(s2_mask)
+            .unsqueeze(1)
+            .repeat(1, preds.shape[1], 1, 1, 1)
+        )
+
+        mask = s2_mask * lc_mask 
 
         # MSE computation
-        if len(masks.shape) == 5:
-            sum_squared_error = torch.pow(preds * masks - targets * masks, 2).sum(
-                (1, 2, 3, 4)
-            )
-            n_obs = (masks != 0).sum((1, 2, 3, 4))
-        else:
-            sum_squared_error = torch.pow(preds * masks - targets * masks, 2).sum(
-                (1, 2)
-            )
-            n_obs = (masks != 0).sum((1, 2))
+        sum_squared_error = torch.pow((preds - targets) * mask, 2).sum((1, 2, 3, 4))
+        n_obs = (mask == 1).sum((1, 2, 3, 4)) #sum of pixel with vegetation
 
         # Update the states variables
-        self.current_scores = sum_squared_error / n_obs
+        self.current_scores = sum_squared_error / (n_obs + 1e-8)
         self.sum_squared_error += sum_squared_error.sum()
         self.total += n_obs.sum()
 
@@ -122,4 +102,3 @@ class RootMeanSquaredError(Metric):
             }  # "rmse" is Legacy, update logging before
             for i in range(len(cubenames))
         ]
-

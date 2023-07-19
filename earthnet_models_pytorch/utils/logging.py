@@ -1,5 +1,5 @@
 
-
+import sys
 import copy
 import torch
 import torchvision
@@ -99,6 +99,11 @@ def log_viz(tensorboard_logger, viz_data, batch, batch_idx, current_epoch, setti
             grid = torchvision.utils.make_grid(ndvi_chg.unsqueeze(1), nrow = nrow)
             grid = torch.cat([grid, text], dim = -2)
             tensorboard_logger.add_image(f"Cube: {batch_idx*preds.shape[0] + j} NDVI Change, Sample: {i}", grid, current_epoch)
+            # if j == 0:
+            #     print(ndvi.shape)
+            #     print("ndvi",  ndvi)
+            #     print("ndvi:chg", ndvi_chg)
+
             # Images
             if i == 0:
                 if setting == "en21x":
