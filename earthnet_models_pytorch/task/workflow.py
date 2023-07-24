@@ -126,18 +126,18 @@ class SpatioTemporalTask(pl.LightningModule):
         return parser
 
     def forward(
-        self, data, pred_start: int = 0, n_preds: Optional[int] = None, kwargs={}
+        self, data, pred_start: int = 0, preds_length: Optional[int] = None, kwargs={}
     ):
         """
-        data: dict with tensors
-        pred_start: first index that shall be predicted, defaults to zero.
-        n_preds: the number of predictions, used for statistical model, can also be None.
+        data is a dict with tensors
+        pred_start is the first index that shall be predicted, defaults to zero.
+        preds_length is the length of the prediction, could also be None.
         kwargs are optional keyword arguments parsed to the model, right now these are model shedulers.
         """
         return self.model(
             data,
             pred_start=pred_start,
-            n_preds=n_preds,
+            preds_length=preds_length,
             step=self.global_step,
             **kwargs,
         )
@@ -168,10 +168,8 @@ class SpatioTemporalTask(pl.LightningModule):
         data = copy.deepcopy(batch)
 
         # Predictions generation
-        preds, aux = self(
-            data, n_preds=self.context_length + self.target_length, kwargs=kwargs
-        )
-        loss, logs = self.loss(preds, data, aux, current_step=self.global_step)
+        preds, aux = self(data, kwargs=kwargs)
+        loss, logs = self.loss(preds, batch, aux, current_step=self.global_step)
 
         # Logs
         for shedule_name in kwargs:
@@ -185,7 +183,6 @@ class SpatioTemporalTask(pl.LightningModule):
         )
         # Metric logging method
         self.log_dict(logs)
-
         return loss
 
     def validation_step(self, batch, batch_idx):
@@ -194,14 +191,11 @@ class SpatioTemporalTask(pl.LightningModule):
         """
 
         data = copy.deepcopy(batch)
+
         batch_size = torch.tensor(self.hparams.val_batch_size, dtype=torch.int64)
 
         # Select only the context data for the model
-        data["dynamic"][0] = data["dynamic"][0][:, : self.context_length, ...]
-        if len(data["dynamic_mask"]) > 0:
-            data["dynamic_mask"][0] = data["dynamic_mask"][0][
-                :, : self.context_length, ...
-            ]
+        data["dynamic"][0] = data["dynamic"][0][:, :self.context_length, ...]
 
         loss_logs = []  # list of loss values
         viz_logs = []  # list of (preds, scores)
@@ -210,10 +204,12 @@ class SpatioTemporalTask(pl.LightningModule):
         for i in range(self.n_stochastic_preds):
             # Predictions of the model
             preds, aux = self(
-                data, pred_start=self.context_length, n_preds=self.target_length
+                data, pred_start=self.context_length, preds_length=self.target_length
             )
+
             # Loss computation
             mse_lc, logs = self.loss(preds, batch, aux)
+
             if np.isfinite(mse_lc.cpu().detach().numpy()):
                 loss_logs.append(logs)
 
@@ -240,7 +236,6 @@ class SpatioTemporalTask(pl.LightningModule):
             sync_dist=True,
             batch_size=batch_size,
         )
-        # self.log("loss", loss_logs)
 
         # Visualisation of the prediction for the n first batches
         if batch_idx < self.hparams.n_log_batches and len(preds.shape) == 5:
@@ -287,7 +282,7 @@ class SpatioTemporalTask(pl.LightningModule):
 
         for i in range(self.n_stochastic_preds):
             preds, aux = self(
-                batch, pred_start=self.context_length, n_preds=self.target_length
+                batch, pred_start=self.context_length, preds_length=self.target_length
             )
 
             lc = batch["landcover"]

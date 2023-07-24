@@ -114,6 +114,7 @@ def parse_setting(setting_file, track = None):
    
     setting_dict["Model"]["context_length"] = setting_dict["Task"]["context_length"]        
     setting_dict["Model"]["target_length"] = setting_dict["Task"]["target_length"]
+    setting_dict["Model"]["target"] = setting_dict["Data"]["target"]
 
     setting_dict["Task"]["loss"]["context_length"] = setting_dict["Task"]["context_length"]        
     setting_dict["Task"]["loss"]["target_length"] = setting_dict["Task"]["target_length"]

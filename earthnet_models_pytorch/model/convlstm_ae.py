@@ -122,13 +122,17 @@ class ConvLSTMAE(nn.Module):
             bias=self.hparams.bias,
         )
 
-        self.activation_output = nn.Sigmoid()
+        if self.hparams.target == "ndvi":
+            self.activation_output = nn.Sigmoid()
+        elif self.hparams.target == "anomalie_ndvi":
+            self.activation_output = 2 * (nn.Sigmoid() - 0.5)
+        else:
+            KeyError("The target is not defined.")
 
     @staticmethod
     def add_model_specific_args(
         parent_parser: Optional[Union[argparse.ArgumentParser, list]] = None
     ):
-        # TODO remove the useless features
         if parent_parser is None:
             parent_parser = []
         elif not isinstance(parent_parser, list):
@@ -148,13 +152,14 @@ class ConvLSTMAE(nn.Module):
         parser.add_argument("--target_length", type=int, default=36)
         parser.add_argument("--skip_connections", type=str2bool, default=False)
         parser.add_argument("--teacher_forcing", type=str2bool, default=False)
+        parser.add_argument("--target", type=str, default=False)
         return parser
 
     def forward(
         self,
         data,
         pred_start: int = 0,
-        n_preds: Optional[int] = None,
+        preds_length: Optional[int] = None,
         step: Optional[int] = None,
     ):
         context_length = (
@@ -257,7 +262,9 @@ class ConvLSTMAE(nn.Module):
                 pred = pred + pred_previous
 
             # Output
+            # ATTENTION TO CHANGE FOR ANOMALIES
             pred = self.activation_output(pred)
             output += [pred.unsqueeze(1)]
+
         output = torch.cat(output, dim=1)
         return output, {}

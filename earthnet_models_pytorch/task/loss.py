@@ -4,6 +4,7 @@ import torch.nn.functional as F
 import torch.distributions as distrib
 import sys
 
+
 def make_normal_from_raw_params(raw_params, scale_stddev=1, dim=-1, eps=1e-8):
     """
     Creates a normal distribution from the given parameters.
@@ -62,8 +63,8 @@ class PixelwiseLoss(nn.Module):
         self.lc_min = 82 if "lc_min" not in setting else setting["lc_min"]
         self.lc_max = 104 if "lc_max" not in setting else setting["lc_max"]
         print(
-                f"Using Masked L2 NDVI Loss with Landcover boundaries ({self.lc_min, self.lc_max})."
-            )
+            f"Using Masked L2 NDVI Loss with Landcover boundaries ({self.lc_min, self.lc_max})."
+        )
 
     def forward(self, preds, batch, aux, current_step=None):
         logs = {}
@@ -94,7 +95,7 @@ class PixelwiseLoss(nn.Module):
 
 
 class MaskedPixelwiseLoss(nn.Module):
-        def __init__(
+    def __init__(
         self,
         lc_min=None,
         lc_max=None,
@@ -108,74 +109,75 @@ class MaskedPixelwiseLoss(nn.Module):
         extra_aux_loss_weight=1,
         **kwargs,
     ):
-            super().__init__()
+        super().__init__()
 
-            self.lc_min = lc_min if lc_min else None   # landcover boudaries of vegetation (to select only pixel with vegetation)
-            self.lc_max = lc_max if lc_max else None
-            self.use_lc = lc_min & lc_max
-            if not self.use_lc:
-                print(f"WARNING. The boundaries of the landcover map are not definite. Loss calculated on all pixels including non-vegetation pixels.")
-            self.context_length = context_length
-            self.target_length = target_length
-            self.ndvi_pred_idx = ndvi_pred_idx      # index of the NDVI band
-            self.ndvi_targ_idx = ndvi_targ_idx      # index of the NDVI band
-            self.pred_mask_value = pred_mask_value
-            self.scale_by_std = scale_by_std
-            if self.scale_by_std:
-                print(
-                    f"Using Masked L2/Std NDVI Loss with Landcover boundaries ({self.lc_min, self.lc_max})."
-                )
-            else:
-                print(
-                    f"Using Masked L2 NDVI Loss with Landcover boundaries ({self.lc_min, self.lc_max})."
-                )
-
-            self.extra_aux_loss_term = extra_aux_loss_term
-            self.extra_aux_loss_weight = extra_aux_loss_weight
-
-
-        def forward(self, preds, batch, aux, current_step=None):
-            logs = {}
-            # Targets
-            targets = batch["dynamic"][0][
-                :, self.context_length : self.context_length + self.target_length, 0, ...
-            ].unsqueeze(2)
-
-            # Masks on the non vegetation pixels
-            # Dynamic cloud mask available
-            if len(batch["dynamic_mask"]) > 0:
-                s2_mask = (
-                    (
-                        batch["dynamic_mask"][0][
-                            :,
-                            self.context_length : self.context_length + self.target_length,
-                            ...,
-                        ]
-                        < 1.0
-                    )
-                    .bool()
-                    .type_as(preds)
-                )
-
-            # Landcover mask
-            lc = batch["landcover"]
-            lc_mask = (
-                ((lc >= self.lc_min).bool() & (lc <= self.lc_max).bool())
-                .type_as(s2_mask)
-                .unsqueeze(1)
-                .repeat(1, preds.shape[1], 1, 1, 1)
+        self.lc_min = (
+            lc_min if lc_min else None
+        )  # landcover boudaries of vegetation (to select only pixel with vegetation)
+        self.lc_max = lc_max if lc_max else None
+        self.use_lc = lc_min & lc_max
+        if not self.use_lc:
+            print(
+                f"WARNING. The boundaries of the landcover map are not definite. Loss calculated on all pixels including non-vegetation pixels."
+            )
+        self.context_length = context_length
+        self.target_length = target_length
+        self.ndvi_pred_idx = ndvi_pred_idx  # index of the NDVI band
+        self.ndvi_targ_idx = ndvi_targ_idx  # index of the NDVI band
+        self.pred_mask_value = pred_mask_value
+        self.scale_by_std = scale_by_std
+        if self.scale_by_std:
+            print(
+                f"Using Masked L2/Std NDVI Loss with Landcover boundaries ({self.lc_min, self.lc_max})."
+            )
+        else:
+            print(
+                f"Using Masked L2 NDVI Loss with Landcover boundaries ({self.lc_min, self.lc_max})."
             )
 
-            mask = s2_mask * lc_mask 
+        self.extra_aux_loss_term = extra_aux_loss_term
+        self.extra_aux_loss_weight = extra_aux_loss_weight
 
-            # MSE computation
-            sum_squared_error = torch.pow((preds - targets) * mask, 2).sum()
-            n_obs = (mask == 1).sum() #sum of pixel with vegetation
+    def forward(self, preds, batch, aux, current_step=None):
+        logs = {}
+        # Targets
+        targets = batch["dynamic"][0][
+            :, self.context_length : self.context_length + self.target_length, 0, ...
+        ].unsqueeze(2)
 
-            loss = sum_squared_error / (n_obs + 1e-8)
+        # Masks on the non vegetation pixels
+        # Dynamic cloud mask available
+        if len(batch["dynamic_mask"]) > 0:
+            s2_mask = (
+                (
+                    batch["dynamic_mask"][0][
+                        :,
+                        self.context_length : self.context_length + self.target_length,
+                        self.ndvi_targ_idx,
+                        ...,
+                    ].unsqueeze(2)
+                    < 1.0
+                )
+                .bool()
+                .type_as(preds)
+            )
 
-            logs["loss"] = loss
-            return loss, logs
+        # Landcover mask
+        lc = batch["landcover"]
+        lc_mask = (
+            ((lc >= self.lc_min).bool() & (lc <= self.lc_max).bool())
+            .type_as(s2_mask)
+            .unsqueeze(1)
+            .repeat(1, preds.shape[1], 1, 1, 1)
+        )
+        mask = s2_mask * lc_mask
+        # MSE computation
+        sum_squared_error = torch.pow((preds - targets) * mask, 2).sum()
+        n_obs = mask.sum()  # sum of pixel with vegetation
+        loss = sum_squared_error / (n_obs + 1e-8)
+        logs["loss"] = loss
+        # print(loss, sum_squared_error, n_obs)
+        return loss, logs
 
 
 class MaskedL2NDVILoss(nn.Module):
@@ -195,15 +197,19 @@ class MaskedL2NDVILoss(nn.Module):
     ):
         super().__init__()
 
-        self.lc_min = lc_min if lc_min else None   # landcover boudaries of vegetation (to select only pixel with vegetation)
+        self.lc_min = (
+            lc_min if lc_min else None
+        )  # landcover boudaries of vegetation (to select only pixel with vegetation)
         self.lc_max = lc_max if lc_max else None
         self.use_lc = lc_min & lc_max
         if not self.use_lc:
-            print(f"WARNING. The boundaries of the landcover map are not definite. Loss calculated on all pixels including non-vegetation pixels.")
+            print(
+                f"WARNING. The boundaries of the landcover map are not definite. Loss calculated on all pixels including non-vegetation pixels."
+            )
         self.context_length = context_length
         self.target_length = target_length
-        self.ndvi_pred_idx = ndvi_pred_idx      # index of the NDVI band
-        self.ndvi_targ_idx = ndvi_targ_idx      # index of the NDVI band
+        self.ndvi_pred_idx = ndvi_pred_idx  # index of the NDVI band
+        self.ndvi_targ_idx = ndvi_targ_idx  # index of the NDVI band
         self.pred_mask_value = pred_mask_value
         self.scale_by_std = scale_by_std
         if self.scale_by_std:
@@ -222,7 +228,16 @@ class MaskedL2NDVILoss(nn.Module):
         # Mask
         # Cloud mask
         s2_mask = (
-            (batch["dynamic_mask"][0][:, self.context_length:self.context_length+self.target_length, ...] < 1.0).bool().type_as(preds)
+            (
+                batch["dynamic_mask"][0][
+                    :,
+                    self.context_length : self.context_length + self.target_length,
+                    ...,
+                ]
+                < 1.0
+            )
+            .bool()
+            .type_as(preds)
         )  # b t c h w
 
         # Landcover mask
@@ -230,29 +245,25 @@ class MaskedL2NDVILoss(nn.Module):
         lc_mask = ((lc >= self.lc_min).bool() & (lc <= self.lc_max).bool()).type_as(
             preds
         )  # b c h w
-        ndvi_targ = batch["dynamic"][0][:, self.context_length:self.context_length+self.target_length, self.ndvi_targ_idx, ...].unsqueeze(
+        ndvi_targ = batch["dynamic"][0][
+            :,
+            self.context_length : self.context_length + self.target_length,
+            self.ndvi_targ_idx,
+            ...,
+        ].unsqueeze(
             2
         )  # b t c h w
 
         ndvi_pred = preds[:, :, self.ndvi_pred_idx, ...].unsqueeze(2)  # b t c h w
 
-        sum_squared_error = (
-            ((ndvi_targ - ndvi_pred) * s2_mask) ** 2
-        ).sum(
-            1
-        )  # b c h w
-        print(sum_squared_error, (s2_mask.sum(1) + 1e-8) )
+        sum_squared_error = (((ndvi_targ - ndvi_pred) * s2_mask) ** 2).sum(1)  # b c h w
         mse = sum_squared_error / (s2_mask.sum(1) + 1e-8)  # b c h w
 
         if self.scale_by_std:
-            mean_ndvi_targ = (ndvi_targ * s2_mask).sum(1).unsqueeze(
-                1
-            ) / (
+            mean_ndvi_targ = (ndvi_targ * s2_mask).sum(1).unsqueeze(1) / (
                 s2_mask.sum(1).unsqueeze(1) + 1e-8
             )  # b t c h w
-            sum_squared_deviation = (
-                ((ndvi_targ - mean_ndvi_targ) * s2_mask) ** 2
-            ).sum(
+            sum_squared_deviation = (((ndvi_targ - mean_ndvi_targ) * s2_mask) ** 2).sum(
                 1
             )  # b c h w
             mse = sum_squared_error / sum_squared_deviation.clip(
@@ -279,6 +290,14 @@ class MaskedL2NDVILoss(nn.Module):
             logs[self.extra_aux_loss_term] = extra_loss
             mse_lc += self.extra_aux_loss_weight * extra_loss
             logs["loss"] = mse_lc
+
+        # print(
+        #     sum_squared_error.shape,
+        #     # sum_squared_error,
+        #     mse.shape,
+        #     # mse,
+        #     mse_lc,
+        # )
 
         return mse_lc, logs
 

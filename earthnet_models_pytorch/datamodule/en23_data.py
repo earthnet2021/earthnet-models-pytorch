@@ -1,6 +1,7 @@
 from typing import Union, Optional
 
 import argparse
+import sys
 import copy
 import scipy
 import multiprocessing
@@ -152,6 +153,7 @@ class EarthNet2023Dataset(Dataset):
             .values[:, None, ...]
             .astype(self.type)[:, :, :128, :128]
         )
+        
 
         # weather is daily
         meteo_cube = minicube[self.variables["era5"]]
@@ -202,7 +204,7 @@ class EarthNet2023Dataset(Dataset):
             np.isnan(landcover), np.zeros(1).astype(self.type), landcover
         )
         satellite_data = np.concatenate((target, s2_cube), axis=1)
-
+        
         # Final minicube
         data = {
             "dynamic": [
@@ -244,7 +246,7 @@ class EarthNet2023Dataset(Dataset):
             targ = (minicube.s2_B8A - minicube.s2_B04) / (
                 minicube.s2_B8A + minicube.s2_B04 + 1e-6
             )
-
+        
         if (
             self.target == "kndvi"
         ):  # TODO the denominator is not optimal, needs to be improved accordingly to the original paper
