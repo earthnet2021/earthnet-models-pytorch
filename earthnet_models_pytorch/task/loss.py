@@ -165,7 +165,7 @@ class MaskedPixelwiseLoss(nn.Module):
         # Landcover mask
         lc = batch["landcover"]
         lc_mask = (
-            ((lc >= self.lc_min).bool() & (lc <= self.lc_max).bool())
+            ((lc <= self.lc_min).bool() | (lc >= self.lc_max).bool())
             .type_as(s2_mask)
             .unsqueeze(1)
             .repeat(1, preds.shape[1], 1, 1, 1)

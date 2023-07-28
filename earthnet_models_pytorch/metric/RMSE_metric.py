@@ -1,4 +1,3 @@
-import sys
 from torchmetrics import Metric
 import torch
 
@@ -16,6 +15,28 @@ class RootMeanSquaredError(Metric):
         process_group=None,
         dist_sync_fn=None,
     ):
+        """
+        Initialize the RootMeanSquaredError metric.
+
+        Parameters
+        ----------
+        lc_min : int
+            Minimum value bound for the landcover mask.
+        lc_max : int
+            Maximum value bound for the landcover mask.
+        context_length : int
+            Length of the context for predictions.
+        target_length : int
+            Length of the target sequence for predictions.
+        compute_on_step : bool, optional
+            If True, compute the metric on each forward call (default is False).
+        dist_sync_on_step : bool, optional
+            If True, synchronize metric computation across devices in a distributed environment (default is False).
+        process_group : optional
+            Process group for distributed training (default is None).
+        dist_sync_fn : optional
+            Function for synchronizing metric computation across devices (default is None).
+        """
         super().__init__(
             # Advanced metric settings
             compute_on_step=compute_on_step,
@@ -24,6 +45,7 @@ class RootMeanSquaredError(Metric):
             dist_sync_fn=dist_sync_fn,  # distributed environment, by default we use torch.distributed.all_gather() to perform the synchronization between devices.
         )
 
+        # State variables for the metric
         self.add_state(
             "sum_squared_error", default=torch.tensor(0.0), dist_reduce_fx="sum"
         )
@@ -40,15 +62,23 @@ class RootMeanSquaredError(Metric):
         )
 
     def update(self, preds, targs):
-        """Any code needed to update the state given any inputs to the metric."""
+        """
+        Update the state variables of the metric given the input predictions and targets.
 
-        # Targets
+        Parameters
+        ----------
+        preds : torch.Tensor
+            Predicted tensor from the model.
+        targs : dict
+            Dictionary containing the target data.
+        """
+
+        # Targets for the RMSE computation
         targets = targs["dynamic"][0][
             :, self.context_length : self.context_length + self.target_length, 0, ...
         ].unsqueeze(2)
 
-        # Masks on the non vegetation pixels
-        # Dynamic cloud mask available
+        # Masks on the non-vegetation pixels
         if len(targs["dynamic_mask"]) > 0:
             s2_mask = (
                 (
@@ -66,17 +96,17 @@ class RootMeanSquaredError(Metric):
         # Landcover mask
         lc = targs["landcover"]
         lc_mask = (
-            ((lc >= self.lc_min).bool() & (lc <= self.lc_max).bool())
+            ((lc <= self.lc_min).bool() | (lc >= self.lc_max).bool())
             .type_as(s2_mask)
             .unsqueeze(1)
             .repeat(1, preds.shape[1], 1, 1, 1)
         )
 
-        mask = s2_mask * lc_mask 
+        mask = s2_mask * lc_mask
 
-        # MSE computation
+        # Compute the Mean Squared Error (MSE) for the masked regions
         sum_squared_error = torch.pow((preds - targets) * mask, 2).sum((1, 2, 3, 4))
-        n_obs = (mask == 1).sum((1, 2, 3, 4)) #sum of pixel with vegetation
+        n_obs = (mask == 1).sum((1, 2, 3, 4))  # sum of pixel with vegetation
 
         # Update the states variables
         self.current_scores = sum_squared_error / (n_obs + 1e-8)
@@ -85,20 +115,34 @@ class RootMeanSquaredError(Metric):
 
     def compute(self):
         """
-        Computes a final value from the state of the metric.
-        Computes mean squared error over state.
+        Compute the final Root Mean Squared Error (RMSE) over the state of the metric.
+
+        Returns
+        -------
+        dict
+            Dictionary containing the computed RMSE for vegetation pixels.
         """
         return {"RMSE_Veg": torch.sqrt(self.sum_squared_error / self.total)}
 
     def compute_batch(self, targs):
         """
-        Computes a final value for each sample of a batch over the state of the metric.
+        Compute the final RMSE for each sample of a batch over the state of the metric.
+
+        Parameters
+        ----------
+        targs : dict
+            Dictionary containing the target data.
+
+        Returns
+        -------
+        list
+            List of dictionaries containing RMSE scores for each sample in the batch.
         """
         cubenames = targs["cubename"]
         return [
             {
                 "name": cubenames[i],
                 "rmse": self.current_scores[i],
-            }  # "rmse" is Legacy, update logging before
+            }
             for i in range(len(cubenames))
         ]

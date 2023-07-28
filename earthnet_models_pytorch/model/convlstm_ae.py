@@ -10,6 +10,22 @@ import torch
 from earthnet_models_pytorch.utils import str2bool
 
 
+# Mapping of class labels to indices
+class_mapping = {
+    10: 0,
+    20: 1,
+    30: 2,
+    40: 3,
+    50: 4,
+    60: 5,
+    70: 6,
+    80: 7,
+    90: 8,
+    95: 9,
+    100: 10,
+}
+
+
 class ConvLSTMCell(nn.Module):
     def __init__(self, input_dim, hidden_dim, kernel_size, bias):
         """
@@ -43,6 +59,23 @@ class ConvLSTMCell(nn.Module):
         )
 
     def forward(self, input_tensor, cur_state):
+        """
+        Forward pass of the ConvLSTM cell.
+        Parameters
+        ----------
+        input_tensor: torch.Tensor
+            Input tensor.
+        cur_state: tuple
+            Tuple containing the current hidden state (h) and cell state (c).
+
+        Returns
+        -------
+        torch.Tensor
+            Next hidden state (h_next).
+        torch.Tensor
+            Next cell state (c_next).
+        """
+
         h_cur, c_cur = cur_state
         combined = torch.cat(
             [input_tensor, h_cur], dim=1
@@ -60,6 +93,24 @@ class ConvLSTMCell(nn.Module):
         return h_next, c_next
 
     def init_hidden(self, batch_size, height, width):
+        """
+        Initialize the hidden and cell states with zeros.
+        Parameters
+        ----------
+        batch_size: int
+            Batch size.
+        height: int
+            Height of the input tensor.
+        width: int
+            Width of the input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Initial hidden state (h) filled with zeros.
+        torch.Tensor
+            Initial cell state (c) filled with zeros.
+        """
         return (
             torch.zeros(
                 batch_size,
@@ -76,6 +127,21 @@ class ConvLSTMCell(nn.Module):
                 device=self.conv.weight.device,
             ),
         )
+
+
+# SigmoidRescaler class to rescale output between -1 and 1
+class SigmoidRescaler(nn.Module):
+    def __init__(self):
+        super(SigmoidRescaler, self).__init__()
+
+    def forward(self, x):
+        # Apply the sigmoid function
+        sigmoid_output = torch.sigmoid(x)
+
+        # Rescale the sigmoid output between -1 and 1
+        rescaled_output = 2 * sigmoid_output - 1
+
+        return rescaled_output
 
 
 class ConvLSTMAE(nn.Module):
@@ -125,7 +191,7 @@ class ConvLSTMAE(nn.Module):
         if self.hparams.target == "ndvi":
             self.activation_output = nn.Sigmoid()
         elif self.hparams.target == "anomalie_ndvi":
-            self.activation_output = 2 * (nn.Sigmoid() - 0.5)
+            self.activation_output = SigmoidRescaler()
         else:
             KeyError("The target is not defined.")
 
@@ -133,6 +199,20 @@ class ConvLSTMAE(nn.Module):
     def add_model_specific_args(
         parent_parser: Optional[Union[argparse.ArgumentParser, list]] = None
     ):
+        """
+        Add model-specific arguments to the command-line argument parser.
+
+        Parameters
+        ----------
+        parent_parser: Optional[Union[argparse.ArgumentParser, list]]
+            Parent argument parser (optional).
+
+        Returns
+        -------
+        argparse.ArgumentParser
+            Argument parser with added model-specific arguments.
+        """
+        # Create a new argument parser or use the parent parser
         if parent_parser is None:
             parent_parser = []
         elif not isinstance(parent_parser, list):
@@ -140,6 +220,7 @@ class ConvLSTMAE(nn.Module):
 
         parser = argparse.ArgumentParser(parents=parent_parser, add_help=False)
 
+        # Add model-specific arguments
         parser.add_argument(
             "--hidden_dim", type=ast.literal_eval, default=[64, 64, 64, 64]
         )
@@ -162,12 +243,36 @@ class ConvLSTMAE(nn.Module):
         preds_length: Optional[int] = None,
         step: Optional[int] = None,
     ):
+        """
+        Forward pass of the ConvLSTMAE model.
+
+        Parameters
+        ----------
+        data: dict
+            Dictionary containing the input data.
+        pred_start: int, optional
+            Starting index of predictions (default is 0).
+        preds_length: Optional[int], optional
+            Length of predictions (default is None).
+        step: Optional[int], optional
+            Step parameter for teacher forcing (default is None).
+
+        Returns
+        -------
+        torch.Tensor
+            Output tensor containing the model predictions.
+        dict
+            Empty dictionary as the second return value (not used in this implementation).
+        """
+
+        # Determine the context length for prediction
         context_length = (
             self.hparams.context_length
             if self.training or (pred_start < self.hparams.context_length)
             else pred_start
         )
-        # teacher forcing coefficient
+
+        # Calculate teacher forcing coefficient
         if self.hparams.teacher_forcing:
             k = torch.tensor(0.1 * 10 * 12000)
 
@@ -175,22 +280,38 @@ class ConvLSTMAE(nn.Module):
         else:
             teacher_forcing_decay = 0
 
-        # Data
+        # Extract data components
+
         # sentinel 2 bands
         sentinel = data["dynamic"][0][:, :context_length, ...]
 
+        # Extract the target for the teacher forcing method
         if self.hparams.teacher_forcing and self.training:
             target = data["dynamic"][0][
                 :, context_length : context_length + self.hparams.target_length, ...
             ]
 
         weather = data["dynamic"][1].unsqueeze(3).unsqueeze(4)
-        static = data["static"][0]
 
-        # Shape: batch size, temporal size, number of channels, height, width
+        # Prepare landcover data
+        landcover = data["landcover"]
+        for key in list(class_mapping.keys()):
+            landcover[landcover == key] = class_mapping.get(key)
+
+        landcover = (
+            nn.functional.one_hot(landcover.to(torch.int64), 11)
+            .squeeze(1)
+            .transpose((0, 3, 1, 2))
+        )
+
+        # Concatenate static data with landcover
+        static = torch.cat((data["static"][0], data["static"][1]), dim=1)
+        static = torch.cat((static, landcover), dim=1)
+
+        # Get the dimensions of the input data. Shape: batch size, temporal size, number of channels, height, width
         b, t, _, h, w = sentinel.shape
 
-        # initialize hidden states
+        # Initialize hidden states for encoder ConvLSTM cells
         h_t, c_t = self.encoder_1_convlstm.init_hidden(batch_size=b, height=h, width=w)
         h_t2, c_t2 = self.encoder_2_convlstm.init_hidden(
             batch_size=b, height=h, width=w
@@ -200,6 +321,7 @@ class ConvLSTMAE(nn.Module):
 
         # Encoding network
         for t in range(context_length):
+            # Prepare input for encoder ConvLSTM cells
             input = torch.cat((sentinel[:, t, ...], static), dim=1)
             # WARNING only for En23
             weather_t = (
@@ -210,27 +332,28 @@ class ConvLSTMAE(nn.Module):
             )
             input = torch.cat((input, weather_t), dim=1)
 
-            # First block
+            # First ConvLSTM block
             h_t, c_t = self.encoder_1_convlstm(input_tensor=input, cur_state=[h_t, c_t])
-            # second block
+            # Second ConvLSTM block
             h_t2, c_t2 = self.encoder_2_convlstm(
                 input_tensor=h_t, cur_state=[h_t2, c_t2]
             )
 
         # First prediction
         pred = self.conv(h_t2)
-        # add the last frame of the context period
+
+        # Add the last frame of the context period if skip_connections is True
         if self.hparams.skip_connections:
             pred = pred + sentinel[:, t, 0, ...].unsqueeze(1)
 
         pred = self.activation_output(pred)
 
-        # forecasting network
+        # Forecasting network
         for t in range(self.hparams.target_length):
-            # Skip connection
+            # Copy the previous prediction for skip connections
             pred_previous = torch.clone(pred)
 
-            # Input
+            # Prepare input for decoder ConvLSTM cells
             weather_t = (
                 weather[:, context_length + t : context_length + t + 5, ...]
                 .view(weather.shape[0], 1, -1, 1, 1)
@@ -248,21 +371,23 @@ class ConvLSTMAE(nn.Module):
 
             pred = torch.cat((pred, static), dim=1)
             pred = torch.cat((pred, weather_t), dim=1)
-            # first block
+
+            # First ConvLSTM block for the decoder
             h_t, c_t = self.decoder_1_convlstm(input_tensor=pred, cur_state=[h_t, c_t])
 
-            # Second block
+            # Second ConvLSTM block for the decoder
             h_t2, c_t2 = self.decoder_2_convlstm(
                 input_tensor=h_t, cur_state=[h_t2, c_t2]
             )
 
             pred = h_t2
             pred = self.conv(pred)
+
+            # Add the previous prediction for skip connections
             if self.hparams.skip_connections:
                 pred = pred + pred_previous
 
             # Output
-            # ATTENTION TO CHANGE FOR ANOMALIES
             pred = self.activation_output(pred)
             output += [pred.unsqueeze(1)]
 

@@ -3,9 +3,9 @@ from typing import Union, Optional
 import argparse
 import sys
 import copy
-import scipy
 import multiprocessing
 import re
+import json
 from pathlib import Path
 import numpy as np
 import pytorch_lightning as pl
@@ -26,7 +26,7 @@ variables = {
     "s1_avail": ["s1_avail"],
     # Monthly mean and std computed over 1984-2020 using Landsat 5, 7, 8. Digital Earth Africa product.
     "ndviclim": ["ndviclim_mean", "ndviclim_std"],
-    # Era5 reanalysis dataset. Era5 era5land pev and pet have a low precision
+    # Era5 reanalysis dataset. Temporal dataset. Era5 era5land pev and pet have a low precision.
     "era5lands": [
         "era5land_t2m_mean",
         "era5land_pev_mean",
@@ -64,7 +64,7 @@ variables = {
         "era5_t2mmin",
         "era5_tp",
     ],
-    # soigrids is not yet define on 128 x 128 pixels. Can maybe not be used during the prediction period.
+    # soigrids is a soil properties dataset. Spatial data.
     "soilgrids": [
         "sg_bdod_top_mean",
         "sg_bdod_sub_mean",
@@ -130,13 +130,13 @@ class EarthNet2023Dataset(Dataset):
             )
 
         # Create the minicube
-        # s2 is 10 to 5 days, and already rescaled [0, 1]
+        # Sentinel-2: s2 is 10 to 5 days, and already rescaled [0, 1]
         s2_cube = (
             minicube[self.variables["s2_bands"]]
             .to_array()
             .sel(time=time)
             .values.transpose((1, 0, 2, 3))
-            .astype(self.type)[:, :, :128, :128]
+            .astype(self.type)
         )  # shape: (time, channels, w, h)
 
         s2_mask = (
@@ -144,52 +144,51 @@ class EarthNet2023Dataset(Dataset):
             .to_array()
             .sel(time=time)
             .values.transpose((1, 0, 2, 3))
-            .astype(self.type)[:, :, :128, :128]
+            .astype(self.type)
         )  # (time, 1, w, h)
 
         target = (
             self.target_computation(minicube)
             .sel(time=time)
             .values[:, None, ...]
-            .astype(self.type)[:, :, :128, :128]
+            .astype(self.type)
         )
-        
-
-        # weather is daily
-        meteo_cube = minicube[self.variables["era5"]]
-
-        # rescale temperature on the extreme values ever observed in Africa (Kelvin).
-        meteo_cube["era5_t2m"] = (meteo_cube["era5_t2m"] - 248) / (328 - 248)
-        meteo_cube["era5_t2mmin"] = (meteo_cube["era5_t2mmin"] - 248) / (328 - 248)
-        meteo_cube["era5_t2mmax"] = (meteo_cube["era5_t2mmax"] - 248) / (328 - 248)
-
-        meteo_cube = meteo_cube.to_array().values.transpose((1, 0)).astype(self.type)
-        meteo_cube[np.isnan(meteo_cube)] = 0
-
-        # TODO NaN values are replaces by the mean of each variable.
-        # col_mean = np.nanmean(meteo_cube, axis=0)
-        # inds = np.where(np.isnan(meteo_cube))
-        # meteo_cube[inds] = np.take(col_mean, inds[1])
 
         topography = (
-            minicube[self.variables["elevation"]].to_array() / 2000
-        )  # c h w, rescaling
-
-        # TODO  [:, :128, :128] and mean to remove?
-        topography = topography.values.astype(self.type)[:, :128, :128]
-        topography[np.isnan(topography)] = np.mean(
-            topography
-        )  # idk if we can have missing value in the topography
+            minicube[self.variables["elevation"]].to_array().values.astype(self.type)
+            / 2000
+        )  # c h w,
 
         landcover = (
-            minicube[self.variables["landcover"]]
-            .to_array()
-            .values.astype(self.type)[:, :128, :128]
+            minicube[self.variables["landcover"]].to_array().values.astype(self.type)
         )  # c h w
 
-        # TODO transform landcover in categoritcal variables if used for training
+        # Rescaling
+        with open("earthnet_models_pytorch/datamodule/statistics_en23.json") as file:
+            statistic = json.load(file)
 
-        # TODO to remove?
+        for variable in (
+            self.variables["era5"]
+            + self.variables["era5lands"]
+            + self.variables["soilgrids"]
+        ):
+            minicube[variable] = (minicube[variable] - statistic[variable]["min"]) / (
+                statistic[variable]["max"] - statistic[variable]["min"]
+            )
+
+        # Era5land and Era5 dataset. Weather is daily
+        meteo_cube = (
+            minicube[self.variables["era5"]] # + self.variables["era5lands"]]
+            .to_array()
+            .values.transpose((1, 0))
+            .astype(self.type)
+        )
+
+        # Soilgrid dataset
+        sg_cube = (
+            minicube[self.variables["soilgrids"]].to_array().values.astype(self.type)
+        )
+
         # NaN values handling
         s2_cube = np.where(np.isnan(s2_cube), np.zeros(1).astype(self.type), s2_cube)
         s2_mask = np.where(np.isnan(s2_mask), np.ones(1).astype(self.type), s2_cube)
@@ -197,14 +196,17 @@ class EarthNet2023Dataset(Dataset):
         meteo_cube = np.where(
             np.isnan(meteo_cube), np.zeros(1).astype(self.type), meteo_cube
         )
+        sg_cube = np.where(np.isnan(sg_cube), np.zeros(1).astype(self.type), sg_cube)
         topography = np.where(
             np.isnan(topography), np.zeros(1).astype(self.type), topography
         )
         landcover = np.where(
             np.isnan(landcover), np.zeros(1).astype(self.type), landcover
         )
+
+        # Concatenation
         satellite_data = np.concatenate((target, s2_cube), axis=1)
-        
+
         # Final minicube
         data = {
             "dynamic": [
@@ -212,7 +214,7 @@ class EarthNet2023Dataset(Dataset):
                 torch.from_numpy(meteo_cube),
             ],
             "dynamic_mask": [torch.from_numpy(s2_mask)],
-            "static": [torch.from_numpy(topography)],
+            "static": [torch.from_numpy(topography), torch.from_numpy(sg_cube)],
             # "target": torch.from_numpy(target),
             "landcover": torch.from_numpy(landcover),
             "filepath": str(filepath),
@@ -246,7 +248,7 @@ class EarthNet2023Dataset(Dataset):
             targ = (minicube.s2_B8A - minicube.s2_B04) / (
                 minicube.s2_B8A + minicube.s2_B04 + 1e-6
             )
-        
+
         if (
             self.target == "kndvi"
         ):  # TODO the denominator is not optimal, needs to be improved accordingly to the original paper
