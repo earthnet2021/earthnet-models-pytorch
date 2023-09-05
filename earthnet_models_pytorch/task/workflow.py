@@ -9,7 +9,6 @@ import torch
 from torch import nn
 import numpy as np
 import xarray as xr
-import sys
 import pytorch_lightning as pl
 
 
@@ -380,10 +379,6 @@ class SpatioTemporalTask(pl.LightningModule):
                     y = targ_cube["y"].values
                     x = targ_cube["x"].values
 
-                    # Saving
-                    targ_cube["ndvi_target"] = (targ_cube.nir - targ_cube.red) / (
-                        targ_cube.nir + targ_cube.red + 1e-6
-                    )
                     pred_cube = xr.Dataset(
                         {
                             "ndvi_pred": xr.DataArray(
@@ -408,11 +403,7 @@ class SpatioTemporalTask(pl.LightningModule):
                             pred_path,
                             encoding={
                                 "ndvi_pred": {"dtype": "float32"},
-                                "ndvi_target": {"dtype": "float32"},
-                                "mask": {"dtype": "float32"},
-                                "landcover": {"dtype": "float32"},
-                                "geomorphons": {"dtype": "float32"},
-                                "SRTM": {"dtype": "float32"},
+
                             },
                         )
 
@@ -459,21 +450,6 @@ class SpatioTemporalTask(pl.LightningModule):
                             cube_path,
                             encoding={"ndvi_pred": {"dtype": "float32"}},
                         )
-
-                    # np.savez_compressed(
-                    #     cube_path,
-                    #     highresdynamic=preds[j, ...]
-                    #     .permute(2, 3, 1, 0)
-                    #     .detach()
-                    #     .cpu()
-                    #     .numpy()
-                    #     if "full" not in aux
-                    #     else aux["full"][j, ...]
-                    #     .permute(2, 3, 1, 0)
-                    #     .detach()
-                    #     .cpu()
-                    #     .numpy(),
-                    # )
 
             if self.hparams.compute_metric_on_test:
                 self.metric_test.update(preds, batch)

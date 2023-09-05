@@ -12,7 +12,7 @@ from pytorch_lightning.callbacks import TQDMProgressBar
 
 
 from earthnet_models_pytorch.model import MODELS
-from earthnet_models_pytorch.task.workflow import SpatioTemporalTask
+from earthnet_models_pytorch.task import SpatioTemporalTask
 
 from earthnet_models_pytorch.datamodule import DATASETS
 from earthnet_models_pytorch.utils import parse_setting
@@ -47,9 +47,7 @@ def train_model(setting_dict: dict, setting_file: str = None):
         "--{}={}".format(key, value) for key, value in setting_dict["Task"].items()
     ]
     task_parser = ArgumentParser()
-    task_parser = SpatioTemporalTask.add_task_specific_args(
-        task_parser
-    )
+    task_parser = SpatioTemporalTask.add_task_specific_args(task_parser)
     task_params = task_parser.parse_args(task_args)
     task = SpatioTemporalTask(model=model, hparams=task_params)
 

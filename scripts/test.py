@@ -9,12 +9,10 @@ import pytorch_lightning as pl
 
 from earthnet_models_pytorch.model import MODELS
 from earthnet_models_pytorch.datamodule import DATASETS
-from earthnet_models_pytorch.task.workflow import SpatioTemporalTask
+from earthnet_models_pytorch.task import SpatioTemporalTask
 from earthnet_models_pytorch.utils import parse_setting
 
 # from torchsummary import summary
-# from earthnet_models_pytorch.task import TRACK_INFO
-
 
 def test_model(setting_dict: dict, checkpoint: str):
     # Data

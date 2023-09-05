@@ -27,6 +27,7 @@ DATASETS = {
     "en22": EarthNet2022DataModule,
     "en23": EarthNet2023DataModule,
 }
+
 METRIC_CHECKPOINT_INFO = {
     "en21-std": {
         "monitor": "EarthNetScore",

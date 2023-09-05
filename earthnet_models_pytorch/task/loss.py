@@ -107,6 +107,7 @@ class MaskedPixelwiseLoss(nn.Module):
         scale_by_std=False,
         extra_aux_loss_term=None,
         extra_aux_loss_weight=1,
+        setting=None,
         **kwargs,
     ):
         super().__init__()
@@ -137,6 +138,7 @@ class MaskedPixelwiseLoss(nn.Module):
 
         self.extra_aux_loss_term = extra_aux_loss_term
         self.extra_aux_loss_weight = extra_aux_loss_weight
+        self.setting = setting
 
     def forward(self, preds, batch, aux, current_step=None):
         logs = {}
@@ -164,19 +166,21 @@ class MaskedPixelwiseLoss(nn.Module):
 
         # Landcover mask
         lc = batch["landcover"]
+        if self.setting == "en23":
+            lc_bool = (lc <= self.lc_min).bool() | (lc >= self.lc_max).bool()
+        else:
+            lc_mask = (lc >= self.lc_min).bool() & (lc <= self.lc_max).bool()
+
         lc_mask = (
-            ((lc <= self.lc_min).bool() | (lc >= self.lc_max).bool())
-            .type_as(s2_mask)
-            .unsqueeze(1)
-            .repeat(1, preds.shape[1], 1, 1, 1)
+            lc_bool.type_as(s2_mask).unsqueeze(1).repeat(1, preds.shape[1], 1, 1, 1)
         )
         mask = s2_mask * lc_mask
+
         # MSE computation
         sum_squared_error = torch.pow((preds - targets) * mask, 2).sum()
         n_obs = mask.sum()  # sum of pixel with vegetation
         loss = sum_squared_error / (n_obs + 1e-8)
         logs["loss"] = loss
-        # print(loss, sum_squared_error, n_obs)
         return loss, logs
 
 
@@ -290,14 +294,6 @@ class MaskedL2NDVILoss(nn.Module):
             logs[self.extra_aux_loss_term] = extra_loss
             mse_lc += self.extra_aux_loss_weight * extra_loss
             logs["loss"] = mse_lc
-
-        # print(
-        #     sum_squared_error.shape,
-        #     # sum_squared_error,
-        #     mse.shape,
-        #     # mse,
-        #     mse_lc,
-        # )
 
         return mse_lc, logs
 

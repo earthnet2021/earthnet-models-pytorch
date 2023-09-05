@@ -23,7 +23,7 @@ Trainer:
     #fast_dev_run: True
     #log_gpu_memory: 'all'
     #weights_summary: 'full'
-    max_epochs: 50
+    max_epochs: 30
     #limit_train_batches: 32
     #limit_val_batches: 32
     gradient_clip_val: 1
@@ -33,9 +33,9 @@ Trainer:
     val_check_interval: 0.25 #0.005 # 
   
 Data:
-    base_dir: "/scratch/crobin/earthnet2023_interpolated/" 
+    base_dir: "/scratch/crobin/earthnet2023/" 
     test_track: "iid"
-    target: "ndvi"
+    target: "anomalie_ndvi"
     train_batch_size: 4
     val_batch_size: 4
     test_batch_size: 4
@@ -75,6 +75,6 @@ Model:
     kernel_size: 3
     bias: True
     skip_connections: True
-    num_inputs: 200
+    num_inputs: 49
     num_outputs: 1 
     teacher_forcing: True

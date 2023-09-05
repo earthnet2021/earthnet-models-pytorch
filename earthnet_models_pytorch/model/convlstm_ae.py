@@ -294,19 +294,21 @@ class ConvLSTMAE(nn.Module):
         weather = data["dynamic"][1].unsqueeze(3).unsqueeze(4)
 
         # Prepare landcover data
-        landcover = data["landcover"]
-        for key in list(class_mapping.keys()):
-            landcover[landcover == key] = class_mapping.get(key)
+        # landcover = data["landcover"]
+        # for key in list(class_mapping.keys()):
+        #     landcover[landcover == key] = class_mapping.get(key)
+# 
+        # landcover = (
+        #     nn.functional.one_hot(landcover.to(torch.int64), 11)
+        #     .transpose(1, 4)
+        #     .squeeze(4)
+        # )
+# 
+        # # Concatenate static data with landcover
+        # static = torch.cat((data["static"][0], data["static"][1]), dim=1)
+        # static = torch.cat((static, landcover), dim=1)
 
-        landcover = (
-            nn.functional.one_hot(landcover.to(torch.int64), 11)
-            .squeeze(1)
-            .transpose((0, 3, 1, 2))
-        )
-
-        # Concatenate static data with landcover
-        static = torch.cat((data["static"][0], data["static"][1]), dim=1)
-        static = torch.cat((static, landcover), dim=1)
+        static = data["static"][0]
 
         # Get the dimensions of the input data. Shape: batch size, temporal size, number of channels, height, width
         b, t, _, h, w = sentinel.shape

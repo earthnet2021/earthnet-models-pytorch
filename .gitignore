@@ -145,6 +145,8 @@ notebooks/*
 notebooks
 experiments
 experiments/*
+Data_analysis/
+Data_analysis/*
 analysis
 analysis/*
 experiments_1

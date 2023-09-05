@@ -15,7 +15,7 @@ import torch
 import pytorch_lightning as pl
 
 from earthnet_models_pytorch.model import MODELS
-from earthnet_models_pytorch.task.workflow import SpatioTemporalTask
+from earthnet_models_pytorch.task import SpatioTemporalTask
 from earthnet_models_pytorch.datamodule import DATASETS
 from earthnet_models_pytorch.utils import parse_setting
 
@@ -63,10 +63,10 @@ def fast_dev_run(setting_dict: dict):
     trainer_dict["logger"] = False
     trainer_dict["fast_dev_run"] = 2  # number of batch
     # trainer_dict["log_gpu_memory"] = 'all'
-    if "profiler" in trainer_dict:
-        trainer_dict["profiler"] = pl.profiler.AdvancedProfiler(
-            output_filename="curr_profile"
-        )  # TODO better output filename...  # performance analysis
+    # if "profiler" in trainer_dict:
+    #     trainer_dict["profiler"] = pl.profiler.AdvancedProfiler(
+    #         output_filename="curr_profile"
+    #     )  # TODO better output filename...  # performance analysis
 
     trainer = pl.Trainer(**trainer_dict)  # Customize every aspect of training via flags
 
@@ -127,10 +127,10 @@ def overfit_model(setting_dict: dict):
     trainer_dict["check_val_every_n_epoch"] = 50  # Check val every n train epochs.
     trainer_dict["max_epochs"] = 10
     # trainer_dict["num_sanity_val_steps"] = 0  #Sanity check runs n batches of val before starting the training routine
-    if "profiler" in trainer_dict:
-        trainer_dict["profiler"] = pl.profiler.AdvancedProfiler(
-            output_filename="curr_profile"
-        )
+    # if "profiler" in trainer_dict:
+    #     trainer_dict["profiler"] = pl.profiler.AdvancedProfiler(
+    #         output_filename="curr_profile"
+    #     )
 
     trainer = pl.Trainer(logger=logger, **trainer_dict)
 

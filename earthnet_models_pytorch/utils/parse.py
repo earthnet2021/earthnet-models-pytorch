@@ -10,7 +10,9 @@ import warnings
 from earthnet_models_pytorch.datamodule import SETTINGS, METRIC_CHECKPOINT_INFO
 from earthnet_models_pytorch.model import MODELS
 
+
 def parse_setting(setting_file, track = None):
+  
 
     setting_file = Path(setting_file)
     
@@ -85,7 +87,6 @@ def parse_setting(setting_file, track = None):
 
     setting_dict["Trainer"]["precision"] = setting_dict["Trainer"]["precision"] if "precision" in setting_dict["Trainer"] else 32  # binary floating-point computer number format 
     setting_dict["Data"]["fp16"] = (setting_dict["Trainer"]["precision"] == 16)   # binary floating-point computer number format 
-
     setting_dict["Checkpointer"] = {**setting_dict["Checkpointer"], **METRIC_CHECKPOINT_INFO[setting_dict["Setting"]]} if "Checkpointer" in setting_dict else METRIC_CHECKPOINT_INFO[setting_dict["Setting"]]
     
     bs = setting_dict["Data"]["train_batch_size"]
@@ -111,7 +112,8 @@ def parse_setting(setting_file, track = None):
 
     if setting_dict["Architecture"] in ["channel-u-net", "local-rnn","rnn", "context-convlstm", "u-net-convlstm", "dumby-mlp", "convlstm-lstm"]:  
         setting_dict["Model"]["setting"] = setting_dict["Setting"]
-   
+
+    # Cpy information for others modules   
     setting_dict["Model"]["context_length"] = setting_dict["Task"]["context_length"]        
     setting_dict["Model"]["target_length"] = setting_dict["Task"]["target_length"]
     setting_dict["Model"]["target"] = setting_dict["Data"]["target"]
@@ -125,6 +127,8 @@ def parse_setting(setting_file, track = None):
 
     setting_dict["Task"]["lc_min"] = setting_dict["Task"]["loss"]["lc_min"]
     setting_dict["Task"]["lc_max"] = setting_dict["Task"]["loss"]["lc_max"]
+
+    setting_dict["Task"]["loss"]["setting"] = setting_dict["Setting"]
     
 
     return setting_dict
