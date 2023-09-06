@@ -3,9 +3,9 @@ fire==0.4.0
 matplotlib==3.5.1
 numpy==1.23.5
 pandas==1.4.1
-Pillow==10.0.0
+Pillow==9.3.0
 pytorch_lightning==1.8.5.post0
-PyYAML==6.0.1
+PyYAML==6.0
 scipy==1.11.2
 segmentation_models_pytorch==0.2.1
 setuptools==59.5.0

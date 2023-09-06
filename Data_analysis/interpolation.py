@@ -154,8 +154,8 @@ def process_sample(file):
 
 #
 if __name__ == "__main__":
-    basepath = Path("/scratch/crobin/earthnet2023/train/")
-    dst_path = "/scratch/crobin/earthnet2023_interpolated/train/"
+    basepath = Path("/scratch/crobin/earthnet2023/test/")
+    dst_path = "/scratch/crobin/earthnet2023_interpolated/test/"
 
     if not os.path.exists(dst_path):
         os.makedirs(dst_path)

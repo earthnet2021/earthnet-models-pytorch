@@ -1,11 +1,23 @@
-from setuptools import setup, find_packages, find_namespace_packages
+from setuptools import setup, find_packages
 
 
 with open("README.md", "r") as fh:
     long_description = fh.read()
 
 
-install_requires = []
+
+install_requires = [
+    "tensorboard",
+    "numpy",
+    "matplotlib",
+    "pillow",
+    "xarray",
+    "zarr",
+    "netcdf4",
+    "pytorch-lightning",
+    "earthnet",
+    "segmentation-models-pytorch"
+    ]
 
 scripts = [
     "scripts/debug.py",
@@ -16,13 +28,6 @@ scripts = [
     "scripts/slurmrun.sh",
 ]
 
-# include = [
-#     "earthnet_models_pytorch.datamodule",
-#     "earthnet_models_pytorch.metric",
-#     "earthnet_models_pytorch.model",
-#     "earthnet_models_pytorch.task",
-#     "earthnet_models_pytorch.utils",
-# ]
 
 setup(
     name="earthnet-models-pytorch",
