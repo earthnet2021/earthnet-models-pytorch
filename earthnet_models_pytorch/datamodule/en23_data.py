@@ -261,17 +261,8 @@ class EarthNet2023Dataset(Dataset):
             ) / np.tanh(1)
 
         if self.target == "anomalie_ndvi":
-            targ = (minicube.s2_B8A - minicube.s2_B04) / (
-                minicube.s2_B8A + minicube.s2_B04 + 1e-6
-            )
-            for i in range(1, 13):
-                indices = targ.groupby("time.month").groups[i]
-                index_month = minicube.ndviclim_mean.groupby("time_clim.month").groups[
-                    i
-                ]
-                targ[indices] = (
-                    targ[indices].values - minicube.ndviclim_mean[index_month].values
-                )
+            targ = minicube.msc
+            
         return targ
 
 

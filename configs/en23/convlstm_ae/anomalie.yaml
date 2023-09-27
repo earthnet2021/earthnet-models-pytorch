@@ -23,7 +23,7 @@ Trainer:
     #fast_dev_run: True
     #log_gpu_memory: 'all'
     #weights_summary: 'full'
-    max_epochs: 50
+    max_epochs: 30
     #limit_train_batches: 32
     #limit_val_batches: 32
     gradient_clip_val: 1
@@ -33,7 +33,7 @@ Trainer:
     val_check_interval: 0.25 #0.005 # 
   
 Data:
-    base_dir: "/scratch/crobin/earthnet2023/" 
+    base_dir: "/scratch/crobin/earthnet2023_preprocessing/" 
     test_track: "iid"
     target: "anomalie_ndvi"
     train_batch_size: 4
@@ -43,7 +43,7 @@ Data:
 
 Task:
     loss:
-        name: "MaskedL2NDVILoss"
+        name: "MaskedPixelwiseLoss"
         lc_min: 40
         lc_max: 90
         ndvi_pred_idx: 0 # index of the NDVI band
@@ -51,7 +51,7 @@ Task:
         pred_mask_value: -1
         scale_by_std: False
     context_length: 60
-    target_length: 30
+    target_length: 10
     metric: "RMSE"
     n_stochastic_preds: 2
     optimization:
@@ -60,12 +60,12 @@ Task:
                 name: AdamW
                 args: 
                     betas: [0.9, 0.999]
-                lr_per_sample: 0.000001
+                lr_per_sample: 0.0001
         lr_shedule:
             -
                 name: MultiStepLR
                 args:
-                    milestones: [160,190] #[2, 20, 50, 90]
+                    milestones: [3, 6] #[2, 20, 50, 90]
                     gamma: 0.1
     n_log_batches: 2
     compute_metric_on_test: True
@@ -77,3 +77,4 @@ Model:
     skip_connections: True
     num_inputs: 49
     num_outputs: 1 
+    teacher_forcing: True
