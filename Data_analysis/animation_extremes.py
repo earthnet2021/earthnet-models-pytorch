@@ -1,9 +1,7 @@
 import xarray as xr
 from matplotlib import pyplot as plt
 from matplotlib.animation import FuncAnimation, PillowWriter
-import matplotlib as mpl
 import cartopy.crs as ccrs
-import datetime
 import numpy as np
 import sys
 
@@ -54,9 +52,9 @@ map_proj = ccrs.Mollweide(central_longitude=0)
 
 # Setup the initial plot
 fig = plt.figure(figsize=(7, 5))
-ax = plt.axes(
-    projection=ccrs.PlateCarree(),
-)  # the data's projection
+#ax = plt.axes(
+#    projection=ccrs.PlateCarree(),
+#)  # the data's projection
 
 p = extremes.isel(time=0).layer.plot.imshow(
     cmap=cmap,
@@ -70,11 +68,11 @@ cbar.set_label('"Extreme event intensity"')
 cbar.set_ticks(ticks=range(7),labels=labels)
 
 # Set up static features - coastlines, political borders etc.
-ax.coastlines()
+p.coastlines()
 
 
 def animation_function(t):
-    ax.set_title(extremes.isel(time=t).time.dt.date.values)
+    p.set_title(extremes.isel(time=t).time.dt.date.values)
     p.set_array(np.squeeze(extremes.isel(time=t).to_array()))
     # plt.colorbar(p, orientation='vertical', shrink=0.7, label='Extreme event intensity')
 
