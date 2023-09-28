@@ -2,12 +2,8 @@ import xarray as xr
 import cartopy.crs as ccrs
 import numpy as np
 import sys
-
-# Þimport tkinter
+import json
 import matplotlib
-
-# matplotlib.use('QtAgg')
-# matplotlib.use('TkAgg')
 from matplotlib import pyplot as plt
 from matplotlib.animation import FuncAnimation, PillowWriter
 
@@ -19,7 +15,9 @@ def longitudetocoords(x):
 def coordstolongitude(x):
     return ((x + 180) % 360) - 180
 
+
 ### Extemes event dataset
+
 # Define the path to the extremes events data in Zarr format
 path2extreme = "/Net/Groups/BGI/work_1/scratch/s3/deepextremes/v2/EventCube_ranked_pot0.01_ne0.1.zarr"
 # Open the Zarr dataset
@@ -34,13 +32,14 @@ extremes = dsc.assign_coords(longitude=coordstolongitude(dsc.longitude)).sel(
 )
 
 ### Earthnet2023 data
+
 path2earthnet = "/Net/Groups/BGI/scratch/crobin/PythonProjects/EarthNet/earthnet-models-pytorch/Data_analysis/coordinates.py"
 # Open the Json dataset
-# data = xr.open_json(path2extreme)
+f = open(path2earthnet)
+earthnet2023 = json.load(f)
 
 # Remove the non-extreme events
 extremes["layer"] = extremes["layer"].where(extremes["layer"] != 16, 0)
-
 
 
 color_list = [
@@ -111,17 +110,19 @@ cbar = fig.colorbar(
 cbar.set_label("Extreme event intensity")
 cbar.set_ticks(ticks=[i for i in range(len(labels))], labels=labels)
 
+
 # Animation
 def animation_function(t):
     ax.set_title(extremes.isel(time=t).time.dt.date.values)
     anim = p.set_array(np.squeeze(extremes.isel(time=t).to_array()))
     # plt.colorbar(p, orientation='vertical', shrink=0.7, label='Extreme event intensity')
 
+
 animation = FuncAnimation(
     fig, animation_function, frames=len(extremes.time), interval=15
 )
 
 # Save the animation as a GIF
-animation.save('animation_extremes.gif', writer=PillowWriter(fps=5))
+animation.save("animation_extremes.gif", writer=PillowWriter(fps=5))
 
 plt.show()

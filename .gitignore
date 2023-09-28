@@ -151,3 +151,4 @@ checkpoints/*
 *.json
 *.png
 *.nc
+*.zarr
