@@ -33,11 +33,8 @@ extremes = dsc.assign_coords(longitude=coordstolongitude(dsc.longitude)).sel(
 
 ### Earthnet2023 data
 
-path2earthnet = "/Net/Groups/BGI/scratch/crobin/PythonProjects/EarthNet/earthnet-models-pytorch/Data_analysis/coordinates.py"
-# Open the Json dataset
-f = open(path2earthnet)
-earthnet2023 = json.load(f)
-
+path2earthnet = "/Net/Groups/BGI/scratch/crobin/PythonProjects/EarthNet/earthnet2023_veg_type_small.zarr"
+earthnet = xr.open_zarr(path2earthnet)
 # Remove the non-extreme events
 extremes["layer"] = extremes["layer"].where(extremes["layer"] != 16, 0)
 
@@ -98,6 +95,12 @@ p = extremes.isel(time=0).layer.plot.imshow(
     subplot_kws={"projection": ccrs.Mollweide(central_longitude=0)},
     animated=True,
 )
+e = earthnet.isel(time=0).variable.plot.imshow(
+    cmap="viridis",
+    transform=ccrs.PlateCarree(),  # the data's projection
+    subplot_kws={"projection": ccrs.Mollweide(central_longitude=0)},
+    animated=True,
+)
 # Set up static features - coastlines, political borders etc.
 ax.coastlines()
 
@@ -115,6 +118,9 @@ cbar.set_ticks(ticks=[i for i in range(len(labels))], labels=labels)
 def animation_function(t):
     ax.set_title(extremes.isel(time=t).time.dt.date.values)
     anim = p.set_array(np.squeeze(extremes.isel(time=t).to_array()))
+    anim2 = e.set_array(np.squeeze(earthnet.isel(time=t).to_array()))
+
+
     # plt.colorbar(p, orientation='vertical', shrink=0.7, label='Extreme event intensity')
 
 
