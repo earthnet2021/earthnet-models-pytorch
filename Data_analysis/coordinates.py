@@ -16,8 +16,8 @@ train_paths = list(basepath.glob("train/*/*.nc"))
 print("len of the dataset: ", len(train_paths))
 
 # Create an empty dataset with the desired coordinates
-lon = np.arange(-20.00, 56.00, 0.01, dtype=np.float32)
-lat = np.arange(38.00, -35.00, -0.01, dtype=np.float32)
+lon = np.arange(-20.0, 56.0, 0.5, dtype=np.float32)
+lat = np.arange(38.0, -35.0, -0.5, dtype=np.float32)
 time = pd.date_range(start="2015-01-01", end="2022-12-31", freq="D")
 data = xr.Dataset(
     {
@@ -59,4 +59,4 @@ for i, file in enumerate(tqdm(train_paths)):
     data["veg_type"].loc[dict(lon=nearest_lon, lat=nearest_lat, time=time)] = veg_type
 
 # Save the dataset to Zarr
-data.to_zarr("earthnet2023_veg_type_small.zarr")
+data.to_zarr("earthnet2023_veg_type.zarr")
