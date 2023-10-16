@@ -178,7 +178,7 @@ class EarthNet2023Dataset(Dataset):
 
         # Era5land and Era5 dataset. Weather is daily
         meteo_cube = (
-            minicube[self.variables["era5"]] # + self.variables["era5lands"]]
+            minicube[self.variables["era5"]]  # + self.variables["era5lands"]]
             .to_array()
             .values.transpose((1, 0))
             .astype(self.type)
@@ -261,8 +261,11 @@ class EarthNet2023Dataset(Dataset):
             ) / np.tanh(1)
 
         if self.target == "anomalie_ndvi":
-            targ = minicube.msc
-            
+            targ = (
+                (minicube.s2_B8A - minicube.s2_B04)
+                / (minicube.s2_B8A + minicube.s2_B04 + 1e-6)
+            ) - minicube.msc
+
         return targ
 
 
