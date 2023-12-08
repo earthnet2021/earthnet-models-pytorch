@@ -55,7 +55,7 @@ class SpatioTemporalTask(pl.LightningModule):
             )
 
 
-        self.metric = METRICS[self.hparams.setting](**self.hparams.metric_kwargs)
+        self.metric = METRICS[self.hparams.metric](**self.hparams.metric_kwargs)
         
 
     @staticmethod
@@ -204,11 +204,11 @@ class SpatioTemporalTask(pl.LightningModule):
                 loss_logs.append(logs)
 
             # Update of the metric
-            self.metric_val.update(preds, batch)
+            self.metric.update(preds, batch)
 
             # compute the scores for the n_batches that can be visualized in the logger
             if batch_idx < self.hparams.n_log_batches:
-                scores = self.metric_val.compute_batch(batch)
+                scores = self.metric.compute_batch(batch)
                 viz_logs.append((preds, scores))
 
         mean_logs = {
@@ -240,9 +240,9 @@ class SpatioTemporalTask(pl.LightningModule):
                 )
 
     def validation_epoch_end(self, validation_step_outputs):
-        current_scores = self.metric_val.compute()
+        current_scores = self.metric.compute()
         self.log_dict(current_scores, sync_dist=True)
-        self.metric_val.reset()  # lagacy? To remove, shoudl me managed by the logger?
+        self.metric.reset()  # lagacy? To remove, shoudl me managed by the logger?
         if (
             self.logger is not None
             and type(self.logger.experiment).__name__ != "DummyExperiment"
@@ -453,8 +453,8 @@ class SpatioTemporalTask(pl.LightningModule):
                         )
 
             if self.hparams.compute_metric_on_test:
-                self.metric_test.update(preds, batch)
-                scores.append(self.metric_test.compute_batch(batch))
+                self.metric.update(preds, batch)
+                scores.append(self.metric.compute_batch(batch))
         return scores
 
     def test_epoch_end(self, test_step_outputs):
@@ -478,7 +478,7 @@ class SpatioTemporalTask(pl.LightningModule):
                     fp,
                 )
 
-            scores = self.metric_test.compute()
+            scores = self.metric.compute()
             if self.trainer.is_global_zero:
                 with open(self.pred_dir / "total_score.json", "w") as fp:
                     json.dump(

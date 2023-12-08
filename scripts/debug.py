@@ -17,7 +17,7 @@ from pytorch_lightning.strategies import DDPStrategy
 
 from earthnet_models_pytorch.model import MODELS
 from earthnet_models_pytorch.task import SpatioTemporalTask
-from earthnet_models_pytorch.datamodule import DATASETS
+from earthnet_models_pytorch.data import DATASETS
 from earthnet_models_pytorch.utils import parse_setting
 
 
@@ -128,18 +128,11 @@ def overfit_model(setting_dict: dict):
     trainer_dict["overfit_batches"] = 2  # Uses this much data of the training set.
     trainer_dict["check_val_every_n_epoch"] = 50  # Check val every n train epochs.
     trainer_dict["max_epochs"] = 10
-<<<<<<< HEAD
     # trainer_dict["num_sanity_val_steps"] = 0  #Sanity check runs n batches of val before starting the training routine
     # if "profiler" in trainer_dict:
     #     trainer_dict["profiler"] = pl.profiler.AdvancedProfiler(
     #         output_filename="curr_profile"
     #     )
-=======
-    # trainer_dict["strategy"]=DDPStrategy(find_unused_parameters=False)
-    #trainer_dict["num_sanity_val_steps"] = 0  #Sanity check runs n batches of val before starting the training routine
-    if "profiler" in trainer_dict:
-        trainer_dict["profiler"] = pl.profiler.AdvancedProfiler(output_filename="curr_profile")
->>>>>>> main
 
     trainer = pl.Trainer(logger=logger, **trainer_dict)
 

@@ -27,3 +27,41 @@ DATASETS = {
     "en22": EarthNet2022DataModule,
     "en23": EarthNet2023DataModule,
 }
+
+METRIC_CHECKPOINT_INFO = {
+    "en21-std": {
+        "monitor": "EarthNetScore",
+        "filename": 'Epoch-{epoch:02d}-ENS-{EarthNetScore:.4f}',
+        "mode": 'max'
+    },
+    "en21-veg": {
+        "monitor": "RMSE_Veg",
+        "filename": 'Epoch-{epoch:02d}-RMSE (Vegetation)-{RMSE_Veg:.4f}',
+        "mode": 'min'
+        },
+    "en21x": {
+        "monitor": "veg_score",
+        "filename": 'Epoch-{epoch:02d}-veg_score-{veg_score:.4f}',
+        "mode": 'max'
+    },
+    "en21xold": {
+        "monitor": "RMSE_Veg",
+        "filename": 'Epoch-{epoch:02d}-RMSE (Vegetation)-{RMSE_Veg:.4f}',
+        "mode": 'min'
+        },
+    "en21x-pxold": {
+        "monitor": "RMSE_Veg",
+        "filename": 'Epoch-{epoch:02d}-RMSE (Vegetation)-{RMSE_Veg:.4f}',
+        "mode": 'min'
+        },
+    "en22": {
+        "monitor": "RMSE_Veg",
+        "filename": 'Epoch-{epoch:02d}-RMSE (Vegetation)-{RMSE_Veg:.4f}',
+        "mode": 'min'
+    },
+    "en23": {
+        "monitor": "RMSE_Veg",
+        "filename": 'Epoch-{epoch:02d}-RMSE (Vegetation)-{RMSE_Veg:.4f}',
+        "mode": 'min'
+    },
+}

@@ -7,7 +7,7 @@ parse setting implements copying of global attributes to the particular subcateg
 from pathlib import Path
 import yaml
 import warnings
-from earthnet_models_pytorch.datamodule import SETTINGS, METRIC_CHECKPOINT_INFO
+from earthnet_models_pytorch.data import SETTINGS, METRIC_CHECKPOINT_INFO
 from earthnet_models_pytorch.model import MODELS
 
 
@@ -130,6 +130,8 @@ def parse_setting(setting_file, track = None):
 
     setting_dict["Task"]["loss"]["setting"] = setting_dict["Setting"]
     
+    if "metric_kwargs" not in setting_dict["Task"]:
+        setting_dict["Task"]["metric_kwargs"] = {}
     setting_dict["Task"]["metric_kwargs"]["context_length"] = setting_dict["Task"]["context_length"]        
     setting_dict["Task"]["metric_kwargs"]["target_length"] = setting_dict["Task"]["target_length"]        
     setting_dict["Task"]["metric_kwargs"]["lc_min"] = setting_dict["Task"]["lc_min"] 
