@@ -234,6 +234,8 @@ class ConvLSTMAE(nn.Module):
         parser.add_argument("--skip_connections", type=str2bool, default=False)
         parser.add_argument("--teacher_forcing", type=str2bool, default=False)
         parser.add_argument("--target", type=str, default=False)
+        parser.add_argument("--use_weather", type=str2bool, default=True)
+        parser.add_argument("--spatial_shuffle", type = str2bool, default = False)
         return parser
 
     def forward(
@@ -241,7 +243,6 @@ class ConvLSTMAE(nn.Module):
         data,
         pred_start: int = 0,
         preds_length: Optional[int] = None,
-        step: Optional[int] = None,
     ):
         """
         Forward pass of the ConvLSTMAE model.
@@ -272,6 +273,7 @@ class ConvLSTMAE(nn.Module):
             else pred_start
         )
 
+        step = data["global_step"]
         # Calculate teacher forcing coefficient
         if self.hparams.teacher_forcing:
             k = torch.tensor(0.1 * 10 * 12000)
@@ -313,6 +315,21 @@ class ConvLSTMAE(nn.Module):
         # Get the dimensions of the input data. Shape: batch size, temporal size, number of channels, height, width
         b, t, _, h, w = sentinel.shape
 
+        if self.hparams.spatial_shuffle:
+            perm = torch.randperm(b*h*w, device=sentinel.device)
+            invperm = inverse_permutation(perm)
+
+            if weather.shape[-1] == 1:
+                weather = weather.expand(-1, -1, -1, h,w)
+            else:
+                weather = nn.functional.interpolate(weather, size = (h,w), mode='nearest-exact')
+
+            sentinel = sentinel.permute(1, 2, 0, 3, 4).reshape(t, c, b*h*w)[:, :, perm].reshape(t, c, b, h, w).permute(2, 0, 1, 3, 4)
+            weather = weather.permute(1, 2, 0, 3, 4).reshape(t_w, c_w, b*h*w)[:, :, perm].reshape(t_w, c_w, b, h, w).permute(2, 0, 1, 3, 4).contiguous()
+            static = static.permute(1, 0, 2, 3).reshape(3, b*h*w)[:, perm].reshape(3, b, h, w).permute(1, 0, 2, 3)
+
+
+
         # Initialize hidden states for encoder ConvLSTM cells
         h_t, c_t = self.encoder_1_convlstm.init_hidden(batch_size=b, height=h, width=w)
         h_t2, c_t2 = self.encoder_2_convlstm.init_hidden(
@@ -326,13 +343,15 @@ class ConvLSTMAE(nn.Module):
             # Prepare input for encoder ConvLSTM cells
             input = torch.cat((sentinel[:, t, ...], static), dim=1)
             # WARNING only for En23
-            weather_t = (
-                weather[:, t : t + 5, ...]
-                .view(weather.shape[0], 1, -1, 1, 1)
-                .squeeze(1)
-                .repeat(1, 1, 128, 128)
-            )
-            input = torch.cat((input, weather_t), dim=1)
+            
+            if self.hparams.use_weather:
+                weather_t = (
+                    weather[:, t : t + 5, ...]
+                    .view(weather.shape[0], 1, -1, 1, 1)
+                    .squeeze(1)
+                    .repeat(1, 1, 128, 128)
+                )
+                input = torch.cat((input, weather_t), dim=1)
 
             # First ConvLSTM block
             h_t, c_t = self.encoder_1_convlstm(input_tensor=input, cur_state=[h_t, c_t])
@@ -372,7 +391,9 @@ class ConvLSTMAE(nn.Module):
                 pred = target[:, t, 0, ...].unsqueeze(1)
 
             pred = torch.cat((pred, static), dim=1)
-            pred = torch.cat((pred, weather_t), dim=1)
+            if self.hparams.use_weather:
+                weather_t = weather[:, c_l + t, ...].expand(-1, -1, h, w)
+                pred = torch.cat((pred, weather_t), dim=1)
 
             # First ConvLSTM block for the decoder
             h_t, c_t = self.decoder_1_convlstm(input_tensor=pred, cur_state=[h_t, c_t])
@@ -393,5 +414,11 @@ class ConvLSTMAE(nn.Module):
             pred = self.activation_output(pred)
             output += [pred.unsqueeze(1)]
 
-        output = torch.cat(output, dim=1)
+        output = torch.cat(output, dim=1)  # .unsqueeze(2)
+
+        if self.hparams.spatial_shuffle:
+            output = output.permute(1, 2, 0, 3, 4).reshape(self.hparams.target_length, self.hparams.num_outputs, b*h*w)[:, :, invperm].reshape(self.hparams.target_length, self.hparams.num_outputs, b, h, w).permute(2, 0, 1, 3, 4)
+
+            output = output[:, :, :1, :, :]
+
         return output, {}

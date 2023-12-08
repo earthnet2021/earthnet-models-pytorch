@@ -47,24 +47,16 @@ class SpatioTemporalTask(pl.LightningModule):
 
         self.n_stochastic_preds = hparams.n_stochastic_preds
 
-        self.metric_val = METRICS[hparams.metric](
-            lc_min=self.lc_min,
-            lc_max=self.lc_max,
-            context_length=self.context_length,
-            target_length=self.target_length,
-        )
-        self.metric_test = METRICS[hparams.metric](
-            lc_min=self.lc_min,
-            lc_max=self.lc_max,
-            context_length=self.context_length,
-            target_length=self.target_length,
-        )
 
         self.shedulers = []
         for shedule in self.hparams.shedulers:
             self.shedulers.append(
                 (shedule["call_name"], SHEDULERS[shedule["name"]](**shedule["args"]))
             )
+
+
+        self.metric = METRICS[self.hparams.setting](**self.hparams.metric_kwargs)
+        
 
     @staticmethod
     def add_task_specific_args(
@@ -93,6 +85,7 @@ class SpatioTemporalTask(pl.LightningModule):
         )
         # Metric used for the test set and the validation set.
         parser.add_argument("--metric", type=str, default="RMSE")
+        parser.add_argument('--metric_kwargs', type = ast.literal_eval, default = '{}')
 
         # Context and target length for temporal model. A temporal model use a context period to learn the temporal dependencies and predict the target period.
         parser.add_argument("--context_length", type=int, default=10)
@@ -133,11 +126,11 @@ class SpatioTemporalTask(pl.LightningModule):
         preds_length is the length of the prediction, could also be None.
         kwargs are optional keyword arguments parsed to the model, right now these are model shedulers.
         """
+        data["global_step"] = self.global_step
         return self.model(
             data,
             pred_start=pred_start,
             preds_length=preds_length,
-            step=self.global_step,
             **kwargs,
         )
 
@@ -163,11 +156,9 @@ class SpatioTemporalTask(pl.LightningModule):
         for shedule_name, shedule in self.shedulers:
             kwargs[shedule_name] = shedule(self.global_step)
 
-        # Context data for the context period
-        data = copy.deepcopy(batch)
 
         # Predictions generation
-        preds, aux = self(data, kwargs=kwargs)
+        preds, aux = self(batch, kwargs=kwargs)
         loss, logs = self.loss(preds, batch, aux, current_step=self.global_step)
 
         # Logs
@@ -279,6 +270,12 @@ class SpatioTemporalTask(pl.LightningModule):
         """Operates on a single batch of data from the test set. In this step you generate examples or calculate anything of interest such as accuracy."""
         scores = []
 
+        data = copy.deepcopy(batch)
+
+        #data["dynamic"][0] =  data["dynamic"][0][:,:self.context_length,...]  # selection only the context data
+        #if len(data["dynamic_mask"]) > 0:
+        #    data["dynamic_mask"][0] = data["dynamic_mask"][0][:,:self.context_length,...]
+
         for i in range(self.n_stochastic_preds):
             preds, aux = self(
                 batch, pred_start=self.context_length, preds_length=self.target_length
@@ -322,6 +319,10 @@ class SpatioTemporalTask(pl.LightningModule):
                     pred_dir = self.pred_dir
                     pred_path = pred_dir / targ_path.parent.stem / targ_path.name
                     pred_path.parent.mkdir(parents=True, exist_ok=True)
+
+                    if pred_path.is_file():
+                        pred_path.unlink()
+
                     if not pred_path.is_file():
                         pred_cube.to_netcdf(
                             pred_path, encoding={"ndvi_pred": {"dtype": "float32"}}

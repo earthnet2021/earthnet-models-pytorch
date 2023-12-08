@@ -4,18 +4,8 @@ import math
 import torch
 import torch.nn as nn
 
-
-ACTIVATIONS = {
-    "none": nn.Identity,
-    "relu": nn.ReLU,
-    "gelu": nn.GELU,
-    "leakyrelu": nn.LeakyReLU,
-    "elu": nn.ELU,
-    "sigmoid": nn.Sigmoid,
-    "tanh": nn.Tanh,
-    "hardsigmoid": nn.Hardsigmoid,
-    "hardtanh": nn.Hardtanh
-}
+from earthnet_models_pytorch.model.layer_utils import ACTIVATIONS
+from earthnet_models_pytorch.model.conditioning_layer import Identity_Conditioning, FiLMBlock, Cat_Project_Conditioning, CrossAttention_Conditioning
 
 class PatchMergeDownsample(nn.Module):
 
@@ -47,7 +37,7 @@ class PatchMergeDownsample(nn.Module):
 
 
 class PatchMergeEncoder(nn.Module):
-    def __init__(self, in_channels, hid_channels, out_channels, down_factor = 4, filter_size = 5, norm = None, act = None, bias = True):
+    def __init__(self, in_channels, hid_channels, out_channels, down_factor = 4, filter_size = 5, norm = None, act = None, bias = True, conditioning = None, c_channels = None, n_tokens_c = 8):
         """
             down_factors // 2 downsample layers
         x -> conv -> down -> ... -> down -> conv -> x
@@ -57,18 +47,26 @@ class PatchMergeEncoder(nn.Module):
         if norm:
             bias = False
 
+        conditioners = []
         layers = []
         downsamplers = []
         for i in range(int(math.sqrt(down_factor))):
             layer = []
-            if i == 0:
-                layer.append(
-                    nn.Conv2d(in_channels, hid_channels, filter_size, stride = 1, padding = filter_size//2, bias = bias)
-                )
+            curr_in_channels = in_channels if i == 0 else hid_channels
+
+            layer.append(
+                nn.Conv2d(curr_in_channels, hid_channels, filter_size, stride = 1, padding = filter_size//2, bias = bias)
+            )
+
+            if conditioning == "cat":
+                conditioners.append(Cat_Project_Conditioning(curr_in_channels, c_channels))
+            elif conditioning == "FiLM":
+                conditioners.append(FiLMBlock(c_channels, hid_channels, curr_in_channels))
+            elif conditioning == "xAttn":
+                n_heads = int(2**(math.log2(hid_channels)//2))
+                conditioners.append(CrossAttention_Conditioning(curr_in_channels, c_channels, n_tokens_c=n_tokens_c, act = act, hidden_dim = hid_channels//n_heads, n_heads=n_heads))
             else:
-                layer.append(
-                    nn.Conv2d(hid_channels, hid_channels, filter_size, stride = 1, padding = filter_size//2, bias = bias)
-                )
+                conditioners.append(Identity_Conditioning())
 
             if norm:
                 if norm == "group":
@@ -85,7 +83,7 @@ class PatchMergeEncoder(nn.Module):
                     )
                 else:
                     print("Norm {norm} not supported in PatchMergeEncoder")
-            
+
             if act:
                 layer.append(ACTIVATIONS[act]())
         
@@ -94,6 +92,7 @@ class PatchMergeEncoder(nn.Module):
             
             layers.append(nn.Sequential(*layer))
 
+        self.conditioners = nn.ModuleList(conditioners)
         self.layers = nn.ModuleList(layers)
         self.downsamplers = nn.ModuleList(downsamplers)
 
@@ -114,10 +113,11 @@ class PatchMergeEncoder(nn.Module):
         else:
             self.last_act = nn.Identity()
 
-    def forward(self, x):
+    def forward(self, x, c = None):
 
         skips = []
         for i in range(len(self.layers)):
+            x = self.conditioners[i](x, c)
             if i != 0:
                 x = x + self.layers[i](x)
             else:
@@ -132,7 +132,7 @@ class PatchMergeEncoder(nn.Module):
         return x, skips
 
 class Up2dDecoder(nn.Module):
-    def __init__(self, in_channels, hid_channels, out_channels, up_factor = 4, filter_size = 5, skip_connection = True, norm = None, act = None, bias = True, readout_act = None):
+    def __init__(self, in_channels, hid_channels, out_channels, up_factor = 4, filter_size = 5, skip_connection = True, norm = None, act = None, bias = True, readout_act = None, conditioning = None, c_channels = None, n_tokens_c = 8):
         """
             up_factors // 2 upsample layers
         conv(x+skip) -> up -> conv(x+skip) -> ... -> up -> conv(x+skip) -> x
@@ -144,18 +144,27 @@ class Up2dDecoder(nn.Module):
         if norm:
             bias = False
 
+        conditioners = []
         layers = []
         upsamplers = []
         for i in range(int(math.sqrt(up_factor))):
             layer = []
-            if i == 0:
-                layer.append(
-                    nn.Conv2d(in_channels, hid_channels, filter_size, stride = 1, padding = filter_size//2, bias = bias)
-                )
+            curr_in_channels = in_channels if i == 0 else hid_channels
+
+            layer.append(
+                nn.Conv2d(curr_in_channels, hid_channels, filter_size, stride = 1, padding = filter_size//2, bias = bias)
+            )
+
+
+            if conditioning == "cat":
+                conditioners.append(Cat_Project_Conditioning(curr_in_channels, c_channels))
+            elif conditioning == "FiLM":
+                conditioners.append(FiLMBlock(c_channels, hid_channels, curr_in_channels))
+            elif conditioning == "xAttn":
+                n_heads = int(2**(math.log2(hid_channels)//2))
+                conditioners.append(CrossAttention_Conditioning(curr_in_channels, c_channels, n_tokens_c=n_tokens_c, act = act, hidden_dim = hid_channels//n_heads, n_heads=n_heads))
             else:
-                layer.append(
-                    nn.Conv2d(hid_channels, hid_channels, filter_size, stride = 1, padding = filter_size//2, bias = bias)
-                )
+                conditioners.append(Identity_Conditioning())
 
             if norm:
                 if norm == "group":
@@ -180,6 +189,7 @@ class Up2dDecoder(nn.Module):
             
             layers.append(nn.Sequential(*layer))
         
+        self.conditioners = nn.ModuleList(conditioners)
         self.layers = nn.ModuleList(layers)
         self.upsamplers = nn.ModuleList(upsamplers)
 
@@ -206,11 +216,12 @@ class Up2dDecoder(nn.Module):
         else:
             self.readout_act = nn.Identity()
     
-    def forward(self, x, skips):
+    def forward(self, x, skips, c = None):
 
         for i in range(len(self.layers)):
             if self.skip_connection:
                 x = x + skips[-(1+i)]
+            x = self.conditioners[i](x, c)
             x = x + self.layers[i](x)
             x = self.upsamplers[i](x)
         if self.skip_connection:
@@ -227,8 +238,23 @@ class Up2dDecoder(nn.Module):
 
 
 class PredRNNEncoder(nn.Module):
-    def __init__(self, in_channels, hid_channels, out_channels, filter_size = 5, norm = False, relu = False, bias = False):
+    def __init__(self, in_channels, hid_channels, out_channels, filter_size = 5, norm = False, relu = False, bias = False, conditioning = None, c_channels = None, n_tokens_c = 8):
         super().__init__()
+
+
+        if conditioning == "cat":
+            self.cond1 = Cat_Project_Conditioning(in_channels, c_channels)
+            self.cond2 = Cat_Project_Conditioning(hid_channels, c_channels)
+        elif conditioning == "FiLM":
+            self.cond1 = FiLMBlock(c_channels, hid_channels, in_channels)
+            self.cond2 = FiLMBlock(c_channels, hid_channels, hid_channels)
+        elif conditioning == "xAttn":
+            n_heads = int(2**(math.log2(hid_channels)//2))
+            self.cond1 = CrossAttention_Conditioning(in_channels, c_channels, n_tokens_c=n_tokens_c, act = "relu", hidden_dim = hid_channels//n_heads, n_heads=n_heads)
+            self.cond2 = CrossAttention_Conditioning(hid_channels, c_channels, n_tokens_c=n_tokens_c, act = "relu", hidden_dim = hid_channels//n_heads, n_heads=n_heads)
+        else:
+            self.cond1 = Identity_Conditioning()
+            self.cond2 = Identity_Conditioning()
 
         self.conv1 = nn.Conv2d(in_channels, hid_channels, filter_size, stride = 2, padding = filter_size//2, bias = bias)
 
@@ -242,8 +268,9 @@ class PredRNNEncoder(nn.Module):
         if self.relu_on_conv:
             self.relu = nn.ReLU()
 
-    def forward(self, x):
+    def forward(self, x, c = None):
 
+        x = self.cond1(x, c)
         net = self.conv1(x)
 
         if self.norm_on_conv:
@@ -253,6 +280,7 @@ class PredRNNEncoder(nn.Module):
 
         input_net1 = net
 
+        net = self.cond2(net, c)
         net = self.conv2(net)
 
         if self.norm_on_conv:
@@ -265,9 +293,23 @@ class PredRNNEncoder(nn.Module):
         return net, [x, input_net1, input_net2]
 
 class PredRNNDecoder(nn.Module):
-    def __init__(self, in_channels, hid_channels, out_channels, filter_size = 5, residual = True, norm = False, relu = False, bias = False, readout_act = None):
+    def __init__(self, in_channels, hid_channels, out_channels, filter_size = 5, residual = True, norm = False, relu = False, bias = False, readout_act = None, conditioning = None, c_channels = None, n_tokens_c = 8):
         super().__init__()
 
+        if conditioning == "cat":
+            self.cond1 = Cat_Project_Conditioning(in_channels, c_channels)
+            self.cond2 = Cat_Project_Conditioning(hid_channels, c_channels)
+        elif conditioning == "FiLM":
+            self.cond1 = FiLMBlock(c_channels, hid_channels, in_channels)
+            self.cond2 = FiLMBlock(c_channels, hid_channels, hid_channels)
+        elif conditioning == "xAttn":
+            n_heads = int(2**(math.log2(hid_channels)//2))
+            self.cond1 = CrossAttention_Conditioning(in_channels, c_channels, n_tokens_c=n_tokens_c, act = "relu", hidden_dim = hid_channels//n_heads, n_heads=n_heads)
+            self.cond2 = CrossAttention_Conditioning(hid_channels, c_channels, n_tokens_c=n_tokens_c, act = "relu", hidden_dim = hid_channels//n_heads, n_heads=n_heads)
+        else:
+            self.cond1 = Identity_Conditioning()
+            self.cond2 = Identity_Conditioning()
+        
         self.deconv1 = nn.ConvTranspose2d(in_channels, hid_channels, filter_size, stride = 2, padding = filter_size//2, bias = bias)
 
         self.deconv2 = nn.ConvTranspose2d(hid_channels, out_channels, filter_size, stride = 2, padding = filter_size//2, bias = bias)
@@ -284,19 +326,9 @@ class PredRNNDecoder(nn.Module):
         else:
             self.readout_act = nn.Identity()
 
-    def forward(self, x, skips):
+    def forward(self, x, skips, c = None):
         if self.res_on_conv:
-
-            x = self.deconv1(skips[2] + x, output_size = skips[1].size())
-
-            if self.norm_on_conv:
-                x = self.norm1(x)
-            if self.relu_on_conv:
-                x = self.relu(x)
-
-            x = self.deconv2(skips[1] + x, output_size = skips[0].size())
-
-        else:
+            x = self.cond1(skips[2] + x, c)
             x = self.deconv1(x, output_size = skips[1].size())
 
             if self.norm_on_conv:
@@ -304,7 +336,20 @@ class PredRNNDecoder(nn.Module):
             if self.relu_on_conv:
                 x = self.relu(x)
 
-            x = self.deconv1(x, output_size = skips[0].size())
+            x = self.cond2(skips[1] + x, c)
+            x = self.deconv2(x, output_size = skips[0].size())
+
+        else:
+            x = self.cond1(x, c)
+            x = self.deconv1(x, output_size = skips[1].size())
+
+            if self.norm_on_conv:
+                x = self.norm1(x)
+            if self.relu_on_conv:
+                x = self.relu(x)
+
+            x = self.cond2(x, c)
+            x = self.deconv2(x, output_size = skips[0].size())
 
         x = self.readout_act(x)
         return x
@@ -346,24 +391,48 @@ def stride_generator(N, reverse=False):
     else: return strides[:N]
 
 class SimVPEncoder(nn.Module):
-    def __init__(self,C_in, C_hid, N_S):
+    def __init__(self,C_in, C_hid, N_S, conditioning = None, c_channels = None, n_tokens_c = 8):
         super().__init__()
         strides = stride_generator(N_S)
         self.enc = nn.Sequential(
             ConvSC(C_in, C_hid, stride=strides[0]),
             *[ConvSC(C_hid, C_hid, stride=s) for s in strides[1:]]
         )
+
+        conditioners = []
+        for i, s in enumerate(strides):
+            
+            if (i > 0) & (s == 2):
+                conditioners.append(Identity_Conditioning())
+                continue
+
+            curr_in_channels = C_in if i == 0 else C_hid
+            
+
+            if conditioning == "cat":
+                conditioners.append(Cat_Project_Conditioning(curr_in_channels, c_channels))
+            elif conditioning == "FiLM":
+                conditioners.append(FiLMBlock(c_channels, C_hid, curr_in_channels))
+            elif conditioning == "xAttn":
+                n_heads = 2**(math.log2(C_hid)//2)
+                conditioners.append(CrossAttention_Conditioning(curr_in_channels, c_channels, n_tokens_c=n_tokens_c, act = "relu", hidden_dim = C_hid//n_heads, n_heads=n_heads))
+            else:
+                conditioners.append(Identity_Conditioning())
+        
+        self.conditioners = nn.ModuleList(conditioners)
     
-    def forward(self,x):# B*4, 3, 128, 128
+    def forward(self,x, c = None):# B*4, 3, 128, 128
+        x = self.conditioners[0](x, c)
         enc1 = self.enc[0](x)
         latent = enc1
         for i in range(1,len(self.enc)):
+            latent = self.conditioners[i](latent, c)
             latent = self.enc[i](latent)
         return latent,enc1
 
 
 class SimVPDecoder(nn.Module):
-    def __init__(self,C_hid, C_out, N_S, readout_act = None):
+    def __init__(self,C_hid, C_out, N_S, readout_act = None, conditioning = None, c_channels = None, n_tokens_c = 8):
         super().__init__()
         strides = stride_generator(N_S, reverse=True)
         self.dec = nn.Sequential(
@@ -375,36 +444,60 @@ class SimVPDecoder(nn.Module):
             self.readout_act = ACTIVATIONS[readout_act]()
         else:
             self.readout_act = nn.Identity()
+
+        
+        conditioners = []
+        for i, s in enumerate(strides):
+            
+            if (i > 0) & (s == 2):
+                conditioners.append(Identity_Conditioning())
+                continue
+
+            curr_in_channels = 2*C_hid if i == len(strides)-1 else C_hid
+            
+            if conditioning == "cat":
+                conditioners.append(Cat_Project_Conditioning(curr_in_channels, c_channels))
+            elif conditioning == "FiLM":
+                conditioners.append(FiLMBlock(c_channels, C_hid, curr_in_channels))
+            elif conditioning == "xAttn":
+                n_heads = 2**(math.log2(C_hid)//2)
+                conditioners.append(CrossAttention_Conditioning(curr_in_channels, c_channels, n_tokens_c=n_tokens_c, act = "relu", hidden_dim = C_hid//n_heads, n_heads=n_heads))
+            else:
+                conditioners.append(Identity_Conditioning())
+        
+        self.conditioners = nn.ModuleList(conditioners)
     
-    def forward(self, hid, enc1=None):
+    def forward(self, hid, enc1=None, c = None):
         for i in range(0,len(self.dec)-1):
+            hid = self.conditioners[i](hid, c)
             hid = self.dec[i](hid)
-        Y = self.dec[-1](torch.cat([hid, enc1], dim=1))
+        hid = self.conditioners[-1](torch.cat([hid, enc1], dim=1), c)
+        Y = self.dec[-1](hid)
         Y = self.readout(Y)
         Y = self.readout_act(Y)
         return Y
 
 
-def get_encoder_decoder(type, in_channels, hid_channels, out_channels, down_factor = 4, filter_size = 5, skip_connection = True, norm = "group", act = "leakyrelu", bias = True, readout_act = "tanh"):
+def get_encoder_decoder(type, in_channels, hid_channels, out_channels, down_factor = 4, filter_size = 5, skip_connection = True, norm = "group", act = "leakyrelu", bias = True, readout_act = "tanh", conditioning = None, c_channels_enc = None, c_channels_dec = None, n_tokens_c = 8):
 
     if type == "PatchMerge":
         encoder = PatchMergeEncoder(
-            in_channels, hid_channels, hid_channels, down_factor=down_factor, filter_size = filter_size, norm = norm, act = act, bias = bias
+            in_channels, hid_channels, hid_channels, down_factor=down_factor, filter_size = filter_size, norm = norm, act = act, bias = bias, conditioning = conditioning, c_channels = c_channels_enc, n_tokens_c = n_tokens_c
         )
         decoder = Up2dDecoder(
-            hid_channels, hid_channels, out_channels, up_factor=down_factor, filter_size = filter_size, skip_connection = skip_connection, norm = norm, act = act, bias = bias, readout_act= readout_act
+            hid_channels, hid_channels, out_channels, up_factor=down_factor, filter_size = filter_size, skip_connection = skip_connection, norm = norm, act = act, bias = bias, readout_act= readout_act, conditioning = conditioning, c_channels = c_channels_dec, n_tokens_c = n_tokens_c
         )
 
     elif type == "PredRNN":
         encoder = PredRNNEncoder(
-            in_channels, hid_channels//2, hid_channels, filter_size=filter_size, norm = (norm is not None) , relu = (act is not None), bias = bias
+            in_channels, hid_channels//2, hid_channels, filter_size=filter_size, norm = (norm is not None) , relu = (act is not None), bias = bias, conditioning = conditioning, c_channels = c_channels_enc, n_tokens_c = n_tokens_c
         )
         decoder = PredRNNDecoder(
-            hid_channels, hid_channels//2, out_channels, filter_size=filter_size, residual=skip_connection, norm = (norm is not None), relu = (act is not None), bias = bias
+            hid_channels, hid_channels//2, out_channels, filter_size=filter_size, residual=skip_connection, norm = (norm is not None), relu = (act is not None), bias = bias, conditioning = conditioning, c_channels = c_channels_dec, n_tokens_c = n_tokens_c
         )
     
     elif type == "SimVP":
-        encoder = SimVPEncoder(in_channels, hid_channels, int(2 * math.sqrt(down_factor)))
-        decoder = SimVPDecoder(hid_channels, out_channels, int(2 * math.sqrt(down_factor)))
+        encoder = SimVPEncoder(in_channels, hid_channels, int(2 * math.sqrt(down_factor)), conditioning = conditioning, c_channels = c_channels_enc, n_tokens_c = n_tokens_c)
+        decoder = SimVPDecoder(hid_channels, out_channels, int(2 * math.sqrt(down_factor)), conditioning = conditioning, c_channels = c_channels_dec, n_tokens_c = n_tokens_c)
 
     return encoder, decoder

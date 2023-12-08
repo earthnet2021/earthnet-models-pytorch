@@ -1,16 +1,16 @@
 #!/bin/bash
-#SBATCH --partition ml
+#SBATCH --partition gpu
 #SBATCH --time=48:00:00
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=42
-#SBATCH --mem=254000
-#SBATCH --gres=gpu:6
-#SBATCH --exclusive
+#SBATCH --cpus-per-task=32
+#SBATCH --mem=128000
+#SBATCH --gres=gpu:A40:1
+# #SBATCH --exclusive
 #SBATCH --job-name earthnet
-#SBATCH --mail-user your-mail-account@email.com
-#SBATCH --mail-type ALL
-#SBATCH -A p_da_earthnet
+# #SBATCH --mail-user your-mail-account@email.com
+# #SBATCH --mail-type ALL
+# #SBATCH -A p_da_earthnet
 
 # $1 setting.yaml
 # $2 train (test both)
@@ -24,14 +24,9 @@ arr=($(cat $1 | grep "Setting:"))
 setting=${arr[1]}
 echo $setting
 
-echo "Sourcing bash RC"
-source ~/.bashrc
-echo "Activating Conda Env"
-conda activate pt15
 
 cd $3
 
-pip install . --upgrade
 
 if [ $2 == 'train' ] || [ $2 == 'both' ]; then
     if [ $setting == 'en21-std' ]; then
@@ -39,14 +34,14 @@ if [ $2 == 'train' ] || [ $2 == 'both' ]; then
         mkdir -p /tmp/data/train/
         echo "Copying Train"
         cp -rf $4/train/. /tmp/data/train/
-    elif [ $setting == 'en21-veg' ]; then
+    elif [ $setting == 'en21x' ]; then
         echo "Making Directories"
         mkdir -p /tmp/data/train/
-        mkdir -p /tmp/data/landcover/
+        # mkdir -p /tmp/data/landcover/
         echo "Copying Train"
         cp -rf $4/train/. /tmp/data/train/
-        echo "Copying Landcover"
-        cp -rf $4/landcover/. /tmp/data/landcover/
+        # echo "Copying Landcover"
+        # cp -rf $4/landcover/. /tmp/data/landcover/
     #elif [ $setting == "europe-veg"]; then
     #    echo "Not Implemented"
     #    exit 1
@@ -56,7 +51,7 @@ if [ $2 == 'train' ] || [ $2 == 'both' ]; then
     fi
     
     echo "Start training"
-    srun train.py $1
+    srun /Net/Groups/BGI/people/vbenson/miniconda3/envs/emp_a100/bin/python /Net/Groups/BGI/people/vbenson/EarthNet/earthnet-models-pytorch/scripts/train.py $1
 fi
 
 # if [ $1 == "test" || $1 == "both"]; then

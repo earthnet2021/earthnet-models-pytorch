@@ -10,6 +10,8 @@ import yaml
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import TQDMProgressBar
 
+from pytorch_lightning.plugins import DDPPlugin
+from pytorch_lightning.strategies import DDPStrategy
 
 from earthnet_models_pytorch.model import MODELS
 from earthnet_models_pytorch.task import SpatioTemporalTask
@@ -101,9 +103,9 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # Disabling PyTorch Lightning automatic SLURM detection
-    for k, v in os.environ.items():
-        if k.startswith("SLURM"):
-            del os.environ[k]
+    # for k, v in os.environ.items():
+    #     if k.startswith("SLURM"):
+    #         del os.environ[k]
 
     setting_dict = parse_setting(args.setting)
 
