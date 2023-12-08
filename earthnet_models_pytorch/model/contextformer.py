@@ -274,11 +274,11 @@ class ContextFormer(nn.Module):
         parser.add_argument("--spatial_shuffle", type = str2bool, default = False)
 
         return parser
-    def forward(self, data, pred_start: int = 0, n_preds: Optional[int] = None):
+    def forward(self, data, pred_start: int = 0, preds_length: Optional[int] = None):
         
         # Input handling
 
-        n_preds = 0 if n_preds is None else n_preds
+        preds_length = 0 if preds_length is None else preds_length
 
         c_l = self.hparams.context_length if self.training else pred_start
 
@@ -288,8 +288,8 @@ class ContextFormer(nn.Module):
         B, T, C, H, W = hr_dynamic_inputs.shape
 
         if T == c_l: # If Only given Context images, add zeros (later overwritten by token mask)
-            hr_dynamic_inputs = torch.cat((hr_dynamic_inputs, torch.zeros(B, n_preds, C, H, W, device = hr_dynamic_inputs.device)), dim = 1)
-            hr_dynamic_mask = torch.cat((hr_dynamic_mask, torch.zeros(B, n_preds, 1, H, W, device = hr_dynamic_mask.device)), dim = 1)
+            hr_dynamic_inputs = torch.cat((hr_dynamic_inputs, torch.zeros(B, preds_length, C, H, W, device = hr_dynamic_inputs.device)), dim = 1)
+            hr_dynamic_mask = torch.cat((hr_dynamic_mask, torch.zeros(B, preds_length, 1, H, W, device = hr_dynamic_mask.device)), dim = 1)
             B, T, C, H, W = hr_dynamic_inputs.shape
 
         static_inputs = data["static"][0][:, :3, ...]
@@ -414,7 +414,7 @@ class ContextFormer(nn.Module):
             images_out += (images[:,:1,:self.hparams.n_out,...]).repeat(1, N_patch, 1, 1, 1)
 
         if not self.training:
-            images_out = images_out[:,-n_preds:]
+            images_out = images_out[:,-preds_length:]
 
         if self.hparams.spatial_shuffle:
             B, T, C, H, W = images_out.shape

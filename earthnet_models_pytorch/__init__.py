@@ -6,3 +6,8 @@ __author__ = 'Vitus Benson'
 __credits__ = 'Max-Planck-Institute for Biogeochemistry'
 
 from earthnet_models_pytorch.utils import str2bool
+import earthnet_models_pytorch.datamodule
+import earthnet_models_pytorch.metric
+import earthnet_models_pytorch.model
+import earthnet_models_pytorch.task
+import earthnet_models_pytorch.utils

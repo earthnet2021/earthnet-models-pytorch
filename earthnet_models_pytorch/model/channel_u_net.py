@@ -75,12 +75,12 @@ class ChannelUNet(nn.Module):
 
         return parser
 
-    def forward(self, data, pred_start: int = 0, n_preds: Optional[int] = None):
+    def forward(self, data, pred_start: int = 0, preds_length: Optional[int] = None):
         
-        n_preds = 0 if n_preds is None else n_preds
+        preds_length = 0 if preds_length is None else preds_length
 
 
-        n_iter = 1 if self.training or n_preds == self.hparams.target_length else n_preds // self.hparams.target_length
+        n_iter = 1 if self.training or preds_length == self.hparams.target_length else preds_length // self.hparams.target_length
 
         c_l = self.hparams.context_length if self.training else pred_start
 
