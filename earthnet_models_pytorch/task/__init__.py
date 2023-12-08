@@ -1,3 +1,3 @@
 from earthnet_models_pytorch.task.loss import setup_loss
 from earthnet_models_pytorch.task.shedule import SHEDULERS
-from earthnet_models_pytorch.task.workflow import SpatioTemporalTask
+from earthnet_models_pytorch.task.spatio_temporal import SpatioTemporalTask
