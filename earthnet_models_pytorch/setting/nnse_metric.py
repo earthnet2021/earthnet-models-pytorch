@@ -8,7 +8,7 @@ from torchmetrics import Metric
 
 class NNSEVeg(Metric):
     # Each state variable should be called using self.add_state(...)
-    def __init__(self, compute_on_step: bool = False, dist_sync_on_step: bool = False, process_group = None, dist_sync_fn = None, lc_min = 10., lc_max = 40., ndvi_pred_idx = 0, ndvi_targ_idx = 0):
+    def __init__(self, compute_on_step: bool = False, dist_sync_on_step: bool = False, process_group = None, dist_sync_fn = None, lc_min = 10., lc_max = 40., ndvi_pred_idx = 0, ndvi_targ_idx = 0, mask_hq_only = True):
         super().__init__(
             compute_on_step=compute_on_step,
             dist_sync_on_step=dist_sync_on_step,
@@ -23,6 +23,7 @@ class NNSEVeg(Metric):
         self.lc_max = lc_max
         self.ndvi_pred_idx = ndvi_pred_idx
         self.ndvi_targ_idx = ndvi_targ_idx
+        self.mask_hq_only = mask_hq_only
     
     @torch.jit.unused
     def forward(self, *args, **kwargs):
@@ -69,7 +70,10 @@ class NNSEVeg(Metric):
 
         nse = (1 - sum_squared_error / (sum_squared_deviation + 1e-8))  # b c h w
 
-        lc_mask = ((lc >= self.lc_min).bool() & (lc <= self.lc_max).bool() & (ndvi_targ.min(1)[0] > 0.0) & (s2_mask.sum(1) >= 10) & (((sum_squared_deviation / s2_mask.sum(1))**0.5) > 0.1)).type_as(preds)  # b c h w
+        if self.mask_hq_only:
+            lc_mask = ((lc >= self.lc_min).bool() & (lc <= self.lc_max).bool() & (ndvi_targ.min(1)[0] > 0.0) & (s2_mask.sum(1) >= 10) & (((sum_squared_deviation / s2_mask.sum(1))**0.5) > 0.1)).type_as(preds)  # b c h w
+        else:   
+            lc_mask = ((lc >= self.lc_min).bool() & (lc <= self.lc_max).bool()).type_as(preds)  # b c h w
 
         nnse = (1 / (2 - nse)) * lc_mask  # b c h w
 

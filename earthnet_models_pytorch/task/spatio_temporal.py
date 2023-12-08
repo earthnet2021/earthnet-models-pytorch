@@ -54,7 +54,7 @@ class SpatioTemporalTask(pl.LightningModule):
 
         self.current_filepaths = []
 
-        self.metric = METRICS[self.hparams.setting]()
+        self.metric = METRICS[self.hparams.setting](**self.hparams.metric_kwargs)
         self.ndvi_pred = (self.hparams.setting == "en21-veg") #TODO: Legacy, remove this...  #TODO: what is mean ?
         
         self.pred_mode = {"en21-veg": "ndvi", "en21-std": "rgb",  "en21x": "ndvi","en21xold": "kndvi", "en21x-px": "kndvi", "en22": "kndvi"}[self.hparams.setting]
@@ -98,6 +98,9 @@ class SpatioTemporalTask(pl.LightningModule):
         parser.add_argument('--setting', type = str, default = "en21-std")
 
         parser.add_argument('--compute_metric_on_test', type = str2bool, default = False)
+
+        parser.add_argument('--metric_kwargs', type = ast.literal_eval, default = '{}')
+        #parser.add_argument('--mtm', type = ast.literal_eval, default = '{"use_mtm": False, "args": {"leave_n_first": 3, "p_mask": 0.3}}')
         return parser
 
     def forward(self, data, pred_start: int = 0, n_preds: Optional[int] = None, kwargs = {}):
@@ -107,6 +110,7 @@ class SpatioTemporalTask(pl.LightningModule):
         n_preds is the length of the prediction, could also be None.
         kwargs are optional keyword arguments parsed to the model, right now these are model shedulers.
         """        
+        data["global_step"] = self.global_step
         return self.model(data, pred_start = pred_start, n_preds = n_preds, **kwargs)
 
     def configure_optimizers(self):
@@ -121,6 +125,11 @@ class SpatioTemporalTask(pl.LightningModule):
         kwargs = {}
         for (shedule_name, shedule) in self.model_shedules:
             kwargs[shedule_name] = shedule(self.global_step)
+
+        # if self.hparams.mtm["use_mtm"]:
+        #     token_mask = (torch.rand(batch["dynamic"].shape[0], batch["dynamic"].shape[1],device=self.device) < self.hparans.mtm["args"]["p_mask"]).type_as(batch["dynamic_mask"])
+        #     token_mask[:,:self.hparans.mtm["args"]["leave_n_first"]] = 0
+        #     batch["token_mask"] = token_mask
         
         # Predictions generation
         preds, aux = self(batch, n_preds = self.context_length+self.target_length, kwargs = kwargs) 
@@ -198,8 +207,14 @@ class SpatioTemporalTask(pl.LightningModule):
         '''Operates on a single batch of data from the test set. In this step you d normally generate examples or calculate anything of interest such as accuracy.'''
         scores = []
 
+        data = copy.deepcopy(batch)
+
+        #data["dynamic"][0] =  data["dynamic"][0][:,:self.context_length,...]  # selection only the context data
+        #if len(data["dynamic_mask"]) > 0:
+        #    data["dynamic_mask"][0] = data["dynamic_mask"][0][:,:self.context_length,...]
+
         for i in range(self.n_stochastic_preds):
-            preds, aux = self(batch, pred_start = self.context_length, n_preds = self.target_length)
+            preds, aux = self(data, pred_start = self.context_length, n_preds = self.target_length)
 
             lc = batch["landcover"]
             
@@ -220,6 +235,9 @@ class SpatioTemporalTask(pl.LightningModule):
                     pred_dir = self.pred_dir
                     pred_path = pred_dir/targ_path.parent.stem/targ_path.name
                     pred_path.parent.mkdir(parents = True, exist_ok = True)
+                    
+                    if pred_path.is_file():
+                        pred_path.unlink()
                     if not pred_path.is_file():
                         pred_cube.to_netcdf(pred_path, encoding={"ndvi_pred":{"dtype": "float32"}})
                     

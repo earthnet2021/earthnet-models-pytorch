@@ -86,9 +86,9 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # Disabling PyTorch Lightning automatic SLURM detection
-    for k, v in os.environ.items():
-        if k.startswith("SLURM"):
-            del os.environ[k]
+    # for k, v in os.environ.items():
+    #     if k.startswith("SLURM"):
+    #         del os.environ[k]
 
     setting_dict = parse_setting(args.setting)
 

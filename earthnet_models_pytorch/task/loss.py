@@ -162,7 +162,7 @@ class BaseLoss(nn.Module):
 
 class MaskedL2NDVILoss(nn.Module):
 
-    def __init__(self, min_lc = None, max_lc = None, ndvi_pred_idx = 0, ndvi_targ_idx = 0, pred_mask_value = None, scale_by_std = False, weight_by_std = False, extra_aux_loss_term = None, extra_aux_loss_weight = 1, **kwargs):
+    def __init__(self, min_lc = None, max_lc = None, ndvi_pred_idx = 0, ndvi_targ_idx = 0, pred_mask_value = None, scale_by_std = False, weight_by_std = False, extra_aux_loss_term = None, extra_aux_loss_weight = 1, mask_hq_only = False, **kwargs):
         super().__init__()
         
         self.min_lc = min_lc if min_lc else 0
@@ -180,6 +180,7 @@ class MaskedL2NDVILoss(nn.Module):
 
         self.extra_aux_loss_term = extra_aux_loss_term
         self.extra_aux_loss_weight = extra_aux_loss_weight
+        self.mask_hq_only = mask_hq_only
 
     def forward(self, preds, batch, aux, current_step = None):
 
@@ -190,7 +191,7 @@ class MaskedL2NDVILoss(nn.Module):
 
         s2_mask = (batch["dynamic_mask"][0][:,-t_pred:,...] < 1.).bool().type_as(preds)  # b t c h w
 
-        lc_mask = ((lc >= self.min_lc).bool() & (lc <= self.max_lc).bool()).type_as(preds)  # b c h w
+        #lc_mask = ((lc >= self.min_lc).bool() & (lc <= self.max_lc).bool()).type_as(preds)  # b c h w
 
         ndvi_targ = batch["dynamic"][0][:, :, self.ndvi_targ_idx,...].unsqueeze(2) # b t c h w
 
@@ -199,6 +200,14 @@ class MaskedL2NDVILoss(nn.Module):
         sum_squared_error = (((ndvi_targ[:, -t_pred:,...] - ndvi_pred) * s2_mask)**2).sum(1)  # b c h w
 
         mse = sum_squared_error / (s2_mask.sum(1) + 1e-8) # b c h w
+
+        if self.mask_hq_only:
+            mean_ndvi_targ = (ndvi_targ[:, -t_pred:,...] * s2_mask).sum(1).unsqueeze(1) / (s2_mask.sum(1).unsqueeze(1) + 1e-8)  # b t c h w
+
+            sum_squared_deviation = (((ndvi_targ[:, -t_pred:,...] - mean_ndvi_targ) * s2_mask)**2).sum(1)  # b c h w
+            lc_mask = ((lc >= self.min_lc).bool() & (lc <= self.max_lc).bool() & (ndvi_targ.min(1)[0] > 0.0) & (s2_mask.sum(1) >= 10) & (((sum_squared_deviation / s2_mask.sum(1))**0.5) > 0.1)).type_as(preds)  # b c h w
+        else:   
+            lc_mask = ((lc >= self.min_lc).bool() & (lc <= self.max_lc).bool()).type_as(preds)  # b c h w
 
         if self.scale_by_std:
             mean_ndvi_targ = (ndvi_targ[:, -t_pred:,...] * s2_mask).sum(1).unsqueeze(1) / (s2_mask.sum(1).unsqueeze(1) + 1e-8)  # b t c h w

@@ -51,12 +51,14 @@ class EarthNet2021XDataset(Dataset):
         self.static_mean = xr.DataArray(data = [0.0, 0.0, 0.0, 0.0, 0.0], coords = {'variable': ['nasa_dem', 'alos_dem', 'cop_dem', 'esawc_lc', 'geom_cls']})
         self.static_std = xr.DataArray(data = [500.0, 500.0, 500.0, 1.0, 1.0], coords = {'variable': ['nasa_dem', 'alos_dem', 'cop_dem', 'esawc_lc', 'geom_cls']})
 
+        print(f"dataset has {len(self)} samples")
 
     def __getitem__(self, idx: int) -> dict:
         
         filepath = self.filepaths[idx]
 
         if self.fast_access:
+
             npz = np.load(filepath)
             data = {
                 "dynamic": [
@@ -75,7 +77,7 @@ class EarthNet2021XDataset(Dataset):
                 "cubename": filepath.stem
             }
             return data
-        
+
         minicube = xr.open_dataset(filepath)
 
         if self.start_month_extreme:
@@ -133,7 +135,6 @@ class EarthNet2021XDataset(Dataset):
 
         lc[np.isnan(lc)] = 0
 
-
         data = {
             "dynamic": [
                 torch.from_numpy(sen2arr.astype(self.type)),
@@ -150,6 +151,7 @@ class EarthNet2021XDataset(Dataset):
             "filepath": str(filepath),
             "cubename": filepath.stem
         }
+
         return data
     
     def __len__(self) -> int:

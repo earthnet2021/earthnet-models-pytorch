@@ -154,6 +154,8 @@ class ConvLSTMAE(nn.Module):
         parser.add_argument("--skip_connections", type=str2bool, default=False)
         parser.add_argument("--use_weather", type=str2bool, default=True)
         parser.add_argument("--spatial_shuffle", type = str2bool, default = False)
+        parser.add_argument("--new_skipconn", type=str2bool, default=False)
+        parser.add_argument("--teacher_forcing", type=str2bool, default=False)
 
         return parser
 
@@ -164,9 +166,33 @@ class ConvLSTMAE(nn.Module):
         # teacher_forcing_decay = k / (k + torch.exp(step / k))
         # teacher_forcing = torch.bernoulli(teacher_forcing_decay)
 
+
+        context_length = (
+            self.hparams.context_length
+            if self.training or (pred_start < self.hparams.context_length)
+            else pred_start
+        )
+
+        # Calculate teacher forcing coefficient
+        if self.hparams.teacher_forcing:
+            k = torch.tensor(0.1 * 10 * 12000)
+
+            teacher_forcing_decay = k / (k + torch.exp(data["global_step"] + (120000 / 2) / k))
+        else:
+            teacher_forcing_decay = 0
+
+        # Extract the target for the teacher forcing method
+        if self.hparams.teacher_forcing and self.training:
+            target = data["dynamic"][0][
+                :, context_length : context_length + self.hparams.target_length, ...
+            ]
+
         # Data
         # sentinel 2 bands
-        sentinel = data["dynamic"][0]
+        if self.hparams.new_skipconn:
+            sentinel = data["dynamic"][0][:, :context_length, ...]
+        else:
+            sentinel = data["dynamic"][0]
         weather = data["dynamic"][1].unsqueeze(3).unsqueeze(4)
         static = data["static"][0][:, :3, ...]
 
@@ -214,8 +240,12 @@ class ConvLSTMAE(nn.Module):
         # First prediction
         pred = self.conv(h_t2)
         # add the last frame of the context period
-        if self.hparams.skip_connections:
+        if self.hparams.new_skipconn:
+            pred = pred + sentinel[:, t, 0, ...].unsqueeze(1)
+        
+        elif self.hparams.skip_connections:
             pred = pred + sentinel[:, -1, 0, ...].unsqueeze(1)
+        
 
         pred = self.activation_output(pred)
 
@@ -223,10 +253,18 @@ class ConvLSTMAE(nn.Module):
         for t in range(self.hparams.target_length):
             # if teacher_forcing:
             #    pred = target[:, c_l + t, ...]
+            if (
+                self.hparams.teacher_forcing
+                and self.training
+                and torch.bernoulli(teacher_forcing_decay)
+            ):
+                pred = target[:, t, :, ...]#.unsqueeze(1)
+
 
             # for skip connection
             pred_previous = torch.clone(pred)
 
+            
             # Input
             pred = torch.cat((pred, static), dim=1)
             if self.hparams.use_weather:

@@ -5,6 +5,7 @@ from earthnet_models_pytorch.model.context_convlstm import ContextConvLSTM
 from earthnet_models_pytorch.model.CNN import CNN
 from earthnet_models_pytorch.model.convlstm_lstm import ConvLSTMLSTM
 from earthnet_models_pytorch.model.convlstm_ae import ConvLSTMAE
+from earthnet_models_pytorch.model.convlstm_former import ConvLSTMAEFormer
 from earthnet_models_pytorch.model.simvp import SimVP
 from earthnet_models_pytorch.model.predrnn import PredRNN
 from earthnet_models_pytorch.model.convlstm import ConvLSTM
@@ -12,6 +13,9 @@ from earthnet_models_pytorch.model.nextframe_resnet import NextFrameResNet
 from earthnet_models_pytorch.model.nextframe_unet import NextFrameUNet
 from earthnet_models_pytorch.model.spatiotemporal_unet import SpatioTemporalUNet
 from earthnet_models_pytorch.model.unet_lstm import UNetLSTM
+from earthnet_models_pytorch.model.contextformer import ContextFormer
+from earthnet_models_pytorch.model.presto import Presto
+
 from earthnet_models_pytorch.task import TASKS
 
 MODELS = {
@@ -27,7 +31,10 @@ MODELS = {
     "nf_unet": NextFrameUNet,
     "st_unet": SpatioTemporalUNet,
     "convlstm_ae": ConvLSTMAE,
-    "unet_lstm": UNetLSTM
+    "unet_lstm": UNetLSTM,
+    "contextformer": ContextFormer,
+    "convlstm_former": ConvLSTMAEFormer,
+    "presto": Presto
 }
 
 MODELTASKS = {
@@ -46,6 +53,9 @@ MODELTASKS = {
     "st_unet": TASKS["spatio-temporal"],
     "unet_lstm": TASKS["spatio-temporal"],
     "convlstm_ae": TASKS["spatio-temporal"],
+    "contextformer": TASKS["spatio-temporal"],
+    "convlstm_former": TASKS["spatio-temporal"],
+    "presto": TASKS["spatio-temporal"],
 }
 
 MODELTASKNAMES = {
@@ -64,4 +74,7 @@ MODELTASKNAMES = {
     "st_unet": "spatio-temporal",
     "unet_lstm": "spatio-temporal",
     "convlstm_ae": "spatio-temporal",
+    "contextformer": "spatio-temporal",
+    "convlstm_former": "spatio-temporal",
+    "presto": "spatio-temporal",
 }
