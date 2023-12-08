@@ -374,13 +374,7 @@ class ConvLSTMAE(nn.Module):
             # Copy the previous prediction for skip connections
             pred_previous = torch.clone(pred)
 
-            # Prepare input for decoder ConvLSTM cells
-            weather_t = (
-                weather[:, context_length + t : context_length + t + 5, ...]
-                .view(weather.shape[0], 1, -1, 1, 1)
-                .squeeze(1)
-                .repeat(1, 1, 128, 128)
-            )
+            
 
             # Teacher forcing scheduled sampling
             if (
@@ -392,7 +386,13 @@ class ConvLSTMAE(nn.Module):
 
             pred = torch.cat((pred, static), dim=1)
             if self.hparams.use_weather:
-                weather_t = weather[:, c_l + t, ...].expand(-1, -1, h, w)
+                # Prepare input for decoder ConvLSTM cells
+                weather_t = (
+                    weather[:, context_length + t : context_length + t + 5, ...]
+                    .view(weather.shape[0], 1, -1, 1, 1)
+                    .squeeze(1)
+                    .repeat(1, 1, 128, 128)
+                )
                 pred = torch.cat((pred, weather_t), dim=1)
 
             # First ConvLSTM block for the decoder
