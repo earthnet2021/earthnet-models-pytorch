@@ -119,7 +119,8 @@ def score_over_dataset(testset_dir, pred_dir, score_dir, name_ndvi_pred = "ndvi_
                 dfs = list(tqdm(pool.map(score_from_args, inputargs), total = len(inputargs), desc = "Minicube", position=1, leave=False))
             else:
                 dfs = list(pool.map(score_from_args, inputargs))
-
+        if len(dfs) == 0:
+            continue
         df = pd.concat(dfs).reset_index()
 
         #df["season"] = region.split("_")[-1][:3]
@@ -192,7 +193,7 @@ if __name__ == "__main__":
     parser.add_argument('pred_dir', type = str)
     parser.add_argument('score_dir', type = str)
     parser.add_argument('--compare_dir', type = str, default = "experiments/en21x/climatology/scores_loo/")
-    
+
     args = parser.parse_args()
 
     score_over_dataset(testset_dir=args.testset_dir, pred_dir=args.pred_dir, score_dir=args.score_dir, verbose = True, num_workers=20)

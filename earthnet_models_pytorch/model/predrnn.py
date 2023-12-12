@@ -264,9 +264,9 @@ class PredRNN(nn.Module):
 
         return parser
 
-    def forward(self, data, pred_start = 0, n_preds = None, sampling = None):
+    def forward(self, data, pred_start = 0, preds_length = None, sampling = None):
 
-        n_preds = 0 if n_preds is None else n_preds
+        preds_length = 0 if preds_length is None else preds_length
         
         c_l = self.hparams.context_length if self.training else pred_start
 
@@ -309,7 +309,6 @@ class PredRNN(nn.Module):
         input_frames = hr_dynamic_inputs.contiguous()#frames[:, :, :self.hparams.num_inputs, :, :]
         input_actions = meso_dynamic_inputs.contiguous()#frames[:, :, self.hparams.num_inputs:, :, :]
         #mask_true = mask_true.permute(0, 1, 4, 2, 3).contiguous()
-
 
         next_frames = []
         h_t = []
