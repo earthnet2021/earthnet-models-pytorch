@@ -33,7 +33,7 @@ Trainer:
     val_check_interval: 0.25 #0.005 # 
   
 Data:
-    base_dir: "/Net/Groups/BGI/work_2/scratch/DeepExtremes/minicubes_leipzig" 
+    base_dir: "/Net/Groups/BGI/work_2/scratch/DeepExtremes/dx-minicubes/full/1.3/" 
     test_track: "iid"
     target: "ndvi"
     train_batch_size: 4
