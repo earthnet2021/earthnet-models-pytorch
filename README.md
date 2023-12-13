@@ -23,7 +23,7 @@ We recommend using Anaconda for managing dependencies of this library. The follo
 conda create -n emp python=3.10
 conda activate emp
 conda install pytorch==1.13.1 torchvision==0.14.1 torchaudio==0.13.1 pytorch-cuda=11.6 -c pytorch -c nvidia
-conda install -c conda-forge numpy matplotlib pillow xarray zarr netcdf4 scipy imageio networkx scikit-image s3fs pyproj pyarrow seaborn cartopy tensorboard dask pytorch-lightning=1.7.7 torchmetrics=0.7.3
+conda install -c conda-forge numpy matplotlib pillow xarray zarr netcdf4 scipy imageio networkx scikit-image s3fs pyproj tensorboard pyarrow seaborn cartopy dask pytorch-lightning=1.7.7 torchmetrics=0.7.3
 pip install earthnet segmentation-models-pytorch
 ```
 

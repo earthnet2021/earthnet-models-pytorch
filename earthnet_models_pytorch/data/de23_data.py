@@ -12,10 +12,12 @@ import numpy as np
 import pytorch_lightning as pl
 import torch
 import xarray as xr
+import datetime
 
 from torch.utils.data import Dataset, DataLoader, random_split
 
 from earthnet_models_pytorch.utils import str2bool
+
 
 variables = {
     ### variables with dimensions x, y, Sampled time (irregular)
@@ -61,11 +63,13 @@ variables = {
     ### static variables
     ### variables with dimensions x_300, y_300, 
     # Land cover classes. Categorical variable.
+    # use Scene classification instead
     "landcover": ["lccs_class"],
     ### variables with dimensions x, y
     # Elevation model. Defined on 0 - 2000.
     "elevation": ["cop_dem"], 
 }
+
 
 
 class DeepExtremes2023Dataset(Dataset):
@@ -85,9 +89,7 @@ class DeepExtremes2023Dataset(Dataset):
         # print(filepath)
         minicube = xr.open_dataset(filepath)
 
-        print(minicube.cloud_mask.time)
-        print(minicube.s2_bands.B02.time)
-        if minicube.cloud_mask.time != minicube.s2_bands.B02.time:
+        if (minicube[self.variables["cloud_mask"]].time != minicube[self.variables["s2_bands"]].B02.time).all():
             raise Exception(
                 "The first available imagery of sentinel-2 is not 4 + [5]"
                 + str(index_avail)
@@ -96,14 +98,13 @@ class DeepExtremes2023Dataset(Dataset):
 
         # Create the minicube
         # s2 is 5 days, and already rescaled [0, 1]
-        print(minicube[self.variables["s2_bands"]].shape)
         s2_cube = (
             minicube[self.variables["s2_bands"]]
             .to_array()
-            .values.transpose((3, 0, 1, 2))
+            .values.transpose((1, 0, 2, 3))
             .astype(self.type)
         )  # (time, channels, w, h)
-        print(s2_cube)
+        # print(s2_cube.shape)
 
         # s2_mask: 
         # 0 - free_sky
@@ -115,31 +116,40 @@ class DeepExtremes2023Dataset(Dataset):
         s2_mask = (
             minicube[self.variables["cloud_mask"]]
             .to_array()
-            .isel(time=time)
             .values.transpose((1, 0, 2, 3))
-            .astype(self.type)[:, :, :128, :128]
+            .astype(self.type)
         )  # (time, 1, w, h)
 
         target = (
             self.target_computation(minicube)
-            .isel(time=time)
             .values[:, None, ...]
-            .astype(self.type)[:, :, :128, :128]
+            .astype(self.type)
         )
+        # print(target.shape)
 
         # weather is daily
         meteo_cube = minicube[self.variables["era5"]]
 
-        # rescale temperature on the extreme values ever observed globally (Kelvin): -88, 58.
-        meteo_cube["t2m"] = (meteo_cube["t2m"] - 185) / (331 - 185)
-        meteo_cube["t2mmin"] = (meteo_cube["t2mmin"] - 185) / (331 - 185)
-        meteo_cube["t2mmax"] = (meteo_cube["t2mmax"] - 185) / (331 - 185)
+        # # rescale temperature on the extreme values ever observed globally (Kelvin): -88, 58.
+        # meteo_cube["t2m_mean"] = (meteo_cube["t2m_mean"] - 185) / (331 - 185)
+        # meteo_cube["t2m_min"] = (meteo_cube["t2m_min"] - 185) / (331 - 185)
+        # meteo_cube["t2m_max"] = (meteo_cube["t2m_max"] - 185) / (331 - 185)
 
-        # shouldn't I rescale all meteo variables?
+        # rescale all meteo variables?
+        # minicube[self.variables["era5"]] = (
+        #         minicube[self.variables["era5"]] - statistic[self.variables["era5"]]["min"]
+        #     ) / (
+        #         statistic[self.variables["era5"]]["max"] - statistic[self.variables["era5"]]["min"]
+        #     )
+
+        # Era5land and Era5 dataset. Weather is daily
         meteo_cube = (
-            meteo_cube.to_array().values.transpose((1, 0)).astype(self.type)
-        )  # t, c
-        meteo_cube[np.isnan(meteo_cube)] = 0
+            minicube[self.variables["era5"]] 
+            .to_array()
+            .values.transpose((1, 0))
+            .astype(self.type)
+        )
+        # print(meteo_cube.shape)
 
         # TODO NaN values are replaced by the mean of each variable. To solve, currently RuntimeWarning: overflow encountered in reduce
         # col_mean = np.nanmean(meteo_cube, axis=0)
@@ -147,35 +157,41 @@ class DeepExtremes2023Dataset(Dataset):
         # meteo_cube[inds] = np.take(col_mean, inds[1])
 
         topography = (
-            minicube[self.variables["elevation"]].to_array() / 2000
+            minicube[self.variables["elevation"]].to_array().values.astype(self.type) / 2000
         )  # c h w, rescaling
-        topography = topography.values.astype(self.type)[:, :128, :128]
-        topography[np.isnan(topography)] = np.mean(
-            topography
-        )  # idk if we can have missing value in the topography
-
-        landcover = (
-            minicube[self.variables["landcover"]]
+        # print(topography.shape)
+        
+        # SCL is scene classification. i.e., it has a time dimension. Needs to be reduced over time
+        s2_scene_classification = (
+            minicube[self.variables["s2_scene_classification"]]
             .to_array()
-            .values.astype(self.type)[:, :128, :128]
+            .values.transpose((1, 0, 2, 3))
+            .astype(self.type)
         )  # c h w
-
-        # TODO transform landcover in categoritcal variables if used for training
+        # print(s2_scene_classification.shape)
 
         # NaN values handling
         s2_cube = np.where(np.isnan(s2_cube), np.zeros(1).astype(self.type), s2_cube)
         target = np.where(np.isnan(target), np.zeros(1).astype(self.type), target)
         s2_mask = np.where(np.isnan(s2_mask), np.ones(1).astype(self.type), s2_mask) # ?? s2_cube ? or s2_mask ?
 
-        landcover = np.where(
-            np.isnan(landcover), np.zeros(1).astype(self.type), landcover
+        s2_scene_classification = np.where(
+            np.isnan(s2_scene_classification), np.zeros(1).astype(self.type), s2_scene_classification
         )
+
+        lc_mask = (
+            (s2_scene_classification == 4)
+            .astype(self.type)
+        )
+        # print(lc_mask)
+
 
         # include scene classification in model? https://sentinels.copernicus.eu/web/sentinel/technical-guides/sentinel-2-msi/level-2a/algorithm-overview
         # Concatenation
         satellite_data = np.concatenate((target, s2_cube), axis=1)
 
         # Final minicube
+        # print(filepath.name)
         data = {
             "dynamic": [
                 torch.from_numpy(satellite_data),
@@ -183,11 +199,10 @@ class DeepExtremes2023Dataset(Dataset):
             ],
             "dynamic_mask": [torch.from_numpy(s2_mask)],
             "static": [torch.from_numpy(topography)],
-            # "target": torch.from_numpy(target),
-            # "s2_avail": torch.from_numpy(s2_avail),
-            "landcover": torch.from_numpy(landcover),
+            "landcover": torch.from_numpy(s2_scene_classification),
+            "landcover_mask": torch.from_numpy(lc_mask).bool(),
             "filepath": str(filepath),
-            "cubename": self.__name_getter(filepath),
+            "cubename": filepath.name #self.__name_getter(filepath),
         }
         # print(data["filepath"], data["dynamic"][0].shape)
         return data
@@ -204,44 +219,39 @@ class DeepExtremes2023Dataset(Dataset):
         Returns:
             [str]: cubename (has format tile_stuff.npz)
         """
-        components = path.name.split("_")
+        # components = path.name.split("_")
+        print(path.name)
         regex = re.compile("\d{2}[A-Z]{3}")
+        print(regex)
         if bool(regex.match(components[0])):
             return path.name
         else:
             assert bool(regex.match(components[1]))
             return "_".join(components[1:])
 
-    def target_computation(self, minicube):
+    def target_computation(self, minicube) -> str:
         """Compute the vegetation index (VI) target"""
         if self.target == "ndvi":
-            targ = (minicube.B8A - minicube.B04) / (
-                minicube.B8A + minicube.B04 + 1e-6
+            targ = (minicube.s2_B8A - minicube.s2_B04) / (
+                minicube.s2_B8A + minicube.s2_B04 + 1e-6
             )
 
         if (
             self.target == "kndvi"
-        ):  # TODO the the denominator is not optimal, needs to be improved accordingly to the original paper
+        ):  # TODO the denominator is not optimal, needs to be improved accordingly to the original paper
             targ = np.tanh(
                 (
-                    (minicube.B08 - minicube.B04)
-                    / (minicube.BO8 + minicube.B04 + 1e-6)
+                    (minicube.s2_B08 - minicube.s2_B04)
+                    / (minicube.s2_BO8 + minicube.s2_B04 + 1e-6)
                 )
                 ** 2
             ) / np.tanh(1)
 
-        # if self.target == "anomalie_ndvi":
-        #     targ = (minicube.B8A - minicube.B04) / (
-        #         minicube.B8A + minicube.B04 + 1e-6
-        #     )
-        #     for i in range(1, 13):
-        #         indices = targ.groupby("time.month").groups[i]
-        #         index_month = minicube.ndviclim_mean.groupby("time_clim.month").groups[
-        #             i
-        #         ]
-        #         targ[indices] = (
-        #             targ[indices].values - minicube.ndviclim_mean[index_month].values
-        #         )
+        if self.target == "anomalie_ndvi":
+            targ = (
+                (minicube.s2_B8A - minicube.s2_B04)
+                / (minicube.s2_B8A + minicube.s2_B04 + 1e-6)
+            ) - minicube.msc
 
         return targ
 
@@ -264,6 +274,9 @@ class DeepExtremes2023DataModule(pl.LightningDataModule):
         parser = argparse.ArgumentParser(parents=parent_parser, add_help=False)
 
         parser.add_argument("--base_dir", type=str, default="data/datasets/")
+        parser.add_argument("--fold_path", type=str, default="mc_earthnet.csv")
+        parser.add_argument("--test_fold", type=str, default=10)
+        parser.add_argument("--val_fold", type=str, default=9)
         parser.add_argument("--test_track", type=str, default="iid")
         parser.add_argument("--target", type=str, default="ndvi")
 
@@ -282,9 +295,11 @@ class DeepExtremes2023DataModule(pl.LightningDataModule):
         return parser
 
     def setup(self, stage: str = None):
+        train_subset, val_subset, spatial_test_subset, temporal_test_subset = get_dataset(fold_path, test_fold, val_fold)
+
         if stage == "fit" or stage is None:
             earthnet_full = DeepExtremes2023Dataset(
-                self.base_dir, # / "train",
+                self.base_dir, train_subset,
                 target=self.hparams.target,
                 fp16=self.hparams.fp16,
             )
@@ -295,10 +310,26 @@ class DeepExtremes2023DataModule(pl.LightningDataModule):
             )
 
         if stage == "test" or stage is None:
-            self.earthnet_test = DeepExtremes2023Dataset(
-                self.base_dir / "test",
-                target=self.hparams.target,
-                fp16=self.hparams.fp16,
+            if test_track == "iid":
+                self.earthnet_test = DeepExtremes2023Dataset(
+                    self.base_dir, 
+                    spatial_test_subset,
+                    target=self.hparams.target,
+                    fp16=self.hparams.fp16,
+            )
+            if test_track == "temporal":
+                self.earthnet_test = DeepExtremes2023Dataset(
+                    self.base_dir, 
+                    temporal_test_subset,
+                    target=self.hparams.target,
+                    fp16=self.hparams.fp16,
+            )
+
+            self.earthnet_val = DeepExtremes2023Dataset(
+                    self.base_dir, 
+                    val_subset,
+                    target=self.hparams.target,
+                    fp16=self.hparams.fp16,
             )
 
     def train_dataloader(self) -> DataLoader:
@@ -326,3 +357,36 @@ class DeepExtremes2023DataModule(pl.LightningDataModule):
             num_workers=self.hparams.num_workers,
             pin_memory=True,
         )
+
+    def get_dataset(fold_path, test_fold, val_fold):
+
+        # load csv
+        df = pd.read_csv(fold_path, delimiter=",")[["path", "group", "check", "start_date"]]
+
+        df["start_date"] = pd.to_datetime(df["start_date"], format='%Y-%m-%dT%H:%M:%S.%f')
+        df["start_date2"] = df["start_date"] + datetime.timedelta(days=450)
+        df["start_date3"] = df["start_date2"] + datetime.timedelta(days=450)
+        df["start_test1"] = df["start_date3"] + datetime.timedelta(days=450)
+        df["start_test2"] = df["start_test1"] + datetime.timedelta(days=90)
+        df["start_test3"] = df["start_test2"] + datetime.timedelta(days=90)
+        df = df.melt(['path', 'group', 'check'], value_name = "start_date")
+        df["end_date"] = df["start_date"] + datetime.timedelta(days=449)
+
+        # temporal test set 2021
+        temporal_test_subset = df.loc[(df["variable"].str.startswith("start_test")), ["path", "start_date", "end_date"]]
+    
+        # folds 2017 - 2020
+        df = df.loc[df["variable"].str.startswith("start_date")].drop('variable', 1)
+
+        # training set
+        train_subset = df.loc[(df["group"] != test_fold) & (df["group"] != val_fold) & (df["check"] == 0), ["path", "start_date", "end_date"]]
+
+        # validation set
+        val_subset = df.loc[(df["group"] == val_fold) & (df["check"] == 0), ["path", "start_date", "end_date"]]
+
+        # iid test set
+        spatial_test_subset = df.loc[(df["group"] == test_fold) & (df["check"] == 0), ["path", "start_date", "end_date"]]
+
+        return train_subset, val_subset, spatial_test_subset, temporal_test_subset
+    
+
