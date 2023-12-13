@@ -3,12 +3,13 @@
 """
 from typing import Optional, Union
 import sys
+import numpy as np
 import argparse
 import ast
 import torch.nn as nn
 import torch
 from earthnet_models_pytorch.utils import str2bool
-
+from itertools import chain
 
 # Mapping of class labels to indices
 class_mapping = {
@@ -187,14 +188,12 @@ class ConvLSTMAE(nn.Module):
             padding=padding,
             bias=self.hparams.bias,
         )
-
         if self.hparams.target == "ndvi":
             self.activation_output = nn.Sigmoid()
         elif self.hparams.target == "anomalie_ndvi":
             self.activation_output = SigmoidRescaler()
         else:
             KeyError("The target is not defined.")
-
     @staticmethod
     def add_model_specific_args(
         parent_parser: Optional[Union[argparse.ArgumentParser, list]] = None
@@ -234,6 +233,8 @@ class ConvLSTMAE(nn.Module):
         parser.add_argument("--skip_connections", type=str2bool, default=False)
         parser.add_argument("--teacher_forcing", type=str2bool, default=False)
         parser.add_argument("--target", type=str, default=False)
+        parser.add_argument("--temporal_experiment", type=str, default=False)
+        parser.add_argument("--spatial_experiment", type=str, default=False)
         return parser
 
     def forward(
@@ -311,7 +312,60 @@ class ConvLSTMAE(nn.Module):
         static = data["static"][0]
 
         # Get the dimensions of the input data. Shape: batch size, temporal size, number of channels, height, width
-        b, t, _, h, w = sentinel.shape
+        b, t, c, h, w = sentinel.shape
+
+        if self.hparams.temporal_experiment:
+            end_shuffle = 40
+
+            # Create an array of indices along the specified dimension
+            indices = np.arange(0, 60)
+            
+            # for random shuffuling
+            # sentinel[:,0:60 - end_shuffle,...] = torch.rand([b, 60 - end_shuffle, c, h, w])
+            # weather[:, 0:(60 - end_shuffle)*5, ...] = torch.rand([weather.shape[0], (60 - end_shuffle)*5, weather.shape[2], weather.shape[3], weather.shape[4]])
+
+            # for shuffling in time
+            # Shuffle the indices
+            # for windows shuffling
+            #np.random.shuffle(indices[(60 - end_shuffle) - 10:60 - end_shuffle])
+            # for context shuffling
+            np.random.shuffle(indices[0:60 - end_shuffle])
+
+            # Shuffle for the weather: same shuffle than for sentinel but different temporal resolution
+            indices_weather = list(chain.from_iterable(range(i * 5, 5 * i + 5) for i in indices))  # 5: S2 temporal resolution
+
+            # Use take_along_dim to shuffle along the specified dimension
+            sentinel = sentinel[:,indices,...]
+            weather = weather[:, indices_weather, ...]
+
+        if self.hparams.spatial_experiment:
+            # Size of the array
+            array_size = (128, 128)
+
+            # Radius of the centered circle
+            radius = 5
+
+            # Create a meshgrid of indices
+            x, y = np.meshgrid(np.arange(array_size[0]), np.arange(array_size[1]))
+
+            # Calculate distance from the center for each point in the grid
+            distance = np.sqrt((x - array_size[0] // 2)**2 + (y - array_size[1] // 2)**2)
+
+            # Create a boolean mask for points inside the circle
+            circle_mask = distance <= radius
+
+            # Create an array with shuffled values for points outside the circle
+            shuffled_values = np.random.rand(np.sum(~circle_mask))
+
+            original_array = np.ones((128,128))
+            # Copy the original array to maintain the original values
+            shuffled_array = np.copy(original_array)
+
+            # Assign shuffled values to pixels outside the circle
+            shuffled_array[~circle_mask] = shuffled_values
+
+
+
 
         # Initialize hidden states for encoder ConvLSTM cells
         h_t, c_t = self.encoder_1_convlstm.init_hidden(batch_size=b, height=h, width=w)

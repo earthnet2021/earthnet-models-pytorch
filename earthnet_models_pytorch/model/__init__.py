@@ -6,7 +6,7 @@ from earthnet_models_pytorch.model.simvp import SimVP
 from earthnet_models_pytorch.model.predrnn import PredRNN
 from earthnet_models_pytorch.model.convlstm import ConvLSTM
 from earthnet_models_pytorch.model.nextframe_resnet import NextFrameResNet
-
+from earthnet_models_pytorch.model.presto import Presto
 MODELS = {
     "local-rnn": LocalRNN,
     "rnn": RNN,
@@ -16,5 +16,6 @@ MODELS = {
     "predrnn": PredRNN,
     "convlstm": ConvLSTM,
     "nf_resnet": NextFrameResNet,
+    "presto": Presto
 }
 

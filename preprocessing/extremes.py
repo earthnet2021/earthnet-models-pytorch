@@ -55,8 +55,8 @@ def add_extremes_events_dataset(file):
 
 if __name__ == "__main__":
     # Define the base path for input files and the destination path for output files
-    basepath = Path("/scratch/crobin/earthnet2023_interpolated/test/")
-    dst_path = "/scratch/crobin/earthnet2023_interpolated_extremes/test/"
+    basepath = Path("/Net/Groups/BGI/work_1/scratch/DeepCube/earthnet2023_interpolated/train")
+    dst_path = "/scratch/crobin/earthnet2023_interpolated_extremes/train/"
 
     # Create the destination directory if it doesn't exist
     if not os.path.exists(dst_path):

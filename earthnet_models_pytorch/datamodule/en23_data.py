@@ -1,5 +1,4 @@
 from typing import Union, Optional
-
 import argparse
 import sys
 import copy

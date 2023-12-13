@@ -80,8 +80,8 @@ def add_msc_daily_dataset(file):
 
 
 if __name__ == "__main__":
-    basepath = Path("/scratch/crobin/earthnet2023_interpolated_extremes/test/")
-    dst_path = "/scratch/crobin/earthnet2023_preprocessing/test/"
+    basepath = Path("/scratch/crobin/earthnet2023_interpolated_extremes/train/")
+    dst_path = "/scratch/crobin/earthnet2023_preprocessing/train/"
 
     if not os.path.exists(dst_path):
         os.makedirs(dst_path)

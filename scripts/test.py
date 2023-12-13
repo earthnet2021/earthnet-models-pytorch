@@ -61,20 +61,6 @@ def test_model(setting_dict: dict, checkpoint: str):
     dm.setup("test")
 
     trainer.test(model=task, datamodule=dm, ckpt_path=None)
-    """    x = next(iter(dm.train_dataloader())) #torch.randn(4, 36, 26, 128, 128, device="cuda")
-   
-    # summary(model, x.shape)
-    torch.onnx.export(model,               # model being run
-                  x,                         # model input (or a tuple for multiple inputs)
-                  setting_dict["Task"]["pred_dir"] + '/' + setting_dict["Logger"]["name"] + ".onnx",   # where to save the model (can be a file or file-like object)
-                  export_params=True,        # store the trained parameter weights inside the model file
-                  opset_version=10,          # the ONNX version to export the model to
-                  do_constant_folding=True,  # whether to execute constant folding for optimization
-                  input_names = ['input'],   # the model's input names
-                  output_names = ['output'], # the model's output names
-                  dynamic_axes={'input' : {0 : 'batch_size', 1 : 'time', 2: 'channels', 3: 'long', 4: 'lat'},    # variable length axes
-                                'output' : {0 : 'batch_size'}})"""
-
 
 if __name__ == "__main__":
     parser = ArgumentParser()

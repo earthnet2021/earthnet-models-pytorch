@@ -1,0 +1,71 @@
+Architecture: "presto"
+
+Seed: 42
+
+Setting: en21x
+
+Logger:
+    save_dir: "experiments/"
+
+Checkpointer:
+    save_top_k: 1
+    save_last: True
+    every_n_epochs: 1
+
+Trainer:
+    gpus: 1
+    strategy: 'ddp'
+    #deterministic: True
+    log_every_n_steps: 32
+    #profiler: 'advanced'
+    #accumulate_grad_batches: 2
+    #fast_dev_run: True
+    #log_gpu_memory: 'all'
+    #weights_summary: 'full'
+    max_epochs: 100
+    #limit_train_batches: 32
+    #limit_val_batches: 32
+    gradient_clip_val: 1
+    #val_check_interval: 0.25
+
+Data:
+    base_dir: "/Net/Groups/BGI/work_1/scratch/EarthNet2021/data/datasets/en21x" 
+    test_track: "iid"
+    train_batch_size: 32
+    val_batch_size: 8
+    test_batch_size: 8
+    num_workers: 32
+    dl_cloudmask: True
+
+Task:
+    loss:
+        name: "MaskedL2NDVILoss"
+        lc_min: 10
+        lc_max: 40
+        ndvi_pred_idx: 0
+        ndvi_targ_idx: 0
+        pred_mask_value: -1
+        scale_by_std: False
+    context_length: 10
+    target_length: 20
+    n_stochastic_preds: 1
+    optimization:
+        optimizer:
+            - 
+                name: AdamW
+                args: 
+                    betas: [0.9, 0.999]
+                lr_per_sample: 0.00001
+        lr_shedule:
+            -
+                name: MultiStepLR
+                args:
+                    milestones: [190] #[2, 20, 50, 90]
+                    gamma: 0.1
+    n_log_batches: 2
+    compute_metric_on_test: True
+
+Model:
+    context_length: 10
+    target_length: 20
+    

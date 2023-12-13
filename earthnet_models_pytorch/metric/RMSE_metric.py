@@ -96,7 +96,8 @@ class RootMeanSquaredError(Metric):
         # Landcover mask
         lc = targs["landcover"]
         lc_mask = (
-            ((lc <= self.lc_min).bool() | (lc >= self.lc_max).bool())
+            #((lc >= self.lc_min).bool() & (lc <= self.lc_max).bool()) # !!! En21x
+            ((lc <= self.lc_min).bool() | (lc >= self.lc_max).bool()) # !!! En23, update the lc as parameter
             .type_as(s2_mask)
             .unsqueeze(1)
             .repeat(1, preds.shape[1], 1, 1, 1)
