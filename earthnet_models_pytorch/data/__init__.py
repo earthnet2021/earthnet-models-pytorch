@@ -6,7 +6,7 @@ from earthnet_models_pytorch.data.en21x_data_old import (
     EarthNet2021XpxOldDataModule,
 )
 from earthnet_models_pytorch.data.en23_data import EarthNet2023DataModule
-from earthnet_models_pytorch.data.de23_data import DeepExtremes2023Dataset
+from earthnet_models_pytorch.data.de23_data import DeepExtremes2023DataModule
 
 SETTINGS = [
     "en21-std",
@@ -28,7 +28,7 @@ DATASETS = {
     "en21x-pxold": EarthNet2021XpxOldDataModule,
     "en22": EarthNet2022DataModule,
     "en23": EarthNet2023DataModule,
-    "de23": DeepExtremes2023Dataset,
+    "de23": DeepExtremes2023DataModule,
 }
 
 METRIC_CHECKPOINT_INFO = {
