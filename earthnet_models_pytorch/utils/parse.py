@@ -125,17 +125,16 @@ def parse_setting(setting_file, track = None):
     setting_dict["Task"]["val_batch_size"] = setting_dict["Data"]["val_batch_size"]
     setting_dict["Task"]["test_batch_size"] = setting_dict["Data"]["test_batch_size"]
 
-    setting_dict["Task"]["lc_min"] = setting_dict["Task"]["loss"]["lc_min"]
-    setting_dict["Task"]["lc_max"] = setting_dict["Task"]["loss"]["lc_max"]
+    #setting_dict["Task"]["lc_min"] = setting_dict["Task"]["loss"]["lc_min"]
+    #setting_dict["Task"]["lc_max"] = setting_dict["Task"]["loss"]["lc_max"]
 
-    setting_dict["Task"]["loss"]["setting"] = setting_dict["Setting"]
-    
+    #setting_dict["Task"]["loss"]["setting"] = setting_dict["Setting"]
     if "metric_kwargs" not in setting_dict["Task"]:
         setting_dict["Task"]["metric_kwargs"] = {}
     setting_dict["Task"]["metric_kwargs"]["context_length"] = setting_dict["Task"]["context_length"]        
     setting_dict["Task"]["metric_kwargs"]["target_length"] = setting_dict["Task"]["target_length"]        
-    setting_dict["Task"]["metric_kwargs"]["lc_min"] = setting_dict["Task"]["lc_min"] 
-    setting_dict["Task"]["metric_kwargs"]["lc_max"] = setting_dict["Task"]["lc_max"] 
+    #setting_dict["Task"]["metric_kwargs"]["lc_min"] = setting_dict["Task"]["lc_min"] 
+    #setting_dict["Task"]["metric_kwargs"]["lc_max"] = setting_dict["Task"]["lc_max"] 
 
     if "model_shedules" in setting_dict["Task"]["metric_kwargs"]:
         setting_dict["Task"]["metric_kwargs"]["shedulers"] = setting_dict["Task"]["metric_kwargs"]["model_shedules"]

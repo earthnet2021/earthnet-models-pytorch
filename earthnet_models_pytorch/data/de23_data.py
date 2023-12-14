@@ -90,7 +90,8 @@ class DeepExtremes2023Dataset(Dataset):
 
         filepath, start_date, end_date = self.metadata[idx]
         minicube = xr.open_dataset(filepath, engine='zarr').sel(time=slice(start_date, end_date), event_time=slice(start_date, min(end_date, datetime.date(2021, 12, 31))))
-        # print(minicube)
+        print(filepath)
+        print(minicube[self.variables["cloud_mask"]])
 
         if (minicube[self.variables["cloud_mask"]].time != minicube[self.variables["s2_bands"]].B02.time).all():
             raise Exception(
@@ -122,6 +123,7 @@ class DeepExtremes2023Dataset(Dataset):
             .values.transpose((1, 0, 2, 3))
             .astype(self.type)
         )  # (time, 1, w, h)
+        s2_mask = s2_mask != 0
 
         target = (
             self.target_computation(minicube)
@@ -183,7 +185,7 @@ class DeepExtremes2023Dataset(Dataset):
         )
 
         lc_mask = (
-            (s2_scene_classification == 4)
+            (s2_scene_classification != 4) # 4 is vegetation pixel
             .astype(self.type)
         )
         # print(lc_mask)

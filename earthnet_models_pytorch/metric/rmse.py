@@ -6,8 +6,6 @@ class RootMeanSquaredError(Metric):
     # Each state variable should be called using self.add_state(...)
     def __init__(
         self,
-        lc_min: int,
-        lc_max: int,
         context_length: int,
         target_length: int,
         compute_on_step: bool = False,
@@ -55,10 +53,8 @@ class RootMeanSquaredError(Metric):
         self.context_length = context_length
         self.target_length = target_length
 
-        self.lc_min = lc_min
-        self.lc_max = lc_max
         print(
-            f"Using Masked RootMeanSquaredError metric Loss with Landcover boundaries ({self.lc_min, self.lc_max})."
+            f"Using Masked RootMeanSquaredError metric Loss."
         )
 
     def update(self, preds, targs):
@@ -94,13 +90,21 @@ class RootMeanSquaredError(Metric):
             )
 
         # Landcover mask
-        lc = targs["landcover"]
-        lc_mask = (
-            ((lc <= self.lc_min).bool() | (lc >= self.lc_max).bool())
-            .type_as(s2_mask)
-            .unsqueeze(1)
-            .repeat(1, preds.shape[1], 1, 1, 1)
-        )
+        lc_mask = targs["landcover_mask"]
+
+        if len(lc_mask.shape) < 5: # spatial landcover mask
+            lc_mask.unsqueeze(1).repeat(1, preds.shape[1], 1, 1, 1)
+        else: # spato-temporal landcover mask
+            lc_mask = lc_mask[:, self.context_length : self.context_length + self.target_length, ...]
+
+
+        # lc = targs["landcover"]
+        # lc_mask = (
+        #     ((lc <= self.lc_min).bool() | (lc >= self.lc_max).bool())
+        #     .type_as(s2_mask)
+        #     .unsqueeze(1)
+        #     .repeat(1, preds.shape[1], 1, 1, 1)
+        # )
 
         mask = s2_mask * lc_mask
 

@@ -42,8 +42,8 @@ class SpatioTemporalTask(pl.LightningModule):
         self.context_length = hparams.context_length
         self.target_length = hparams.target_length
 
-        self.lc_min = hparams.lc_min
-        self.lc_max = hparams.lc_max
+        #self.lc_min = hparams.lc_min
+        #self.lc_max = hparams.lc_max
 
         self.n_stochastic_preds = hparams.n_stochastic_preds
 
@@ -92,8 +92,8 @@ class SpatioTemporalTask(pl.LightningModule):
         parser.add_argument("--target_length", type=int, default=20)
 
         # Landcover bounds. Used as mask on the non-vegetation pixel.
-        parser.add_argument("--lc_min", type=int, default=10)
-        parser.add_argument("--lc_max", type=int, default=20)
+        #parser.add_argument("--lc_min", type=int, default=10)
+        #parser.add_argument("--lc_max", type=int, default=20)
 
         # Number of stochastic prediction for statistical models.
         parser.add_argument("--n_stochastic_preds", type=int, default=1)

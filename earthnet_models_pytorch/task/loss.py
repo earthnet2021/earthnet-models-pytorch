@@ -97,8 +97,6 @@ class PixelwiseLoss(nn.Module):
 class MaskedPixelwiseLoss(nn.Module):
     def __init__(
         self,
-        lc_min=None,
-        lc_max=None,
         context_length=None,
         target_length=None,
         ndvi_pred_idx=0,
@@ -112,15 +110,6 @@ class MaskedPixelwiseLoss(nn.Module):
     ):
         super().__init__()
 
-        self.lc_min = (
-            lc_min if lc_min else None
-        )  # landcover boudaries of vegetation (to select only pixel with vegetation)
-        self.lc_max = lc_max if lc_max else None
-        self.use_lc = lc_min & lc_max
-        if not self.use_lc:
-            print(
-                f"WARNING. The boundaries of the landcover map are not definite. Loss calculated on all pixels including non-vegetation pixels."
-            )
         self.context_length = context_length
         self.target_length = target_length
         self.ndvi_pred_idx = ndvi_pred_idx  # index of the NDVI band
@@ -129,11 +118,11 @@ class MaskedPixelwiseLoss(nn.Module):
         self.scale_by_std = scale_by_std
         if self.scale_by_std:
             print(
-                f"Using Masked L2/Std NDVI Loss with Landcover boundaries ({self.lc_min, self.lc_max})."
+                f"Using Masked L2/Std NDVI Loss."
             )
         else:
             print(
-                f"Using Masked L2 NDVI Loss with Landcover boundaries ({self.lc_min, self.lc_max})."
+                f"Using Masked L2 NDVI Loss."
             )
 
         self.extra_aux_loss_term = extra_aux_loss_term
@@ -165,15 +154,22 @@ class MaskedPixelwiseLoss(nn.Module):
             )
 
         # Landcover mask
-        lc = batch["landcover"]
-        if self.setting == "en23":
-            lc_bool = (lc <= self.lc_min).bool() | (lc >= self.lc_max).bool()
-        else:
-            lc_mask = (lc >= self.lc_min).bool() & (lc <= self.lc_max).bool()
+        lc_mask = batch["landcover_mask"]
+        
+        if len(lc_mask.shape) < 5: # spatial landcover mask
+            lc_mask.unsqueeze(1).repeat(1, preds.shape[1], 1, 1, 1)
+        else: # spato-temporal landcover mask
+            lc_mask = lc_mask[:, self.context_length : self.context_length + self.target_length, ...]
+        
+        # if self.setting == "en23":
+        #     lc_bool = (lc <= self.lc_min).bool() | (lc >= self.lc_max).bool()
+        # else:
+        #     lc_mask = (lc >= self.lc_min).bool() & (lc <= self.lc_max).bool()
 
-        lc_mask = (
-            lc_bool.type_as(s2_mask).unsqueeze(1).repeat(1, preds.shape[1], 1, 1, 1)
-        )
+        # lc_mask = (
+        #     lc_bool.type_as(s2_mask).unsqueeze(1).repeat(1, preds.shape[1], 1, 1, 1)
+        # )
+
         mask = s2_mask * lc_mask
 
         # MSE computation
