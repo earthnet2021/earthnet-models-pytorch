@@ -116,7 +116,9 @@ def parse_setting(setting_file, track = None):
     # Cpy information for others modules   
     setting_dict["Model"]["context_length"] = setting_dict["Task"]["context_length"]        
     setting_dict["Model"]["target_length"] = setting_dict["Task"]["target_length"]
-    setting_dict["Model"]["target"] = setting_dict["Data"]["target"]
+        
+    if "target" in setting_dict["Data"]:
+        setting_dict["Model"]["target"] = setting_dict["Data"]["target"]
 
     setting_dict["Task"]["loss"]["context_length"] = setting_dict["Task"]["context_length"]        
     setting_dict["Task"]["loss"]["target_length"] = setting_dict["Task"]["target_length"]
@@ -125,16 +127,19 @@ def parse_setting(setting_file, track = None):
     setting_dict["Task"]["val_batch_size"] = setting_dict["Data"]["val_batch_size"]
     setting_dict["Task"]["test_batch_size"] = setting_dict["Data"]["test_batch_size"]
 
-    #setting_dict["Task"]["lc_min"] = setting_dict["Task"]["loss"]["lc_min"]
-    #setting_dict["Task"]["lc_max"] = setting_dict["Task"]["loss"]["lc_max"]
+    # legacy for lc_min defined in Task config
+    if "lc_min" and "lc_max" in setting_dict["Task"]["loss"]:
+        setting_dict["Data"]["lc_min"] = setting_dict["Task"]["loss"]["lc_min"]
+        setting_dict["Data"]["lc_max"] = setting_dict["Task"]["loss"]["lc_max"]
+
+        del setting_dict["Task"]["loss"]["lc_min"]
+        del setting_dict["Task"]["loss"]["lc_max"]
 
     #setting_dict["Task"]["loss"]["setting"] = setting_dict["Setting"]
     if "metric_kwargs" not in setting_dict["Task"]:
         setting_dict["Task"]["metric_kwargs"] = {}
     setting_dict["Task"]["metric_kwargs"]["context_length"] = setting_dict["Task"]["context_length"]        
     setting_dict["Task"]["metric_kwargs"]["target_length"] = setting_dict["Task"]["target_length"]        
-    #setting_dict["Task"]["metric_kwargs"]["lc_min"] = setting_dict["Task"]["lc_min"] 
-    #setting_dict["Task"]["metric_kwargs"]["lc_max"] = setting_dict["Task"]["lc_max"] 
 
     if "model_shedules" in setting_dict["Task"]["metric_kwargs"]:
         setting_dict["Task"]["metric_kwargs"]["shedulers"] = setting_dict["Task"]["metric_kwargs"]["model_shedules"]

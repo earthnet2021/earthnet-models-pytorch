@@ -93,18 +93,9 @@ class RootMeanSquaredError(Metric):
         lc_mask = targs["landcover_mask"]
 
         if len(lc_mask.shape) < 5: # spatial landcover mask
-            lc_mask.unsqueeze(1).repeat(1, preds.shape[1], 1, 1, 1)
+            lc_mask = lc_mask.unsqueeze(1).repeat(1, preds.shape[1], 1, 1, 1)
         else: # spato-temporal landcover mask
             lc_mask = lc_mask[:, self.context_length : self.context_length + self.target_length, ...]
-
-
-        # lc = targs["landcover"]
-        # lc_mask = (
-        #     ((lc <= self.lc_min).bool() | (lc >= self.lc_max).bool())
-        #     .type_as(s2_mask)
-        #     .unsqueeze(1)
-        #     .repeat(1, preds.shape[1], 1, 1, 1)
-        # )
 
         mask = s2_mask * lc_mask
 

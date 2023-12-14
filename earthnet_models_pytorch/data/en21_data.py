@@ -89,7 +89,6 @@ class EarthNet2021Dataset(Dataset):
             ] if not self.use_meso_static_as_dynamic else [
                 torch.from_numpy(highresstatic)
             ],
-            "static_mask": [],
             "filepath": str(filepath),
             "cubename": self.__name_getter(filepath)
         }
