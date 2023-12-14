@@ -18,7 +18,7 @@ from torch.utils.data import Dataset, DataLoader, random_split
 
 from earthnet_models_pytorch.utils import str2bool
 
-import os
+import json
 
 
 variables = {
@@ -72,7 +72,8 @@ variables = {
     "elevation": ["cop_dem"], 
 }
 
-
+# with open("statistics_de23.json", "r") as f:
+#         statistics = json.load(f)
 
 class DeepExtremes2023Dataset(Dataset):
     def __init__(
@@ -81,7 +82,6 @@ class DeepExtremes2023Dataset(Dataset):
         if not isinstance(folder, Path):
             folder = Path(folder)
         self.metadata = sorted([(Path(folder, metadata_files['path'][idx][1:]), metadata_files['start_date'][idx], metadata_files['end_date'][idx]) for idx in metadata_files.index])  # why sorted?
-        # print(self.metadata[:10])
         self.type = np.float16 if fp16 else np.float32
         self.target = target
         self.variables = variables
@@ -90,8 +90,6 @@ class DeepExtremes2023Dataset(Dataset):
 
         filepath, start_date, end_date = self.metadata[idx]
         minicube = xr.open_dataset(filepath, engine='zarr').sel(time=slice(start_date, end_date), event_time=slice(start_date, min(end_date, datetime.date(2021, 12, 31))))
-        print(filepath)
-        print(minicube[self.variables["cloud_mask"]])
 
         if (minicube[self.variables["cloud_mask"]].time != minicube[self.variables["s2_bands"]].B02.time).all():
             raise Exception(
@@ -108,7 +106,6 @@ class DeepExtremes2023Dataset(Dataset):
             .values.transpose((1, 0, 2, 3))
             .astype(self.type)
         )  # (time, channels, w, h)
-        # print(s2_cube.shape)
 
         # s2_mask: 
         # 0 - free_sky
@@ -130,7 +127,6 @@ class DeepExtremes2023Dataset(Dataset):
             .values[:, None, ...]
             .astype(self.type)
         )
-        # print(target.shape)
 
         # weather is daily
         meteo_cube = minicube[self.variables["era5"]]
@@ -154,7 +150,6 @@ class DeepExtremes2023Dataset(Dataset):
             .values.transpose((1, 0))
             .astype(self.type)
         )
-        # print(meteo_cube.shape)
 
         # TODO NaN values are replaced by the mean of each variable. To solve, currently RuntimeWarning: overflow encountered in reduce
         # col_mean = np.nanmean(meteo_cube, axis=0)
@@ -164,7 +159,6 @@ class DeepExtremes2023Dataset(Dataset):
         topography = (
             minicube[self.variables["elevation"]].to_array().values.astype(self.type) / 2000
         )  # c h w, rescaling
-        # print(topography.shape)
         
         # SCL is scene classification. i.e., it has a time dimension. Needs to be reduced over time
         s2_scene_classification = (
@@ -173,7 +167,6 @@ class DeepExtremes2023Dataset(Dataset):
             .values.transpose((1, 0, 2, 3))
             .astype(self.type)
         )  # c h w
-        # print(s2_scene_classification.shape)
 
         # NaN values handling
         s2_cube = np.where(np.isnan(s2_cube), np.zeros(1).astype(self.type), s2_cube)
@@ -188,15 +181,12 @@ class DeepExtremes2023Dataset(Dataset):
             (s2_scene_classification != 4) # 4 is vegetation pixel
             .astype(self.type)
         )
-        # print(lc_mask)
-
 
         # include scene classification in model? https://sentinels.copernicus.eu/web/sentinel/technical-guides/sentinel-2-msi/level-2a/algorithm-overview
         # Concatenation
         satellite_data = np.concatenate((target, s2_cube), axis=1)
 
         # Final minicube
-        # print(filepath.name)
         data = {
             "dynamic": [
                 torch.from_numpy(satellite_data),
@@ -209,8 +199,6 @@ class DeepExtremes2023Dataset(Dataset):
             "filepath": str(filepath),
             "cubename": self.__name_getter(filepath),
         }
-        # print(data["filepath"], data["dynamic"][0].shape)
-        # print(data["cubename"])
         return data
 
     def __len__(self) -> int:
@@ -229,15 +217,6 @@ class DeepExtremes2023Dataset(Dataset):
         
         components1 = components[-1].split("_")
         return "_".join(components1[0:3])
-        # print(path.name)
-        # regex = re.compile("\d{2}[A-Z]{3}")
-        # print(regex)
-        # if bool(regex.match(components[0])):
-        #     return path.name
-        # else:
-        #     assert bool(regex.match(components[1]))
-        #     return "_".join(components[1:])
-
 
     def target_computation(self, minicube) -> str:
         """Compute the vegetation index (VI) target"""
@@ -305,8 +284,6 @@ class DeepExtremes2023DataModule(pl.LightningDataModule):
         return parser
 
     def setup(self, stage: str = None):
-        # print(self.base_dir)
-        # print(self.hparams.fold_path)
         train_subset, val_subset, spatial_test_subset, temporal_test_subset = self.get_dataset()
 
         if stage == "fit" or stage is None:
