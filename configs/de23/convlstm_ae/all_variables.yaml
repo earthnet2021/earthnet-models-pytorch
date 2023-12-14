@@ -33,7 +33,7 @@ Trainer:
     val_check_interval: 0.25 #0.005 # 
   
 Data:
-    base_dir: "/Net/Groups/BGI/work_2/scratch/DeepExtremes/dx-minicubes" 
+    base_dir: "/Net/Groups/BGI/tscratch/mweynants/dx-minicubes" 
     test_fold: 10
     val_fold: 9
     fold_path: "/Net/Groups/BGI/work_2/scratch/DeepExtremes/mc_earthnet.csv"
@@ -54,8 +54,8 @@ Task:
         ndvi_targ_idx: 0 # index of the NDVI band
         pred_mask_value: -1
         scale_by_std: False
-    context_length: 60
-    target_length: 10
+    context_length: 73
+    target_length: 17
     metric: "RMSE"
     n_stochastic_preds: 2
     optimization:
