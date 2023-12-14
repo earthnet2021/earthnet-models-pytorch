@@ -18,6 +18,8 @@ from torch.utils.data import Dataset, DataLoader, random_split
 
 from earthnet_models_pytorch.utils import str2bool
 
+import os
+
 
 variables = {
     ### variables with dimensions x, y, Sampled time (irregular)
@@ -74,11 +76,12 @@ variables = {
 
 class DeepExtremes2023Dataset(Dataset):
     def __init__(
-        self, folder: Union[Path, str], target: str, variables=variables, fp16=False
+        self, folder: Union[Path, str], filepaths, target: str, variables=variables, fp16=False
     ):
         if not isinstance(folder, Path):
             folder = Path(folder)
-        self.filepaths = sorted(list(folder.glob("*.zarr")))  # why sorted?
+        
+        self.filepaths = sorted([os.path.join(folder, filepath) for filepath in filepaths])  # why sorted?
         self.type = np.float16 if fp16 else np.float32
         self.target = target
         self.variables = variables
@@ -86,8 +89,8 @@ class DeepExtremes2023Dataset(Dataset):
     def __getitem__(self, idx: int) -> dict:
 
         filepath = self.filepaths[idx]
-        # print(filepath)
-        minicube = xr.open_dataset(filepath)
+        print(filepath)
+        minicube = xr.open_dataset(filepath, engine='zarr')
 
         if (minicube[self.variables["cloud_mask"]].time != minicube[self.variables["s2_bands"]].B02.time).all():
             raise Exception(
@@ -305,11 +308,13 @@ class DeepExtremes2023DataModule(pl.LightningDataModule):
                 target=self.hparams.target,
                 fp16=self.hparams.fp16,
             )
-            # self.earthnet_train, self.earthnet_val = random_split(
-            #     earthnet_full,
-            #     [0.95, 0.05],
-            #     generator=torch.Generator().manual_seed(self.hparams.val_split_seed),
-            # )
+            
+            self.earthnet_val = DeepExtremes2023Dataset(
+                    self.base_dir, 
+                    val_subset,
+                    target=self.hparams.target,
+                    fp16=self.hparams.fp16,
+            )
 
         if stage == "test" or stage is None:
             if self.hparams.test_track == "iid":
@@ -327,12 +332,6 @@ class DeepExtremes2023DataModule(pl.LightningDataModule):
                     fp16=self.hparams.fp16,
             )
 
-            self.earthnet_val = DeepExtremes2023Dataset(
-                    self.base_dir, 
-                    val_subset,
-                    target=self.hparams.target,
-                    fp16=self.hparams.fp16,
-            )
 
     def train_dataloader(self) -> DataLoader:
         return DataLoader(
