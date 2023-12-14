@@ -295,29 +295,31 @@ class DeepExtremes2023DataModule(pl.LightningDataModule):
         return parser
 
     def setup(self, stage: str = None):
-        train_subset, val_subset, spatial_test_subset, temporal_test_subset = get_dataset(fold_path, test_fold, val_fold)
+        print(self.base_dir)
+        print(self.hparams.fold_path)
+        train_subset, val_subset, spatial_test_subset, temporal_test_subset = self.get_dataset()
 
         if stage == "fit" or stage is None:
-            earthnet_full = DeepExtremes2023Dataset(
+            self.earthnet_train = DeepExtremes2023Dataset(
                 self.base_dir, train_subset,
                 target=self.hparams.target,
                 fp16=self.hparams.fp16,
             )
-            self.earthnet_train, self.earthnet_val = random_split(
-                earthnet_full,
-                [0.95, 0.05],
-                generator=torch.Generator().manual_seed(self.hparams.val_split_seed),
-            )
+            # self.earthnet_train, self.earthnet_val = random_split(
+            #     earthnet_full,
+            #     [0.95, 0.05],
+            #     generator=torch.Generator().manual_seed(self.hparams.val_split_seed),
+            # )
 
         if stage == "test" or stage is None:
-            if test_track == "iid":
+            if self.hparams.test_track == "iid":
                 self.earthnet_test = DeepExtremes2023Dataset(
                     self.base_dir, 
                     spatial_test_subset,
                     target=self.hparams.target,
                     fp16=self.hparams.fp16,
             )
-            if test_track == "temporal":
+            if self.hparams.test_track == "temporal":
                 self.earthnet_test = DeepExtremes2023Dataset(
                     self.base_dir, 
                     temporal_test_subset,
@@ -358,10 +360,12 @@ class DeepExtremes2023DataModule(pl.LightningDataModule):
             pin_memory=True,
         )
 
-    def get_dataset(fold_path, test_fold, val_fold):
+    def get_dataset(self):
+        test_fold = self.hparams.test_fold
+        val_fold = self.hparams.val_fold
 
         # load csv
-        df = pd.read_csv(fold_path, delimiter=",")[["path", "group", "check", "start_date"]]
+        df = pd.read_csv(self.hparams.fold_path, delimiter=",")[["path", "group", "check", "start_date"]]
 
         df["start_date"] = pd.to_datetime(df["start_date"], format='%Y-%m-%dT%H:%M:%S.%f')
         df["start_date2"] = df["start_date"] + datetime.timedelta(days=450)
