@@ -79,6 +79,6 @@ Model:
     kernel_size: 3
     bias: True
     skip_connections: True
-    num_inputs: 49
+    num_inputs: 33 #1+7+24+1
     num_outputs: 1 
     teacher_forcing: True

@@ -342,10 +342,15 @@ class ConvLSTMAE(nn.Module):
         for t in range(context_length):
             # Prepare input for encoder ConvLSTM cells
             input = torch.cat((sentinel[:, t, ...], static), dim=1)
-            # WARNING only for En23
             
             if self.hparams.use_weather:
-                weather_t = (
+                if weather.shape[1] == 90: # weather is 5 days resolution
+                    weather_t = (
+                    weather[:, t, ...]
+                    .repeat(1, 1, 128, 128)
+                    )
+                else: # weather is daily
+                    weather_t = (
                     weather[:, t : t + 5, ...]
                     .view(weather.shape[0], 1, -1, 1, 1)
                     .squeeze(1)
@@ -387,12 +392,18 @@ class ConvLSTMAE(nn.Module):
             pred = torch.cat((pred, static), dim=1)
             if self.hparams.use_weather:
                 # Prepare input for decoder ConvLSTM cells
-                weather_t = (
-                    weather[:, context_length + t : context_length + t + 5, ...]
-                    .view(weather.shape[0], 1, -1, 1, 1)
-                    .squeeze(1)
-                    .repeat(1, 1, 128, 128)
-                )
+                if weather.shape[1] == 90: # weather is 5 days resolution
+                        weather_t = (
+                        weather[:,  context_length + t, ...]
+                        .repeat(1, 1, 128, 128)
+                    )
+                else: # weather is daily
+                    weather_t = (
+                        weather[:, context_length + t : context_length + t + 5, ...]
+                        .view(weather.shape[0], 1, -1, 1, 1)
+                        .squeeze(1)
+                        .repeat(1, 1, 128, 128)
+                    )
                 pred = torch.cat((pred, weather_t), dim=1)
 
             # First ConvLSTM block for the decoder

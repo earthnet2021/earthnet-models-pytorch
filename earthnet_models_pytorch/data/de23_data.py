@@ -76,21 +76,21 @@ variables = {
 
 class DeepExtremes2023Dataset(Dataset):
     def __init__(
-        self, folder: Union[Path, str], filepaths, target: str, variables=variables, fp16=False
+        self, folder: Union[Path, str], metadata_files, target: str, variables=variables, fp16=False
     ):
         if not isinstance(folder, Path):
             folder = Path(folder)
-        
-        self.filepaths = sorted([os.path.join(folder, filepath) for filepath in filepaths])  # why sorted?
+        self.metadata = sorted([(Path(folder, metadata_files['path'][idx][1:]), metadata_files['start_date'][idx], metadata_files['end_date'][idx]) for idx in metadata_files.index])  # why sorted?
+        # print(self.metadata[:10])
         self.type = np.float16 if fp16 else np.float32
         self.target = target
         self.variables = variables
 
     def __getitem__(self, idx: int) -> dict:
 
-        filepath = self.filepaths[idx]
-        print(filepath)
-        minicube = xr.open_dataset(filepath, engine='zarr')
+        filepath, start_date, end_date = self.metadata[idx]
+        minicube = xr.open_dataset(filepath, engine='zarr').sel(time=slice(start_date, end_date), event_time=slice(start_date, min(end_date, datetime.date(2021, 12, 31))))
+        # print(minicube)
 
         if (minicube[self.variables["cloud_mask"]].time != minicube[self.variables["s2_bands"]].B02.time).all():
             raise Exception(
@@ -205,13 +205,14 @@ class DeepExtremes2023Dataset(Dataset):
             "landcover": torch.from_numpy(s2_scene_classification),
             "landcover_mask": torch.from_numpy(lc_mask).bool(),
             "filepath": str(filepath),
-            "cubename": filepath.name #self.__name_getter(filepath),
+            "cubename": self.__name_getter(filepath),
         }
         # print(data["filepath"], data["dynamic"][0].shape)
+        # print(data["cubename"])
         return data
 
     def __len__(self) -> int:
-        return len(self.filepaths)
+        return len(self.metadata)
 
     def __name_getter(self, path: Path) -> str:
         """Helper function gets Cubename from a Path
@@ -222,21 +223,25 @@ class DeepExtremes2023Dataset(Dataset):
         Returns:
             [str]: cubename (has format tile_stuff.npz)
         """
-        # components = path.name.split("_")
-        print(path.name)
-        regex = re.compile("\d{2}[A-Z]{3}")
-        print(regex)
-        if bool(regex.match(components[0])):
-            return path.name
-        else:
-            assert bool(regex.match(components[1]))
-            return "_".join(components[1:])
+        components = path.name.split("/")
+        
+        components1 = components[-1].split("_")
+        return "_".join(components1[0:3])
+        # print(path.name)
+        # regex = re.compile("\d{2}[A-Z]{3}")
+        # print(regex)
+        # if bool(regex.match(components[0])):
+        #     return path.name
+        # else:
+        #     assert bool(regex.match(components[1]))
+        #     return "_".join(components[1:])
+
 
     def target_computation(self, minicube) -> str:
         """Compute the vegetation index (VI) target"""
         if self.target == "ndvi":
-            targ = (minicube.s2_B8A - minicube.s2_B04) / (
-                minicube.s2_B8A + minicube.s2_B04 + 1e-6
+            targ = (minicube.B8A - minicube.B04) / (
+                minicube.B8A + minicube.B04 + 1e-6
             )
 
         if (
@@ -244,16 +249,16 @@ class DeepExtremes2023Dataset(Dataset):
         ):  # TODO the denominator is not optimal, needs to be improved accordingly to the original paper
             targ = np.tanh(
                 (
-                    (minicube.s2_B08 - minicube.s2_B04)
-                    / (minicube.s2_BO8 + minicube.s2_B04 + 1e-6)
+                    (minicube.B08 - minicube.B04)
+                    / (minicube.BO8 + minicube.B04 + 1e-6)
                 )
                 ** 2
             ) / np.tanh(1)
 
         if self.target == "anomalie_ndvi":
             targ = (
-                (minicube.s2_B8A - minicube.s2_B04)
-                / (minicube.s2_B8A + minicube.s2_B04 + 1e-6)
+                (minicube.B8A - minicube.B04)
+                / (minicube.B8A + minicube.B04 + 1e-6)
             ) - minicube.msc
 
         return targ
@@ -298,8 +303,8 @@ class DeepExtremes2023DataModule(pl.LightningDataModule):
         return parser
 
     def setup(self, stage: str = None):
-        print(self.base_dir)
-        print(self.hparams.fold_path)
+        # print(self.base_dir)
+        # print(self.hparams.fold_path)
         train_subset, val_subset, spatial_test_subset, temporal_test_subset = self.get_dataset()
 
         if stage == "fit" or stage is None:
