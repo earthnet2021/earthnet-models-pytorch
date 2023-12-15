@@ -58,7 +58,7 @@ def calculate_nan(data):
 
 def calculate_sample_statistics(file):
     minicube = xr.open_dataset(file, engine="zarr").load()
-    return [calculate_variable_statistics(minicube[variable].values) for variable in temporal_variables]
+    return [calculate_nan(minicube[variable].values) for variable in temporal_variables]
 
 def process_samples_in_parallel(paths):
     "Function to process samples using pdata = minicube[variable].valuesarallel processing"
@@ -94,20 +94,20 @@ if __name__ == "__main__":
 
     # save the statistics for each variable
     data = {}
-    for var_idx, var_stats in enumerate(variable_statistics):
-        var_name = (temporal_variables)[var_idx]
-        max_vals, min_vals, sum_vals, n_obs_vals = zip(*var_stats)
-        mean = np.sum(sum_vals) / np.sum(n_obs_vals)
-        data[str(var_name)] = {"mean": np.float64(mean), "min": np.float64(np.nanmin(min_vals)), "max": np.float64(np.nanmax(max_vals))}
-       
     # for var_idx, var_stats in enumerate(variable_statistics):
-    #    var_name = (spatiotemporal_variables + temporal_variables + spatial_variables)[var_idx]
-    #    n_nan_vals, no_data_vals = zip(*var_stats)
-    #    mean = np.sum(n_nan_vals) / (450 * len(paths))
-    #    no_data = np.sum(no_data_vals) / len(paths)
+    #     var_name = (temporal_variables)[var_idx]
+    #     max_vals, min_vals, sum_vals, n_obs_vals = zip(*var_stats)
+    #     mean = np.sum(sum_vals) / np.sum(n_obs_vals)
+    #     data[str(var_name)] = {"mean": np.float64(mean), "min": np.float64(np.nanmin(min_vals)), "max": np.float64(np.nanmax(max_vals))}
+       
+    for var_idx, var_stats in enumerate(variable_statistics):
+       var_name = (spatiotemporal_variables + temporal_variables + spatial_variables)[var_idx]
+       n_nan_vals, no_data_vals = zip(*var_stats)
+       mean = np.sum(n_nan_vals) / (450 * len(paths))
+       no_data = np.sum(no_data_vals) / len(paths)
     
-    #    data[str(var_name)] = {"mean": np.float64(mean), "no_data": no_data}
+       data[str(var_name)] = {"mean": np.float64(mean), "no_data": no_data}
    
-    with open("statistics_de23.json", "w") as fp: # 
+    with open("nan_de23.json", "w") as fp: # statistics
         json.dump(data, fp)
 

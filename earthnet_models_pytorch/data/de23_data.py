@@ -72,8 +72,10 @@ variables = {
     "elevation": ["cop_dem"], 
 }
 
-with open("./scripts/preprocessing/statistics_de23.json", "r") as f:
-        statistic = json.load(f)
+# with open("./scripts/preprocessing/statistics_de23.json", "r") as f:
+#         statistic = json.load(f)
+statistic = {"t2m_mean": {"mean": 285.14280428589245, "min": 220.7626190185547, "max": 318.43597412109375}, "pev_mean": {"mean": -0.003933192138161199, "min": -0.049169037491083145, "max": 0.0005616411217488348}, "slhf_mean": {"mean": -2162931.7410918274, "min": -15086400.0, "max": 2074217.375}, "ssr_mean": {"mean": 6422307.595667305, "min": -0.0625, "max": 22510174.0}, "sp_mean": {"mean": 91747.36897021797, "min": 49799.546875, "max": 105716.3984375}, "sshf_mean": {"mean": -1334688.0814032578, "min": -12454722.0, "max": 9606654.0}, "e_mean": {"mean": -0.0008624358549881119, "min": -0.006032629404217005, "max": 0.0007265469757840037}, "tp_mean": {"mean": 0.0015462739210485358, "min": 0.0, "max": 0.09146501123905182}, "t2m_min": {"mean": 278.7418223321622, "min": 214.3935089111328, "max": 310.7576904296875}, "pev_min": {"mean": -0.010466829879496528, "min": -0.1887352466583252, "max": 1.1321157217025757e-05}, "slhf_min": {"mean": -5363088.528838599, "min": -45605476.0, "max": 163808.0}, "ssr_min": {"mean": 147228.9512738576, "min": -1.0, "max": 3258205.0}, "sp_min": {"mean": 91157.6636795228, "min": 49396.6875, "max": 105117.6875}, "sshf_min": {"mean": -4187134.392026041, "min": -26917700.0, "max": 742063.0}, "e_min": {"mean": -0.002136333048618079, "min": -0.018236353993415833, "max": 5.7774828746914864e-05}, "tp_min": {"mean": 3.998941094013752e-06, "min": 0.0, "max": 0.006604030728340149}, "t2m_max": {"mean": 292.271053668584, "min": 224.75808715820312, "max": 325.5970153808594}, "pev_max": {"mean": -9.391972474487043e-05, "min": -0.004983663558959961, "max": 0.02069767564535141}, "slhf_max": {"mean": -1998.1564242578777, "min": -1504041.5, "max": 13011428.0}, "ssr_max": {"mean": 14938754.622621803, "min": -0.0625, "max": 31967088.0}, "sp_max": {"mean": 92268.74949649484, "min": 50269.9453125, "max": 106309.046875}, "sshf_max": {"mean": 787876.1880326597, "min": -2240390.5, "max": 42488880.0}, "e_max": {"mean": -1.9515435042241873e-06, "min": -0.0006014241371303797, "max": 0.0046675666235387325}, "tp_max": {"mean": 0.008162581792683693, "min": 0.0, "max": 0.397117555141449}}
+
 
 class DeepExtremes2023Dataset(Dataset):
     def __init__(
@@ -173,6 +175,8 @@ class DeepExtremes2023Dataset(Dataset):
         s2_cube = np.where(np.isnan(s2_cube), np.zeros(1).astype(self.type), s2_cube)
         target = np.where(np.isnan(target), np.zeros(1).astype(self.type), target)
         s2_mask = np.where(np.isnan(s2_mask), np.ones(1).astype(self.type), s2_mask) # ?? s2_cube ? or s2_mask ?
+        topography = np.where(np.isnan(topography), np.zeros(1).astype(self.type), topography) # ?? s2_cube ? or s2_mask 
+        meteo_cube = np.where(np.isnan(meteo_cube), np.zeros(1).astype(self.type), meteo_cube) # ?? s2_cube ? or s2_mask 
 
         s2_scene_classification = np.where(
             np.isnan(s2_scene_classification), np.zeros(1).astype(self.type), s2_scene_classification
