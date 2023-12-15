@@ -72,8 +72,8 @@ variables = {
     "elevation": ["cop_dem"], 
 }
 
-# with open("statistics_de23.json", "r") as f:
-#         statistics = json.load(f)
+with open("./scripts/preprocessing/statistics_de23.json", "r") as f:
+        statistic = json.load(f)
 
 class DeepExtremes2023Dataset(Dataset):
     def __init__(
@@ -128,8 +128,8 @@ class DeepExtremes2023Dataset(Dataset):
             .astype(self.type)
         )
 
-        # weather is daily
-        meteo_cube = minicube[self.variables["era5"]]
+        # weather is 5-daily
+        # meteo_cube = minicube[self.variables["era5"]]
 
         # # rescale temperature on the extreme values ever observed globally (Kelvin): -88, 58.
         # meteo_cube["t2m_mean"] = (meteo_cube["t2m_mean"] - 185) / (331 - 185)
@@ -137,13 +137,14 @@ class DeepExtremes2023Dataset(Dataset):
         # meteo_cube["t2m_max"] = (meteo_cube["t2m_max"] - 185) / (331 - 185)
 
         # rescale all meteo variables?
-        # minicube[self.variables["era5"]] = (
-        #         minicube[self.variables["era5"]] - statistic[self.variables["era5"]]["min"]
-        #     ) / (
-        #         statistic[self.variables["era5"]]["max"] - statistic[self.variables["era5"]]["min"]
-        #     )
+        for variable in (
+            self.variables["era5"]
+        ):
+            minicube[variable] = (minicube[variable] - statistic[variable]["min"]) / (
+                statistic[variable]["max"] - statistic[variable]["min"]
+            )
 
-        # Era5land and Era5 dataset. Weather is daily
+        # Era5land and Era5 dataset. Weather is 5-daily
         meteo_cube = (
             minicube[self.variables["era5"]] 
             .to_array()
