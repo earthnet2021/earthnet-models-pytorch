@@ -32,27 +32,6 @@ class EarthNet2022Dataset(Dataset):
         self.type = np.float16 if fp16 else np.float32
 
         self.bands = ['ndvi', 'blue', 'green', 'red', 'nir']
-
-        '''
-        With soil moisture
-        self.meteo_vars = ['pev_max', 'pev_mean', 'pev_min', 'sm_rootzone_max', 'sm_rootzone_mean', 'sm_rootzone_min', 'sm_surface_max', 'sm_surface_mean', 'sm_surface_min', 'sp_max', 'sp_mean', 'sp_min', 'ssr_max', 'ssr_mean', 'ssr_min', 'surface_pressure_max', 'surface_pressure_mean', 'surface_pressure_min', 't2m_max', 't2m_mean', 't2m_min', 'tp_max', 'tp_mean', 'tp_min']
-
-        self.meteo_scaling_cube = xr.DataArray(data = [1e-4, 1e-4, 1e-4, 1, 1, 1, 1, 1, 1, 1000, 1000, 1000, 50, 50, 50, 1000, 1000, 1000, 400, 400, 400, 500, 500, 500], coords = {"variable": self.meteo_vars})
-        
-        mean_meteo = torch.tensor([-1.3039e+00, -1.8422e+00, -2.3154e+00,  2.4223e-01,  2.3511e-01,
-         2.2876e-01,  2.2300e-01,  1.9395e-01,  1.6921e-01,  8.9678e-02,
-         8.9426e-02,  8.9150e-02,  3.8471e-01,  3.2978e-01,  2.4605e-01,
-         7.0871e-01,  7.0676e-01,  7.0464e-01,  7.3636e-01,  7.3166e-01,
-         7.2685e-01,  2.0101e-02,  6.4336e-03,  9.6704e-04])
-
-        
-
-        std_meteo = torch.tensor([0.8378, 0.8577, 0.9764, 
-         0.0883, 0.0863, 0.0846, 0.1034, 0.1033, 0.1037,
-         0.0080, 0.0079, 0.0078, 0.0842, 0.0807, 0.0988, 
-         0.0688, 0.0681, 0.0674,
-         0.0146, 0.0144, 0.0153, 0.0294, 0.0105, 0.0029])
-        '''
         
         self.meteo_vars = ['pev_max', 'pev_mean', 'pev_min', 'sp_max', 'sp_mean', 'sp_min', 'ssr_max', 'ssr_mean', 'ssr_min', 't2m_max', 't2m_mean', 't2m_min', 'tp_max', 'tp_mean', 'tp_min']
         self.meteo_scaling_cube = xr.DataArray(data = [1e-4, 1e-4, 1e-4, 1000, 1000, 1000, 50, 50, 50, 400, 400, 400, 500, 500, 500], coords = {"variable": self.meteo_vars})
@@ -91,13 +70,12 @@ class EarthNet2022Dataset(Dataset):
 
         meteo[np.isnan(meteo)] =  0
 
-        highresstatic = minicube.dem.values[None,...].astype(self.type) # c h w       
-        highresstatic /= 2000
+        highresstatic = minicube.dem.values[None,...].astype(self.type) / 2000
         highresstatic[np.isnan(highresstatic)] = 0
 
         lc = minicube.lc.values[None, ...].astype(self.type) # c h w
         lc[np.isnan(lc)] = 0
-    
+        lc_mask = (lc >= self.lc_min) & (lc <= self.lc_max)
         
         data = {
             "dynamic": [
@@ -108,8 +86,8 @@ class EarthNet2022Dataset(Dataset):
             "static": [
                 torch.from_numpy(highresstatic)
             ],
-            "static_mask": [],
             "landcover": torch.from_numpy(lc),
+            "landcover_mask": torch.from_numpy(lc_mask).bool(),
             "filepath": str(filepath),
             "cubename": self.__name_getter(filepath)
         }
