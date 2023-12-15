@@ -152,3 +152,4 @@ checkpoints/*
 *.png
 *.nc
 *.zarr
+*.slurm
