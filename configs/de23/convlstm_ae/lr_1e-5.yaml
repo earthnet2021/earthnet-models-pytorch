@@ -54,8 +54,8 @@ Task:
         ndvi_targ_idx: 0 # index of the NDVI band
         pred_mask_value: -1
         scale_by_std: False
-    context_length: 73
-    target_length: 17
+    context_length: 72
+    target_length: 18
     metric: "RMSE"
     n_stochastic_preds: 2
     optimization:
@@ -64,12 +64,12 @@ Task:
                 name: AdamW
                 args: 
                     betas: [0.9, 0.999]
-                lr_per_sample: 0.0001
+                lr_per_sample: 0.00001
         lr_shedule:
             -
                 name: MultiStepLR
                 args:
-                    milestones: [3, 6] #[2, 20, 50, 90]
+                    milestones: [50] # [3, 6] #[2, 20, 50, 90]
                     gamma: 0.1
     n_log_batches: 2
     compute_metric_on_test: True
