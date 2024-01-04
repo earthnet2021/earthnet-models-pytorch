@@ -2,7 +2,7 @@ Architecture: "convlstm_ae"
 
 Seed: 42
 
-Setting: "en23"
+Setting: "de23"
 
 Logger:
     save_dir: "experiments/"
@@ -18,12 +18,12 @@ Trainer:
     strategy: 'ddp_find_unused_parameters_false'
     #deterministic: True
     log_every_n_steps: 32
-    profiler: 'simple'
+    # profiler: 'simple'
     accumulate_grad_batches: 8
     #fast_dev_run: True
     #log_gpu_memory: 'all'
     #weights_summary: 'full'
-    max_epochs: 30
+    max_epochs: 1
     #limit_train_batches: 32
     #limit_val_batches: 32
     gradient_clip_val: 1
@@ -33,7 +33,10 @@ Trainer:
     val_check_interval: 0.25 #0.005 # 
   
 Data:
-    base_dir: "/scratch/crobin/earthnet2023_preprocessing/" 
+    base_dir: "/Net/Groups/BGI/tscratch/mweynants/dx-minicubes"  # "/Net/Groups/BGI/work_2/scratch/DeepExtremes/dx-minicubes" # 
+    test_fold: 10
+    val_fold: 9
+    fold_path: "/Net/Groups/BGI/work_2/scratch/DeepExtremes/mc_earthnet.csv"
     test_track: "iid"
     target: "ndvi"
     train_batch_size: 4
@@ -41,17 +44,16 @@ Data:
     test_batch_size: 4
     num_workers: 4
 
+
 Task:
     loss:
         name: "MaskedPixelwiseLoss"
-        lc_min: 40
-        lc_max: 90
         ndvi_pred_idx: 0 # index of the NDVI band
         ndvi_targ_idx: 0 # index of the NDVI band
         pred_mask_value: -1
         scale_by_std: False
-    context_length: 60
-    target_length: 10
+    context_length: 73
+    target_length: 17
     metric: "RMSE"
     n_stochastic_preds: 2
     optimization:
@@ -75,6 +77,6 @@ Model:
     kernel_size: 3
     bias: True
     skip_connections: True
-    num_inputs: 49
+    num_inputs: 33 # 1 (target) + 7 (s2) + 24 (meteo) + 1 (topo)
     num_outputs: 1 
     teacher_forcing: True

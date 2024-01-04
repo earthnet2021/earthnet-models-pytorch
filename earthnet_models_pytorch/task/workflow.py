@@ -42,11 +42,7 @@ class SpatioTemporalTask(pl.LightningModule):
         self.context_length = hparams.context_length
         self.target_length = hparams.target_length
 
-        #self.lc_min = hparams.lc_min
-        #self.lc_max = hparams.lc_max
-
         self.n_stochastic_preds = hparams.n_stochastic_preds
-
 
         self.shedulers = []
         for shedule in self.hparams.shedulers:
@@ -54,9 +50,7 @@ class SpatioTemporalTask(pl.LightningModule):
                 (shedule["call_name"], SHEDULERS[shedule["name"]](**shedule["args"]))
             )
 
-
         self.metric = METRICS[self.hparams.metric](**self.hparams.metric_kwargs)
-        
 
     @staticmethod
     def add_task_specific_args(
@@ -85,18 +79,17 @@ class SpatioTemporalTask(pl.LightningModule):
         )
         # Metric used for the test set and the validation set.
         parser.add_argument("--metric", type=str, default="RMSE")
-        parser.add_argument('--metric_kwargs', type = ast.literal_eval, default = '{}')
+        parser.add_argument("--metric_kwargs", type=ast.literal_eval, default="{}")
 
         # Context and target length for temporal model. A temporal model use a context period to learn the temporal dependencies and predict the target period.
         parser.add_argument("--context_length", type=int, default=10)
         parser.add_argument("--target_length", type=int, default=20)
 
-        # Landcover bounds. Used as mask on the non-vegetation pixel.
-        #parser.add_argument("--lc_min", type=int, default=10)
-        #parser.add_argument("--lc_max", type=int, default=20)
-
         # Number of stochastic prediction for statistical models.
         parser.add_argument("--n_stochastic_preds", type=int, default=1)
+
+        # Argument to save each prediction of the set
+        parser.add_argument("--save_prediction", type=bool, default=True)
 
         # Number of batches to be displayed in the logger
         parser.add_argument("--n_log_batches", type=int, default=2)
@@ -156,7 +149,6 @@ class SpatioTemporalTask(pl.LightningModule):
         for shedule_name, shedule in self.shedulers:
             kwargs[shedule_name] = shedule(self.global_step)
 
-
         # Predictions generation
         preds, aux = self(batch, kwargs=kwargs)
         loss, logs = self.loss(preds, batch, aux, current_step=self.global_step)
@@ -179,13 +171,13 @@ class SpatioTemporalTask(pl.LightningModule):
         """Perform one evaluation epoch over the validation set. Operates on a single batch of data from the validation set. In this step you d might generate examples or calculate anything of interest like accuracy.
         Return  a List of dictionaries with metrics logged during the validation phase
         """
-
+        print("validation")
         data = copy.deepcopy(batch)
 
         batch_size = torch.tensor(self.hparams.val_batch_size, dtype=torch.int64)
 
         # Select only the context data for the model
-        data["dynamic"][0] = data["dynamic"][0][:, :self.context_length, ...]
+        data["dynamic"][0] = data["dynamic"][0][:, : self.context_length, ...]
 
         loss_logs = []  # list of loss values
         viz_logs = []  # list of (preds, scores)
@@ -271,186 +263,174 @@ class SpatioTemporalTask(pl.LightningModule):
         scores = []
 
         data = copy.deepcopy(batch)
-
-        #data["dynamic"][0] =  data["dynamic"][0][:,:self.context_length,...]  # selection only the context data
-        #if len(data["dynamic_mask"]) > 0:
-        #    data["dynamic_mask"][0] = data["dynamic_mask"][0][:,:self.context_length,...]
+        data["dynamic"][0] = data["dynamic"][0][
+            :, : self.context_length, ...
+        ]  # selection only the context data
 
         for i in range(self.n_stochastic_preds):
             preds, aux = self(
                 batch, pred_start=self.context_length, preds_length=self.target_length
             )
+            if self.hparams.save_prediction:
+                for j in range(preds.shape[0]):
+                    if self.hparams.setting in ["en21x", "en23"]:
+                        # Targets
+                        targ_path = Path(batch["filepath"][j])
+                        targ_cube = xr.open_dataset(targ_path)
 
-            lc = batch["landcover"]
+                        lat = targ_cube.lat
+                        lon = targ_cube.lon
 
-            static = batch["static"][0]
-
-            for j in range(preds.shape[0]):
-                if self.hparams.setting in ["en21x", "en23"]:
-                    # Targets
-                    targ_path = Path(batch["filepath"][j])
-                    targ_cube = xr.open_dataset(targ_path)
-
-                    lat = targ_cube.lat
-                    lon = targ_cube.lon
-
-                    ndvi_preds = preds[j, :, 0, ...].detach().cpu().numpy()
-                    pred_cube = xr.Dataset(
-                        {
-                            "ndvi_pred": xr.DataArray(
-                                data=ndvi_preds,
-                                coords={
-                                    "time": targ_cube.time.isel(
-                                        time=slice(4, None, 5)
-                                    ).isel(
-                                        time=slice(
-                                            self.context_length,
-                                            self.context_length + self.target_length,
-                                        )
-                                    ),
-                                    "lat": lat,
-                                    "lon": lon,
-                                },
-                                dims=["time", "lat", "lon"],
-                            )
-                        }
-                    )
-
-                    pred_dir = self.pred_dir
-                    pred_path = pred_dir / targ_path.parent.stem / targ_path.name
-                    pred_path.parent.mkdir(parents=True, exist_ok=True)
-
-                    if pred_path.is_file():
-                        pred_path.unlink()
-
-                    if not pred_path.is_file():
-                        pred_cube.to_netcdf(
-                            pred_path, encoding={"ndvi_pred": {"dtype": "float32"}}
+                        ndvi_preds = preds[j, :, 0, ...].detach().cpu().numpy()
+                        pred_cube = xr.Dataset(
+                            {
+                                "ndvi_pred": xr.DataArray(
+                                    data=ndvi_preds,
+                                    coords={
+                                        "time": targ_cube.time.isel(
+                                            time=slice(4, None, 5)
+                                        ).isel(
+                                            time=slice(
+                                                self.context_length,
+                                                self.context_length
+                                                + self.target_length,
+                                            )
+                                        ),
+                                        "lat": lat,
+                                        "lon": lon,
+                                    },
+                                    dims=["time", "lat", "lon"],
+                                )
+                            }
                         )
 
-                elif self.hparams.setting in ["en21xold", "en22"]:
-                    # Targets
-                    targ_path = Path(batch["filepath"][j])
-                    targ_cube = xr.open_dataset(targ_path)
-                    tile = targ_path.name[:5]
+                        pred_dir = self.pred_dir
+                        pred_path = pred_dir / targ_path.parent.stem / targ_path.name
+                        pred_path.parent.mkdir(parents=True, exist_ok=True)
 
-                    hrd = (
-                        preds[j, ...]
-                        .permute(2, 3, 1, 0)
-                        .squeeze(2)
-                        .detach()
-                        .cpu()
-                        .numpy()
-                        if "full" not in aux
-                        else aux["full"][j, ...]
-                        .permute(2, 3, 1, 0)
-                        .detach()
-                        .cpu()
-                        .numpy()
-                    )  # h, w, c, t
+                        if pred_path.is_file():
+                            pred_path.unlink()
 
-                    # Masks
-                    masks = (
-                        (lc >= self.lc_min).bool() & (lc <= self.lc_max).bool()
-                    ).type_as(
-                        preds
-                    )  # mask for outlayers using lc threshold   # mask for outlayers using lc threshold
-                    masks = masks[j, ...].permute(1, 2, 0).detach().cpu().numpy()
+                        if not pred_path.is_file():
+                            pred_cube.to_netcdf(
+                                pred_path, encoding={"ndvi_pred": {"dtype": "float32"}}
+                            )
 
-                    static = static[j, ...].permute(1, 2, 0).detach().cpu().numpy()
+                    elif self.hparams.setting in ["en21xold", "en22"]:
+                        # Targets
+                        targ_path = Path(batch["filepath"][j])
+                        targ_cube = xr.open_dataset(targ_path)
+                        tile = targ_path.name[:5]
 
-                    # Paths
-                    if self.n_stochastic_preds == 1:
-                        if targ_path.parents[1].name == "sim_extremes":
-                            pred_dir = self.pred_dir / targ_path.parents[0].name
+                        hrd = (
+                            preds[j, ...]
+                            .permute(2, 3, 1, 0)
+                            .squeeze(2)
+                            .detach()
+                            .cpu()
+                            .numpy()
+                            if "full" not in aux
+                            else aux["full"][j, ...]
+                            .permute(2, 3, 1, 0)
+                            .detach()
+                            .cpu()
+                            .numpy()
+                        )  # h, w, c, t
+
+                        # Paths
+                        if self.n_stochastic_preds == 1:
+                            if targ_path.parents[1].name == "sim_extremes":
+                                pred_dir = self.pred_dir / targ_path.parents[0].name
+                            else:
+                                pred_dir = self.pred_dir
+                            pred_path = pred_dir / targ_path.name
                         else:
-                            pred_dir = self.pred_dir
-                        pred_path = pred_dir / targ_path.name
+                            if targ_path.parents[1].name == "sim_extremes":
+                                pred_dir = (
+                                    self.pred_dir / tile / targ_path.parents[0].name
+                                )
+                            else:
+                                pred_dir = self.pred_dir / tile
+                            pred_path = pred_dir / f"pred_{i+1}_{targ_path.name}"
+
+                        # TODO save all preds for one cube in same file....
+                        pred_dir.mkdir(parents=True, exist_ok=True)
+
+                        # Axis
+                        y = targ_cube["y"].values
+                        x = targ_cube["x"].values
+
+                        pred_cube = xr.Dataset(
+                            {
+                                "ndvi_pred": xr.DataArray(
+                                    data=hrd,
+                                    coords={
+                                        "time": targ_cube.time.isel(
+                                            time=slice(
+                                                self.context_length,
+                                                self.context_length
+                                                + self.target_length,
+                                            )
+                                        ),
+                                        "latitude": y,
+                                        "longitude": x,
+                                    },
+                                    dims=["latitude", "longitude", "time"],
+                                )
+                            }
+                        )
+
+                        if not pred_path.is_file():
+                            pred_cube.to_netcdf(
+                                pred_path,
+                                encoding={
+                                    "ndvi_pred": {"dtype": "float32"},
+                                },
+                            )
+
                     else:
-                        if targ_path.parents[1].name == "sim_extremes":
-                            pred_dir = self.pred_dir / tile / targ_path.parents[0].name
-                        else:
-                            pred_dir = self.pred_dir / tile
-                        pred_path = pred_dir / f"pred_{i+1}_{targ_path.name}"
+                        cubename = batch["cubename"][j]
+                        cube_dir = self.pred_dir / cubename[:5]
+                        cube_dir.mkdir(parents=True, exist_ok=True)
+                        cube_path = cube_dir / f"pred{i+1}_{cubename}"
 
-                    # TODO save all preds for one cube in same file....
-                    pred_dir.mkdir(parents=True, exist_ok=True)
-
-                    # Axis
-                    y = targ_cube["y"].values
-                    x = targ_cube["x"].values
-
-                    pred_cube = xr.Dataset(
-                        {
-                            "ndvi_pred": xr.DataArray(
-                                data=hrd,
-                                coords={
-                                    "time": targ_cube.time.isel(
-                                        time=slice(
-                                            self.context_length,
-                                            self.context_length + self.target_length,
-                                        )
-                                    ),
-                                    "latitude": y,
-                                    "longitude": x,
-                                },
-                                dims=["latitude", "longitude", "time"],
-                            )
-                        }
-                    )
-
-                    if not pred_path.is_file():
-                        pred_cube.to_netcdf(
-                            pred_path,
-                            encoding={
-                                "ndvi_pred": {"dtype": "float32"},
-
-                            },
+                        targ_path = Path(batch["filepath"][j])
+                        targ_cube = xr.open_dataset(targ_path)
+                        lon = targ_cube["lon"].values
+                        lat = targ_cube["lat"].values
+                        hrd = (
+                            preds[j, :, 0, ...].permute(1, 2, 0).detach().cpu().numpy()
+                            if "full" not in aux
+                            else aux["full"][j, ...]
+                            .permute(2, 3, 1, 0)
+                            .detach()
+                            .cpu()
+                            .numpy()
                         )
-
-                else:
-                    cubename = batch["cubename"][j]
-                    cube_dir = self.pred_dir / cubename[:5]
-                    cube_dir.mkdir(parents=True, exist_ok=True)
-                    cube_path = cube_dir / f"pred{i+1}_{cubename}"
-
-                    targ_path = Path(batch["filepath"][j])
-                    targ_cube = xr.open_dataset(targ_path)
-                    lon = targ_cube["lon"].values
-                    lat = targ_cube["lat"].values
-                    hrd = (
-                        preds[j, :, 0, ...].permute(1, 2, 0).detach().cpu().numpy()
-                        if "full" not in aux
-                        else aux["full"][j, ...]
-                        .permute(2, 3, 1, 0)
-                        .detach()
-                        .cpu()
-                        .numpy()
-                    )
-                    pred_cube = xr.Dataset(
-                        {
-                            "ndvi_pred": xr.DataArray(
-                                data=hrd,
-                                coords={
-                                    "time": targ_cube.time.isel(
-                                        time=slice(
-                                            4 + 5 * self.context_length,
-                                            4 + 5 * self.target_length,
-                                            5,
-                                        )
-                                    ),
-                                    "latitude": lat,
-                                    "longitude": lon,
-                                },
-                                dims=["latitude", "longitude", "time"],
-                            )
-                        }
-                    )
-                    if not cube_path.is_file():
-                        pred_cube.to_netcdf(
-                            cube_path,
-                            encoding={"ndvi_pred": {"dtype": "float32"}},
+                        pred_cube = xr.Dataset(
+                            {
+                                "ndvi_pred": xr.DataArray(
+                                    data=hrd,
+                                    coords={
+                                        "time": targ_cube.time.isel(
+                                            time=slice(
+                                                4 + 5 * self.context_length,
+                                                4 + 5 * self.target_length,
+                                                5,
+                                            )
+                                        ),
+                                        "latitude": lat,
+                                        "longitude": lon,
+                                    },
+                                    dims=["latitude", "longitude", "time"],
+                                )
+                            }
                         )
+                        if not cube_path.is_file():
+                            pred_cube.to_netcdf(
+                                cube_path,
+                                encoding={"ndvi_pred": {"dtype": "float32"}},
+                            )
 
             if self.hparams.compute_metric_on_test:
                 self.metric.update(preds, batch)
@@ -461,7 +441,6 @@ class SpatioTemporalTask(pl.LightningModule):
         """Called at the end of a test epoch with the output of all test steps."""
         if self.hparams.compute_metric_on_test:
             self.pred_dir.mkdir(parents=True, exist_ok=True)
-            print(self.pred_dir)
             with open(
                 self.pred_dir / f"individual_scores_{self.global_rank}.json", "w"
             ) as fp:

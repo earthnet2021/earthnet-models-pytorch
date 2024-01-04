@@ -72,8 +72,6 @@ def train_model(setting_dict: dict, setting_file: str = None):
 
     # Trainer
     trainer_dict = setting_dict["Trainer"]
-    # if "profiler" in trainer_dict:
-    #    trainer_dict["profiler"] = pl.profiler.AdvancedProfiler(output_filename="curr_profile")
 
     trainer = pl.Trainer(
         logger=logger,

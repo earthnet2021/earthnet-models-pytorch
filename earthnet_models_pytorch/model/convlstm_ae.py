@@ -8,6 +8,8 @@ import ast
 import torch.nn as nn
 import torch
 from earthnet_models_pytorch.utils import str2bool
+import numpy as np
+from itertools import chain
 
 
 # Mapping of class labels to indices
@@ -235,7 +237,7 @@ class ConvLSTMAE(nn.Module):
         parser.add_argument("--teacher_forcing", type=str2bool, default=False)
         parser.add_argument("--target", type=str, default=False)
         parser.add_argument("--use_weather", type=str2bool, default=True)
-        parser.add_argument("--spatial_shuffle", type = str2bool, default = False)
+        parser.add_argument("--spatial_shuffle", type=str2bool, default=False)
         return parser
 
     def forward(
@@ -277,13 +279,11 @@ class ConvLSTMAE(nn.Module):
         # Calculate teacher forcing coefficient
         if self.hparams.teacher_forcing:
             k = torch.tensor(0.1 * 10 * 12000)
-
             teacher_forcing_decay = k / (k + torch.exp(step + (120000 / 2) / k))
         else:
             teacher_forcing_decay = 0
 
         # Extract data components
-
         # sentinel 2 bands
         sentinel = data["dynamic"][0][:, :context_length, ...]
 
@@ -292,43 +292,52 @@ class ConvLSTMAE(nn.Module):
             target = data["dynamic"][0][
                 :, context_length : context_length + self.hparams.target_length, ...
             ]
-
         weather = data["dynamic"][1].unsqueeze(3).unsqueeze(4)
+        static = data["static"][0]
 
         # Prepare landcover data
         # landcover = data["landcover"]
         # for key in list(class_mapping.keys()):
         #     landcover[landcover == key] = class_mapping.get(key)
-# 
+        #
         # landcover = (
         #     nn.functional.one_hot(landcover.to(torch.int64), 11)
         #     .transpose(1, 4)
         #     .squeeze(4)
         # )
-# 
+        #
         # # Concatenate static data with landcover
         # static = torch.cat((data["static"][0], data["static"][1]), dim=1)
         # static = torch.cat((static, landcover), dim=1)
 
-        static = data["static"][0]
-
         # Get the dimensions of the input data. Shape: batch size, temporal size, number of channels, height, width
         b, t, _, h, w = sentinel.shape
 
-        if self.hparams.spatial_shuffle:
-            perm = torch.randperm(b*h*w, device=sentinel.device)
-            invperm = inverse_permutation(perm)
-
-            if weather.shape[-1] == 1:
-                weather = weather.expand(-1, -1, -1, h,w)
-            else:
-                weather = nn.functional.interpolate(weather, size = (h,w), mode='nearest-exact')
-
-            sentinel = sentinel.permute(1, 2, 0, 3, 4).reshape(t, c, b*h*w)[:, :, perm].reshape(t, c, b, h, w).permute(2, 0, 1, 3, 4)
-            weather = weather.permute(1, 2, 0, 3, 4).reshape(t_w, c_w, b*h*w)[:, :, perm].reshape(t_w, c_w, b, h, w).permute(2, 0, 1, 3, 4).contiguous()
-            static = static.permute(1, 0, 2, 3).reshape(3, b*h*w)[:, perm].reshape(3, b, h, w).permute(1, 0, 2, 3)
-
-
+        # if self.hparams.temporal_experiment:
+        #    end_shuffle = 40
+        #
+        #    # Create an array of indices along the specified dimension
+        #    indices = np.arange(0, 60)
+        #
+        #    # for random shuffuling
+        #    # sentinel[:,0:60 - end_shuffle,...] = torch.rand([b, 60 - end_shuffle, c, h, w])
+        #    # weather[:, 0:(60 - end_shuffle)*5, ...] = torch.rand([weather.shape[0], (60 - end_shuffle)*5, weather.shape[2], weather.shape[3], weather.shape[4]])
+        #
+        #    # for shuffling in time
+        #    # Shuffle the indices
+        #    # for windows shuffling
+        #    # np.random.shuffle(indices[(60 - end_shuffle) - 10:60 - end_shuffle])
+        #    # for context shuffling
+        #    np.random.shuffle(indices[0 : 60 - end_shuffle])
+        #
+        #    # Shuffle for the weather: same shuffle than for sentinel but different temporal resolution
+        #    indices_weather = list(
+        #        chain.from_iterable(range(i * 5, 5 * i + 5) for i in indices)
+        #    )  # 5: S2 temporal resolution
+        #
+        #    # Use take_along_dim to shuffle along the specified dimension
+        #    sentinel = sentinel[:, indices, ...]
+        #    weather = weather[:, indices_weather, ...]
 
         # Initialize hidden states for encoder ConvLSTM cells
         h_t, c_t = self.encoder_1_convlstm.init_hidden(batch_size=b, height=h, width=w)
@@ -342,20 +351,17 @@ class ConvLSTMAE(nn.Module):
         for t in range(context_length):
             # Prepare input for encoder ConvLSTM cells
             input = torch.cat((sentinel[:, t, ...], static), dim=1)
-            
+
             if self.hparams.use_weather:
-                if weather.shape[1] == 90: # weather is 5 days resolution
+                if weather.shape[1] == 90:  # weather is 5 days resolution
+                    weather_t = weather[:, t, ...].repeat(1, 1, 128, 128)
+                else:  # weather is daily
                     weather_t = (
-                    weather[:, t, ...]
-                    .repeat(1, 1, 128, 128)
+                        weather[:, t : t + 5, ...]
+                        .view(weather.shape[0], 1, -1, 1, 1)
+                        .squeeze(1)
+                        .repeat(1, 1, 128, 128)
                     )
-                else: # weather is daily
-                    weather_t = (
-                    weather[:, t : t + 5, ...]
-                    .view(weather.shape[0], 1, -1, 1, 1)
-                    .squeeze(1)
-                    .repeat(1, 1, 128, 128)
-                )
                 input = torch.cat((input, weather_t), dim=1)
 
             # First ConvLSTM block
@@ -379,8 +385,6 @@ class ConvLSTMAE(nn.Module):
             # Copy the previous prediction for skip connections
             pred_previous = torch.clone(pred)
 
-            
-
             # Teacher forcing scheduled sampling
             if (
                 self.hparams.teacher_forcing
@@ -392,12 +396,11 @@ class ConvLSTMAE(nn.Module):
             pred = torch.cat((pred, static), dim=1)
             if self.hparams.use_weather:
                 # Prepare input for decoder ConvLSTM cells
-                if weather.shape[1] == 90: # weather is 5 days resolution
-                        weather_t = (
-                        weather[:,  context_length + t, ...]
-                        .repeat(1, 1, 128, 128)
+                if weather.shape[1] == 90:  # weather is 5 days resolution
+                    weather_t = weather[:, context_length + t, ...].repeat(
+                        1, 1, 128, 128
                     )
-                else: # weather is daily
+                else:  # weather is daily
                     weather_t = (
                         weather[:, context_length + t : context_length + t + 5, ...]
                         .view(weather.shape[0], 1, -1, 1, 1)
@@ -428,7 +431,14 @@ class ConvLSTMAE(nn.Module):
         output = torch.cat(output, dim=1)  # .unsqueeze(2)
 
         if self.hparams.spatial_shuffle:
-            output = output.permute(1, 2, 0, 3, 4).reshape(self.hparams.target_length, self.hparams.num_outputs, b*h*w)[:, :, invperm].reshape(self.hparams.target_length, self.hparams.num_outputs, b, h, w).permute(2, 0, 1, 3, 4)
+            output = (
+                output.permute(1, 2, 0, 3, 4)
+                .reshape(
+                    self.hparams.target_length, self.hparams.num_outputs, b * h * w
+                )[:, :, invperm]
+                .reshape(self.hparams.target_length, self.hparams.num_outputs, b, h, w)
+                .permute(2, 0, 1, 3, 4)
+            )
 
             output = output[:, :, :1, :, :]
 

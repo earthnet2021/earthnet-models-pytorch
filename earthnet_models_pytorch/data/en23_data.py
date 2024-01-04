@@ -346,6 +346,7 @@ class EarthNet2023Dataset(Dataset):
         target: str,
         lc_min: int,
         lc_max: int,
+        spatial_experiment_radius: int,
         variables=variables,
         fp16=False,
     ):
@@ -356,11 +357,13 @@ class EarthNet2023Dataset(Dataset):
             if len(sorted(list(folder.glob("*.nc")))) > 0
             else sorted(list(folder.glob("*/*.nc")))
         )
+        self.filepaths = self.filepaths[:50]
         print("path of the dataset: ", folder)
         self.type = np.float16 if fp16 else np.float32
         self.target = target
         self.lc_min = lc_min
         self.lc_max = lc_max
+        self.spatial_experiment_radius = spatial_experiment_radius
         self.variables = variables
 
     def __getitem__(self, idx: int) -> dict:
@@ -456,6 +459,28 @@ class EarthNet2023Dataset(Dataset):
         # Concatenation
         satellite_data = np.concatenate((target, s2_cube), axis=1)
 
+        if self.spatial_experiment_radius:
+            # Size of the array
+            (w, h) = (128, 128)
+
+            # Radius of the centered circle
+            radius = self.spatial_experiment_radius
+
+            # Create a meshgrid of indices
+            x, y = np.meshgrid(np.arange(w), np.arange(h))
+
+            # Calculate distance from the center for each point in the grid
+            distance = np.sqrt((x - w // 2) ** 2 + (y - h // 2) ** 2)
+
+            # Create a boolean mask for points inside the circle
+            circle_mask = distance <= radius
+
+            # Shuffle along each slice independently
+            satellite_data[:, :, ~circle_mask] = np.apply_along_axis(
+                np.random.permutation, axis=2, arr=satellite_data[:, :, ~circle_mask]
+            )
+            s2_mask[:, :, ~circle_mask] = 1
+
         # Final minicube
         data = {
             "dynamic": [
@@ -539,6 +564,7 @@ class EarthNet2023DataModule(pl.LightningDataModule):
         parser.add_argument("--base_dir", type=str, default="data/datasets/")
         parser.add_argument("--test_track", type=str, default="iid")
         parser.add_argument("--target", type=str, default="ndvi")
+        parser.add_argument("--spatial_experiment_radius", type=int, default=0)
 
         parser.add_argument("--lc_min", type=int, default=40)
         parser.add_argument("--lc_max", type=int, default=90)
@@ -564,6 +590,7 @@ class EarthNet2023DataModule(pl.LightningDataModule):
                 target=self.hparams.target,
                 lc_min=self.hparams.lc_min,
                 lc_max=self.hparams.lc_max,
+                spatial_experiment_radius=self.hparams.spatial_experiment_radius,
                 fp16=self.hparams.fp16,
             )
             self.earthnet_train, self.earthnet_val = random_split(
@@ -578,6 +605,7 @@ class EarthNet2023DataModule(pl.LightningDataModule):
                 target=self.hparams.target,
                 lc_min=self.hparams.lc_min,
                 lc_max=self.hparams.lc_max,
+                spatial_experiment_radius=self.hparams.spatial_experiment_radius,
                 fp16=self.hparams.fp16,
             )
 
