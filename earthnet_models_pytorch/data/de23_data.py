@@ -372,9 +372,7 @@ class DeepExtremes2023DataModule(pl.LightningDataModule):
             spatial_test_subset,
             temporal_test_subset,
         ) = self.get_dataset()
-        print("setup")
-        print("sp test", len(spatial_test_subset))
-        print("tp test", len(temporal_test_subset))
+
         if stage == "fit" or stage is None:
             self.earthnet_train = DeepExtremes2023Dataset(
                 self.base_dir,

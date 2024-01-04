@@ -357,7 +357,7 @@ class EarthNet2023Dataset(Dataset):
             if len(sorted(list(folder.glob("*.nc")))) > 0
             else sorted(list(folder.glob("*/*.nc")))
         )
-        self.filepaths = self.filepaths[:50]
+        self.filepaths = self.filepaths #[:50]
         print("path of the dataset: ", folder)
         self.type = np.float16 if fp16 else np.float32
         self.target = target
