@@ -269,8 +269,8 @@ class DeepExtremes2023DataModule(pl.LightningDataModule):
 
         parser.add_argument("--base_dir", type=str, default="data/datasets/")
         parser.add_argument("--fold_path", type=str, default="mc_earthnet.csv")
-        parser.add_argument("--test_fold", type=str, default=10)
-        parser.add_argument("--val_fold", type=str, default=9)
+        parser.add_argument("--test_fold", type=int, default=10)
+        parser.add_argument("--val_fold", type=int, default=9)
         parser.add_argument("--test_track", type=str, default="iid")
         parser.add_argument("--target", type=str, default="ndvi")
 
@@ -369,15 +369,23 @@ class DeepExtremes2023DataModule(pl.LightningDataModule):
     
         # folds 2017 - 2020
         df = df.loc[df["variable"].str.startswith("start_date")].drop('variable', 1)
+        # print(df)
+        # print(df.loc[(df["check"] == 0) & (df["group"] >= 9) , :])
 
         # training set
         train_subset = df.loc[(df["group"] != test_fold) & (df["group"] != val_fold) & (df["check"] == 0), ["path", "start_date", "end_date"]]
 
         # validation set
         val_subset = df.loc[(df["group"] == val_fold) & (df["check"] == 0), ["path", "start_date", "end_date"]]
+        # print("validation set")
+        # print(val_fold)
+        # print(type(val_fold))
+        # # print(val_subset)
 
         # iid test set
         spatial_test_subset = df.loc[(df["group"] == test_fold) & (df["check"] == 0), ["path", "start_date", "end_date"]]
+        # print("iid test set")
+        # print(spatial_test_subset)
 
         return train_subset, val_subset, spatial_test_subset, temporal_test_subset
     
