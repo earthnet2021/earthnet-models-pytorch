@@ -202,14 +202,14 @@ class DeepExtremes2023Dataset(Dataset):
             "landcover": torch.from_numpy(s2_scene_classification),
             "landcover_mask": torch.from_numpy(lc_mask).bool(),
             "filepath": str(filepath),
-            "cubename": self.__name_getter(filepath),
+            "cubename": self.__name_getter(filepath, start_date),
         }
         return data
 
     def __len__(self) -> int:
         return len(self.metadata)
 
-    def __name_getter(self, path: Path) -> str:
+    def __name_getter(self, path: Path, start_date) -> str:
         """Helper function gets Cubename from a Path
 
         Args:
@@ -221,7 +221,10 @@ class DeepExtremes2023Dataset(Dataset):
         components = path.name.split("/")
         
         components1 = components[-1].split("_")
-        return "_".join(components1[0:3])
+        name = "_".join(components1[0:3])
+        output = name + "_" + str(start_date)[0:10]
+        # print(output)
+        return output
 
     def target_computation(self, minicube) -> str:
         """Compute the vegetation index (VI) target"""
@@ -355,6 +358,7 @@ class DeepExtremes2023DataModule(pl.LightningDataModule):
         # load csv
         df = pd.read_csv(self.hparams.fold_path, delimiter=",")[["path", "group", "check", "start_date"]]
 
+        # 3 training minicubes between 2017 - 2020 (randomly starting in the first year), followed by 3 test minicubes in 2021
         df["start_date"] = pd.to_datetime(df["start_date"], format='%Y-%m-%dT%H:%M:%S.%f')
         df["start_date2"] = df["start_date"] + datetime.timedelta(days=450)
         df["start_date3"] = df["start_date2"] + datetime.timedelta(days=450)
