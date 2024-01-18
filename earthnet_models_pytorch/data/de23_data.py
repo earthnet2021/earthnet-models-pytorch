@@ -79,7 +79,7 @@ statistic = {"t2m_mean": {"mean": 285.14280428589245, "min": 220.7626190185547, 
 
 class DeepExtremes2023Dataset(Dataset):
     def __init__(
-        self, folder: Union[Path, str], metadata_files, target: str, variables=variables, fp16=False
+        self, folder: Union[Path, str], metadata_files, target: str, variables=variables, fp16=False, is_lc_mask=True
     ):
         if not isinstance(folder, Path):
             folder = Path(folder)
@@ -87,6 +87,7 @@ class DeepExtremes2023Dataset(Dataset):
         self.type = np.float16 if fp16 else np.float32
         self.target = target
         self.variables = variables
+        self.is_lc_mask = is_lc_mask
 
     def __getitem__(self, idx: int) -> dict:
 
@@ -122,7 +123,8 @@ class DeepExtremes2023Dataset(Dataset):
             .values.transpose((1, 0, 2, 3))
             .astype(self.type)
         )  # (time, 1, w, h)
-        s2_mask = s2_mask != 0
+        # mask = 1 where data
+        s2_mask = s2_mask == 0
 
         target = (
             self.target_computation(minicube)
@@ -163,7 +165,7 @@ class DeepExtremes2023Dataset(Dataset):
             minicube[self.variables["elevation"]].to_array().values.astype(self.type) / 2000
         )  # c h w, rescaling
         
-        # SCL is scene classification. i.e., it has a time dimension. Needs to be reduced over time
+        # SCL is scene classification. i.e., it has a time dimension.
         s2_scene_classification = (
             minicube[self.variables["s2_scene_classification"]]
             .to_array()
@@ -182,10 +184,15 @@ class DeepExtremes2023Dataset(Dataset):
             np.isnan(s2_scene_classification), np.zeros(1).astype(self.type), s2_scene_classification
         )
 
-        lc_mask = (
-            (s2_scene_classification != 4) # 4 is vegetation pixel
-            .astype(self.type)
-        )
+        # lc mask = 1 where data
+        if self.is_lc_mask:
+            lc_mask = (
+                (s2_scene_classification == 4) # 4 is vegetation pixel
+                .astype(self.type)
+            )
+        else:
+            # no lc mask
+            lc_mask = 1
 
         # include scene classification in model? https://sentinels.copernicus.eu/web/sentinel/technical-guides/sentinel-2-msi/level-2a/algorithm-overview
         # Concatenation
@@ -277,6 +284,8 @@ class DeepExtremes2023DataModule(pl.LightningDataModule):
         parser.add_argument("--test_track", type=str, default="iid")
         parser.add_argument("--target", type=str, default="ndvi")
 
+        parser.add_argument("--lc_mask", type=bool, default=True)
+
         parser.add_argument("--fp16", type=str2bool, default=False)
 
         parser.add_argument("--train_batch_size", type=int, default=1)
@@ -299,6 +308,7 @@ class DeepExtremes2023DataModule(pl.LightningDataModule):
                 self.base_dir, train_subset,
                 target=self.hparams.target,
                 fp16=self.hparams.fp16,
+                is_lc_mask =self.hparams.lc_mask,
             )
             
             self.earthnet_val = DeepExtremes2023Dataset(
@@ -306,6 +316,7 @@ class DeepExtremes2023DataModule(pl.LightningDataModule):
                     val_subset,
                     target=self.hparams.target,
                     fp16=self.hparams.fp16,
+                    is_lc_mask =self.hparams.lc_mask,
             )
 
         if stage == "test" or stage is None:
@@ -315,6 +326,7 @@ class DeepExtremes2023DataModule(pl.LightningDataModule):
                     spatial_test_subset,
                     target=self.hparams.target,
                     fp16=self.hparams.fp16,
+                    is_lc_mask =self.hparams.lc_mask,
             )
             if self.hparams.test_track == "temporal":
                 self.earthnet_test = DeepExtremes2023Dataset(
@@ -322,6 +334,7 @@ class DeepExtremes2023DataModule(pl.LightningDataModule):
                     temporal_test_subset,
                     target=self.hparams.target,
                     fp16=self.hparams.fp16,
+                    is_lc_mask =self.hparams.is_lc_mask,
             )
 
 

@@ -128,6 +128,7 @@ class MaskedPixelwiseLoss(nn.Module):
         self.extra_aux_loss_term = extra_aux_loss_term
         self.extra_aux_loss_weight = extra_aux_loss_weight
         self.setting = setting
+        self.is_lc_mask = True if 'is_lc_mask' not in list(kwargs.keys()) else kwargs['is_lc_mask']
 
     def forward(self, preds, batch, aux, current_step=None):
         logs = {}
@@ -153,14 +154,20 @@ class MaskedPixelwiseLoss(nn.Module):
                 .type_as(preds)
             )
 
-        # Landcover mask
-        lc_mask = batch["landcover_mask"]
-        if len(lc_mask.shape) < 5: # spatial landcover mask
-            lc_mask =  lc_mask.unsqueeze(1).repeat(1, preds.shape[1], 1, 1, 1)
-        else: # spato-temporal landcover mask
-            lc_mask = lc_mask[:, self.context_length : self.context_length + self.target_length, ...]
+        # Mask certain land covers
+        if self.is_lc_mask:
+            # Landcover mask
+            lc_mask = batch["landcover_mask"]
+            if len(lc_mask.shape) < 5: # spatial landcover mask
+                lc_mask =  lc_mask.unsqueeze(1).repeat(1, preds.shape[1], 1, 1, 1)
+            else: # spato-temporal landcover mask
+                lc_mask = lc_mask[:, self.context_length : self.context_length + self.target_length, ...]
 
-        mask = s2_mask * lc_mask
+            # mask should be = 1 where there are data
+            mask = s2_mask * lc_mask
+        else:
+            mask = s2_mask
+
 
         # MSE computation
         sum_squared_error = torch.pow((preds - targets) * mask, 2).sum()
