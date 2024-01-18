@@ -37,9 +37,10 @@ def calculate_variable_statistics(target, pred, anomalie=False, subset="all", cu
     else:
         extreme = False
 
+    # set mask = 1 where data are OK
     cloud_mask = target.cloudmask_en[tind, ...] < 1.0
     lc = target.SCL[tind, ...]
-    lc_mask = lc != 4 #(lc <= 40) | (lc >= 90)
+    lc_mask = lc == 4 # lc != 4 #(lc <= 40) | (lc >= 90)
     # lc_mask = np.expand_dims(lc_mask, axis=0)
     # lc_mask = np.repeat(lc_mask, target_len, axis=0)
 
@@ -150,8 +151,8 @@ def calculate_variable_statistics(target, pred, anomalie=False, subset="all", cu
 def get_season(date:np.datetime64) -> str:
     # 1: MAM, 2: JJA, 3: SON, 4: DJF
     seasons = ['MAM', 'JJA', 'SON', 'DJF',]
-    season = int(str(np.datetime64(date, 'M'))[5:]) % 3
-    return seasons[season]
+    season = int(str(np.datetime64(date, 'M'))[5:]) // 3 -1
+    return seasons[3 if season < 0 else season]
 
 
 def get_name(path: Path) -> str:
