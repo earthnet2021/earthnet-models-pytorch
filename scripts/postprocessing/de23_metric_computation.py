@@ -64,7 +64,8 @@ def calculate_variable_statistics(target, pred, anomalie=False, subset="all", cu
     if method == "by_frame":
         # stats are first computed over time and then averaged over space by minicube
         sum_squared_error = np.nansum((targ - pred) ** 2, axis=0)
-        rmse = sum_squared_error / (n_obs + 1e-8)
+        rmse = np.sqrt(sum_squared_error / (n_obs + 1e-8)) 
+        
         r2 = np.zeros((128, 128))
         # cov = np.zeros((128, 128))
         sum_squared_dev = np.zeros((128, 128))
@@ -139,7 +140,7 @@ def calculate_variable_statistics(target, pred, anomalie=False, subset="all", cu
         return cubename, season, extreme, rmse, nse, r2, round(np.sum(n_obs) / (128 * 128 * target_len)*100, ndigits=3)
     elif method == "overall":
         sum_squared_error = np.nansum((targ - pred) ** 2)
-        rmse = sum_squared_error / (np.sum(n_obs) + 1e-8)
+        rmse = np.sqrt(sum_squared_error / (np.sum(n_obs) + 1e-8))
         nas = np.logical_or(np.isnan(targ), np.isnan(pred))
         r2 = (pearsonr(targ[~nas], pred[~nas]).statistic) ** 2
         sum_squared_dev = np.nansum((targ - np.nanmean(targ)) ** 2)
