@@ -1,0 +1,82 @@
+Architecture: "convlstm_ae"
+
+Seed: 42
+
+Setting: "en23"
+
+Logger:
+    save_dir: "experiments/"
+    
+
+Checkpointer:
+    save_top_k: 1
+    save_last: True
+    every_n_epochs: 1
+
+Trainer:
+    gpus: 1
+    strategy: 'ddp_find_unused_parameters_false'
+    #deterministic: True
+    log_every_n_steps: 32
+    profiler: 'simple'
+    accumulate_grad_batches: 8
+    #fast_dev_run: True
+    #log_gpu_memory: 'all'
+    #weights_summary: 'full'
+    max_epochs: 30
+    #limit_train_batches: 32
+    #limit_val_batches: 32
+    gradient_clip_val: 1
+    # check_val_every_n_epoch: 1 # default setting
+    # Whether to use torch.inference_mode() or torch.no_grad() mode during evaluation
+    # inference_mode: True # if False use 'torch.no_grad' instead. 
+    val_check_interval: 0.25 #0.005 # 
+  
+Data:
+    base_dir: "/scratch/crobin/earthnet2023_preprocessing/" 
+    test_track: "iid"
+    target: "ndvi"
+    train_batch_size: 4
+    val_batch_size: 4
+    test_batch_size: 4
+    num_workers: 4
+    spatial_experiment_radius: 1
+
+Task:
+    loss:
+        name: "MaskedPixelwiseLoss"
+        lc_min: 40
+        lc_max: 90
+        ndvi_pred_idx: 0 # index of the NDVI band
+        ndvi_targ_idx: 0 # index of the NDVI band
+        pred_mask_value: -1
+        scale_by_std: False
+    context_length: 60
+    target_length: 10
+    metric: "RMSE"
+    n_stochastic_preds: 2
+    optimization:
+        optimizer:
+            - 
+                name: AdamW
+                args: 
+                    betas: [0.9, 0.999]
+                lr_per_sample: 0.0001
+        lr_shedule:
+            -
+                name: MultiStepLR
+                args:
+                    milestones: [3, 6] #[2, 20, 50, 90]
+                    gamma: 0.1
+    n_log_batches: 2
+    compute_metric_on_test: True
+    save_prediction: False
+
+Model:
+    hidden_dim: [64, 64, 64, 64]
+    kernel_size: 3
+    bias: True
+    skip_connections: True
+    num_inputs: 49
+    num_outputs: 1 
+    teacher_forcing: True

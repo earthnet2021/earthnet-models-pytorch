@@ -115,6 +115,7 @@ class RootMeanSquaredError(Metric):
         dict
             Dictionary containing the computed RMSE for vegetation pixels.
         """
+        print(self.total, self.n_samples, torch.sqrt(self.total / (self.n_samples)))
         return {"RMSE_Veg": torch.sqrt(self.total / (self.n_samples))}
 
     def compute_batch(self, targs):

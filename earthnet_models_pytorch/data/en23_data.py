@@ -357,7 +357,7 @@ class EarthNet2023Dataset(Dataset):
             if len(sorted(list(folder.glob("*.nc")))) > 0
             else sorted(list(folder.glob("*/*.nc")))
         )
-        self.filepaths = self.filepaths #[:50]
+        self.filepaths = self.filepaths  # [:50]
         print("path of the dataset: ", folder)
         self.type = np.float16 if fp16 else np.float32
         self.target = target
@@ -464,6 +464,7 @@ class EarthNet2023Dataset(Dataset):
             (w, h) = (128, 128)
 
             # Radius of the centered circle
+            radius1 = 32
             radius = self.spatial_experiment_radius
 
             # Create a meshgrid of indices
@@ -472,13 +473,32 @@ class EarthNet2023Dataset(Dataset):
             # Calculate distance from the center for each point in the grid
             distance = np.sqrt((x - w // 2) ** 2 + (y - h // 2) ** 2)
 
+            # line_border experiment
             # Create a boolean mask for points inside the circle
-            circle_mask = distance <= radius
+            # circle_mask = (radius1 - radius <= distance) & (
+            #     distance <= radius1 + radius
+            # )
 
             # Shuffle along each slice independently
-            satellite_data[:, :, ~circle_mask] = np.apply_along_axis(
-                np.random.permutation, axis=2, arr=satellite_data[:, :, ~circle_mask]
+            # satellite_data[:, :, ~circle_mask] = np.apply_along_axis(
+            #    np.random.permutation, axis=2, arr=satellite_data[:, :, ~circle_mask]
+            # )
+
+            # # disk experimentation
+            # circle_mask = (
+            #     (radius1 - radius <= distance) & (distance <= radius1 - radius + 1)
+            # ) | ((radius1 + radius <= distance) & (distance <= radius1 + radius + 1))
+            # line large experimentation
+            circle_mask = ((distance <= radius1 - radius + 1)) | (
+                (radius1 + radius <= distance)
+             )
+            # Shuffle along each slice independently
+            satellite_data[:, :, circle_mask] = np.apply_along_axis(
+                np.random.permutation, axis=2, arr=satellite_data[:, :, circle_mask]
             )
+
+            # mask all the pixel outside of the area of evaluation in the mask used for evaluation
+            circle_mask = (radius1 <= distance) & (distance <= radius1 + 1)
             s2_mask[:, :, ~circle_mask] = 1
 
         # Final minicube
