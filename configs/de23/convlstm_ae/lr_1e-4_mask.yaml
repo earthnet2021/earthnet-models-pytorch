@@ -50,7 +50,7 @@ Task:
         name: "MaskedPixelwiseLoss"
         # lc_min: 40
         # lc_max: 90
-        lc_mask: True
+        is_lc_mask: True
         ndvi_pred_idx: 0 # index of the NDVI band
         ndvi_targ_idx: 0 # index of the NDVI band
         pred_mask_value: -1
