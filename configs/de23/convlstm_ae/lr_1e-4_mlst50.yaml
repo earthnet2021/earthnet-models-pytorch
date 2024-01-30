@@ -44,7 +44,6 @@ Data:
     test_batch_size: 4
     num_workers: 4
 
-
 Task:
     loss:
         name: "MaskedPixelwiseLoss"
