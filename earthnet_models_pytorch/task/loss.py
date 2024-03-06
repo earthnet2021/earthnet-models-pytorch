@@ -281,14 +281,10 @@ class MaskedL2NDVILoss(nn.Module):
                 min=0.01
             )  # mse b c h w
         elif self.weight_by_std:
-            mean_ndvi_targ = (ndvi_targ[:, -t_pred:, ...] * s2_mask).sum(1).unsqueeze(
-                1
-            ) / (
+            mean_ndvi_targ = (ndvi_targ * s2_mask).sum(1).unsqueeze(1) / (
                 s2_mask.sum(1).unsqueeze(1) + 1e-8
             )  # b t c h w
-            sum_squared_deviation = (
-                ((ndvi_targ[:, -t_pred:, ...] - mean_ndvi_targ) * s2_mask) ** 2
-            ).sum(
+            sum_squared_deviation = (((ndvi_targ - mean_ndvi_targ) * s2_mask) ** 2).sum(
                 1
             )  # b c h w
             mse = sum_squared_error * (
