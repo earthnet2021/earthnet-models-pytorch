@@ -1,20 +1,18 @@
-from typing import Optional, Union
-from pathlib import Path
-
 import argparse
 import ast
 import copy
 import json
-import torch
-from torch import nn
+from pathlib import Path
+from typing import Optional, Union
+
 import numpy as np
-import xarray as xr
 import pytorch_lightning as pl
-
-
-from earthnet_models_pytorch.utils import str2bool, log_viz
-from earthnet_models_pytorch.task import setup_loss, SHEDULERS
+import torch
+import xarray as xr
 from earthnet_models_pytorch.metric import METRICS
+from earthnet_models_pytorch.task import SHEDULERS, setup_loss
+from earthnet_models_pytorch.utils import log_viz, str2bool
+from torch import nn
 
 
 class SpatioTemporalTask(pl.LightningModule):
@@ -47,16 +45,13 @@ class SpatioTemporalTask(pl.LightningModule):
 
         self.n_stochastic_preds = hparams.n_stochastic_preds
 
-
         self.shedulers = []
         for shedule in self.hparams.shedulers:
             self.shedulers.append(
                 (shedule["call_name"], SHEDULERS[shedule["name"]](**shedule["args"]))
             )
 
-
         self.metric = METRICS[self.hparams.metric](**self.hparams.metric_kwargs)
-        
 
     @staticmethod
     def add_task_specific_args(
@@ -85,7 +80,7 @@ class SpatioTemporalTask(pl.LightningModule):
         )
         # Metric used for the test set and the validation set.
         parser.add_argument("--metric", type=str, default="RMSE")
-        parser.add_argument('--metric_kwargs', type = ast.literal_eval, default = '{}')
+        parser.add_argument("--metric_kwargs", type=ast.literal_eval, default="{}")
 
         # Context and target length for temporal model. A temporal model use a context period to learn the temporal dependencies and predict the target period.
         parser.add_argument("--context_length", type=int, default=10)
@@ -156,7 +151,6 @@ class SpatioTemporalTask(pl.LightningModule):
         for shedule_name, shedule in self.shedulers:
             kwargs[shedule_name] = shedule(self.global_step)
 
-
         # Predictions generation
         preds, aux = self(batch, kwargs=kwargs)
         loss, logs = self.loss(preds, batch, aux, current_step=self.global_step)
@@ -184,8 +178,12 @@ class SpatioTemporalTask(pl.LightningModule):
 
         batch_size = torch.tensor(self.hparams.val_batch_size, dtype=torch.int64)
 
-        # Select only the context data for the model
-        data["dynamic"][0] = data["dynamic"][0][:, :self.context_length, ...]
+        # # Select only the context data for the model
+        # data["dynamic"][0] = data["dynamic"][0][:, : self.context_length, ...]
+        # if len(data["dynamic_mask"]) > 0:
+        #     data["dynamic_mask"][0] = data["dynamic_mask"][0][
+        #         :, : self.context_length, ...
+        #     ]
 
         loss_logs = []  # list of loss values
         viz_logs = []  # list of (preds, scores)
@@ -250,9 +248,11 @@ class SpatioTemporalTask(pl.LightningModule):
         ):
             current_scores["epoch"] = self.current_epoch
             current_scores = {
-                k: str(v.detach().cpu().item())
-                if isinstance(v, torch.Tensor)
-                else str(v)
+                k: (
+                    str(v.detach().cpu().item())
+                    if isinstance(v, torch.Tensor)
+                    else str(v)
+                )
                 for k, v in current_scores.items()
             }
             outpath = Path(self.logger.log_dir) / "validation_scores.json"
@@ -272,8 +272,8 @@ class SpatioTemporalTask(pl.LightningModule):
 
         data = copy.deepcopy(batch)
 
-        #data["dynamic"][0] =  data["dynamic"][0][:,:self.context_length,...]  # selection only the context data
-        #if len(data["dynamic_mask"]) > 0:
+        # data["dynamic"][0] =  data["dynamic"][0][:,:self.context_length,...]  # selection only the context data
+        # if len(data["dynamic_mask"]) > 0:
         #    data["dynamic_mask"][0] = data["dynamic_mask"][0][:,:self.context_length,...]
 
         for i in range(self.n_stochastic_preds):
@@ -286,7 +286,7 @@ class SpatioTemporalTask(pl.LightningModule):
             static = batch["static"][0]
 
             for j in range(preds.shape[0]):
-                if self.hparams.setting in ["en21x", "en23"]:
+                if self.hparams.setting in ["en21x", "en23", "greenearthnet"]:
                     # Targets
                     targ_path = Path(batch["filepath"][j])
                     targ_cube = xr.open_dataset(targ_path)
@@ -404,7 +404,6 @@ class SpatioTemporalTask(pl.LightningModule):
                             pred_path,
                             encoding={
                                 "ndvi_pred": {"dtype": "float32"},
-
                             },
                         )
 
