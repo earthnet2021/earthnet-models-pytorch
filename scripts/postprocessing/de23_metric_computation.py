@@ -193,7 +193,7 @@ def calculate_sample_statistics(pred_path, anomalie=False, method="by_frame"):
         else:
             pred_anomalie = None
             return [
-                calculate_variable_statistics(target, prediction, anomalie, "all", cubename, method, )
+                calculate_variable_statistics(target, prediction, anomalie, "all", cubename, method, season,)
                 for prediction, anomalie in [(pred, False)]
             ]
     except :
