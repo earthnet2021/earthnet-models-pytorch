@@ -415,7 +415,7 @@ class DeepExtremes2023DataModule(pl.LightningDataModule):
                     temporal_test_subset,
                     target=self.hparams.target,
                     fp16=self.hparams.fp16,
-                    is_lc_mask=self.hparams.is_lc_mask,
+                    is_lc_mask=self.hparams.lc_mask,
                 )
 
             elif self.hparams.continent_split & (
@@ -426,7 +426,7 @@ class DeepExtremes2023DataModule(pl.LightningDataModule):
                     continent_test_subset,
                     target=self.hparams.target,
                     fp16=self.hparams.fp16,
-                    is_lc_mask=self.hparams.is_lc_mask,
+                    is_lc_mask=self.hparams.lc_mask,
                 )
 
     def train_dataloader(self) -> DataLoader:
@@ -484,8 +484,6 @@ class DeepExtremes2023DataModule(pl.LightningDataModule):
 
         # folds 2017 - 2020
         df = df.loc[df["variable"].str.startswith("start_date")].drop("variable", 1)
-        # print(df)
-        # print(df.loc[(df["check"] == 0) & (df["group"] >= 9) , :])
 
         # training set
         train_subset = df.loc[

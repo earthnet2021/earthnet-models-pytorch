@@ -18,7 +18,7 @@ Trainer:
     strategy: 'ddp_find_unused_parameters_false'
     #deterministic: True
     log_every_n_steps: 32
-    profiler: 'simple'
+    #profiler: 'simple'
     accumulate_grad_batches: 8
     #fast_dev_run: True
     #log_gpu_memory: 'all'

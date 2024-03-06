@@ -52,8 +52,8 @@ Task:
         ndvi_targ_idx: 0 # index of the NDVI band
         pred_mask_value: -1
         scale_by_std: False
-    context_length: 72
-    target_length: 18
+    context_length: 73
+    target_length: 17
     metric: "RMSE"
     n_stochastic_preds: 2
     optimization:
