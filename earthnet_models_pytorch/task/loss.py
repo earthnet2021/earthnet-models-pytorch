@@ -1,8 +1,9 @@
-import torch
-from torch import nn
-import torch.nn.functional as F
-import torch.distributions as distrib
 import sys
+
+import torch
+import torch.distributions as distrib
+import torch.nn.functional as F
+from torch import nn
 
 
 def make_normal_from_raw_params(raw_params, scale_stddev=1, dim=-1, eps=1e-8):
@@ -198,7 +199,7 @@ class MaskedL2NDVILoss(nn.Module):
         weight_by_std=False,
         extra_aux_loss_term=None,
         extra_aux_loss_weight=1,
-        mask_hq_only = False,
+        mask_hq_only=False,
         **kwargs,
     ):
         super().__init__()
@@ -262,7 +263,9 @@ class MaskedL2NDVILoss(nn.Module):
             2
         )  # b t c h w
 
-        ndvi_pred = preds[:, :, self.ndvi_pred_idx, ...].unsqueeze(2)  # b t c h w
+        ndvi_pred = preds[:, -ndvi_targ.shape[1] :, self.ndvi_pred_idx, ...].unsqueeze(
+            2
+        )  # b t c h w
 
         sum_squared_error = (((ndvi_targ - ndvi_pred) * s2_mask) ** 2).sum(1)  # b c h w
         mse = sum_squared_error / (s2_mask.sum(1) + 1e-8)  # b c h w
@@ -278,9 +281,17 @@ class MaskedL2NDVILoss(nn.Module):
                 min=0.01
             )  # mse b c h w
         elif self.weight_by_std:
-            mean_ndvi_targ = (ndvi_targ[:, -t_pred:,...] * s2_mask).sum(1).unsqueeze(1) / (s2_mask.sum(1).unsqueeze(1) + 1e-8)  # b t c h w
-            sum_squared_deviation = (((ndvi_targ[:, -t_pred:,...] - mean_ndvi_targ) * s2_mask)**2).sum(1)  # b c h w
-            mse = sum_squared_error * (((sum_squared_deviation/(s2_mask.sum(1)+1e-8))**0.5)/0.1).clip(min = 0.01, max = 100.0) # b c h w
+            mean_ndvi_targ = (ndvi_targ * s2_mask).sum(1).unsqueeze(1) / (
+                s2_mask.sum(1).unsqueeze(1) + 1e-8
+            )  # b t c h w
+            sum_squared_deviation = (((ndvi_targ - mean_ndvi_targ) * s2_mask) ** 2).sum(
+                1
+            )  # b c h w
+            mse = sum_squared_error * (
+                ((sum_squared_deviation / (s2_mask.sum(1) + 1e-8)) ** 0.5) / 0.1
+            ).clip(
+                min=0.01, max=100.0
+            )  # b c h w
 
         if self.pred_mask_value:  # what is that?
             pred_mask = (
