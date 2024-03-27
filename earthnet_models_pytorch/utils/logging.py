@@ -7,7 +7,8 @@ import torchvision
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 import matplotlib.colors as clr
-
+import logging
+# logging.basicConfig(filename='forward2.log', level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
 CMAP_NDVI = clr.LinearSegmentedColormap.from_list('ndvi', ["#cbbe9a","#fffde4","#bccea5","#66985b","#2e6a32","#123f1e","#0e371a","#01140f","#000d0a"], N=256)
 CMAP_NDVI.set_bad(color='white')
@@ -55,7 +56,7 @@ def veg_colorize(data, mask = None, clouds = None, setting="en21x"): #TODO move 
 
 def log_viz(tensorboard_logger, viz_data, batch, batch_idx, current_epoch, setting = "en21x"):
     targs = batch["dynamic"][0]
-    nrow = 9 if targs.shape[1]%9 == 0 else 10
+    nrow = 6 # 9 if targs.shape[1]%9 == 0 else 10
     
     if "landcover" in batch:
         lc = batch["landcover"]

@@ -62,7 +62,7 @@ def fast_dev_run(setting_dict: dict):
     # Trainer
     trainer_dict = setting_dict["Trainer"]
     trainer_dict["logger"] = False
-    # trainer_dict["strategy"]=DDPStrategy(find_unused_parameters=False)
+    trainer_dict["strategy"]=DDPStrategy(find_unused_parameters=True)
     trainer_dict["fast_dev_run"] = 2  # number of batch
     # trainer_dict["log_gpu_memory"] = 'all'
     # if "profiler" in trainer_dict:
