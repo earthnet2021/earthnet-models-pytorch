@@ -161,4 +161,4 @@ if __name__ == "__main__":
         )
 
     with mp.Pool(1) as pool:
-        r = list(tqdm(pool.imap(process_sample, metadata[:4]), total=len(metadata[:4])))
+        r = list(tqdm(pool.imap(process_sample, metadata), total=len(metadata)))
