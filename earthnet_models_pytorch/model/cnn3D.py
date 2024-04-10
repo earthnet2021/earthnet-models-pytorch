@@ -11,6 +11,12 @@ from earthnet_models_pytorch.utils import str2bool
 logging.basicConfig(filename='forward.log', level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
 class StackedConv3D(nn.Module):
+    """
+    A class representing a stack of 3D convolutional layers.
+
+    This module is designed for next frame prediction tasks, where the goal is to predict
+    the subsequent frame in a sequence of 3D data.
+    """
     def __init__(self, hparams: argparse.Namespace):
         super().__init__()
 
@@ -30,28 +36,64 @@ class StackedConv3D(nn.Module):
 
         # Define convolutional layers
         self.conv1 = nn.Sequential(
-            nn.Conv3d(in_channels=input_channels, out_channels=64, kernel_size=kernel_size, stride=self.hparams.stride_size, padding = "same", bias=self.hparams.bias),
+            nn.Conv3d(
+                in_channels=input_channels, 
+                out_channels=64, 
+                kernel_size=kernel_size, 
+                stride=self.hparams.stride_size, 
+                padding = "same", 
+                bias=self.hparams.bias
+            ),
             nn.BatchNorm3d(64),
         )
         
         self.conv2 = nn.Sequential(
-            nn.Conv3d(in_channels=64, out_channels=49, kernel_size=kernel_size, stride=self.hparams.stride_size, padding = "same", bias=self.hparams.bias),
+            nn.Conv3d(
+                in_channels=64, 
+                out_channels=49, 
+                kernel_size=kernel_size, 
+                stride=self.hparams.stride_size, 
+                padding = "same", 
+                bias=self.hparams.bias
+            ),
             nn.BatchNorm3d(49),
         )
 
         self.conv3 = nn.Sequential(
-            nn.Conv3d(in_channels=49, out_channels=64, kernel_size=kernel_size, stride=self.hparams.stride_size, padding = "same", bias=self.hparams.bias),
+            nn.Conv3d(
+                in_channels=49, 
+                out_channels=64, 
+                kernel_size=kernel_size, 
+                stride=self.hparams.stride_size, 
+                padding = "same", 
+                bias=self.hparams.bias
+            ),
             nn.BatchNorm3d(64),
         )
 
         self.conv4 = nn.Sequential(
-            nn.Conv3d(in_channels=64, out_channels=49, kernel_size=kernel_size, stride=self.hparams.stride_size, padding = "same", bias=self.hparams.bias),
+            nn.Conv3d(
+                in_channels=64, 
+                out_channels=49, 
+                kernel_size=kernel_size, 
+                stride=self.hparams.stride_size, 
+                padding = "same", 
+                bias=self.hparams.bias
+            ),
             nn.BatchNorm3d(49),
         )
 
         # Define the final convolutional layer and activation function
         self.final_conv = nn.Sequential(
-            nn.Conv3d(in_channels=49, out_channels=1, kernel_size=(5, 3, 3), stride=(3, 1, 1), padding=(0, 1, 1), bias=self.hparams.bias),
+            nn.Conv3d(
+                in_channels=49, 
+                out_channels=1, 
+                kernel_size=(5, 3, 3), 
+                stride=(3, 1, 1), 
+                padding=(0, 1, 1), 
+                bias=self.hparams.bias
+            ),
+        nn.BatchNorm3d(1),
         )
 
         # Final activation function
@@ -171,6 +213,7 @@ class StackedConv3D(nn.Module):
 
         output = []
 
+        # Forecasting 
         x = self.conv1(stacked_x)
         x = nn.ReLU()(x)
         x = self.conv2(x)
