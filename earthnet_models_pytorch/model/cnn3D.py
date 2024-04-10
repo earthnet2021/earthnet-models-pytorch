@@ -203,6 +203,6 @@ class StackedConv3D(nn.Module):
             preds = x.permute(0, 2, 1, 3, 4).contiguous()
                 
         # preds = torch.stack(output, dim = 1).contiguous()
-        logging.debug(f"Output size: {preds.size()}")
+        # logging.debug(f"Output size: {preds.size()}")
 
         return preds, {}
