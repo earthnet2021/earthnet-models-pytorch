@@ -136,14 +136,10 @@ class StackedConv2plus1D(nn.Module):
         # sentinel 2 bands
         sentinel = data["dynamic"][0][:, 20 : context_length + 20, ...]
 
-        # Extract the target for the teacher forcing method
-        if self.hparams.teacher_forcing and self.training:
-            target = data["dynamic"][0][
-                :, context_length : context_length + self.hparams.target_length, ...
-            ]
-
+        # weather inputs
         weather = data["dynamic"][1].unsqueeze(3).unsqueeze(4)
 
+        # static inputs
         static = data["static"][0]
 
         # Get the dimensions of the input data. Shape: batch size, temporal size, number of channels, height, width
