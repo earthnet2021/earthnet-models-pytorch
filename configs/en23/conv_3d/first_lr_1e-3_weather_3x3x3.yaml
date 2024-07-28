@@ -76,5 +76,4 @@ Model:
     input: "RGBNR+W"
     teacher_forcing: False
     use_weather: True
-    single_frame_prediciton: False
     residual_connections: True

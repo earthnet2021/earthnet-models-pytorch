@@ -75,5 +75,4 @@ Model:
     no_of_blocks: 3
     bias: True
     input: "RGBNR+W"
-    teacher_forcing: False
     use_weather: True
