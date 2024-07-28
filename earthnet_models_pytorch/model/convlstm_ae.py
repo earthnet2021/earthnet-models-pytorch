@@ -285,7 +285,7 @@ class ConvLSTMAE(nn.Module):
         # Extract data components
 
         # sentinel 2 bands
-        sentinel = data["dynamic"][0][:, :context_length, ...]
+        sentinel = data["dynamic"][0][:, 10 : context_length + 10, ...]
 
         # Extract the target for the teacher forcing method
         if self.hparams.teacher_forcing and self.training:
@@ -346,7 +346,7 @@ class ConvLSTMAE(nn.Module):
             
             if self.hparams.use_weather:
                 weather_t = (
-                    weather[:, t : t + 5, ...]
+                    weather[:, t + 10: t + 10 + 5, ...]
                     .view(weather.shape[0], 1, -1, 1, 1)
                     .squeeze(1)
                     .repeat(1, 1, 128, 128)
@@ -382,13 +382,13 @@ class ConvLSTMAE(nn.Module):
                 and self.training
                 and torch.bernoulli(teacher_forcing_decay)
             ):
-                pred = target[:, t, 0, ...].unsqueeze(1)
+                pred = target[:, t + 10, 0, ...].unsqueeze(1)
 
             pred = torch.cat((pred, static), dim=1)
             if self.hparams.use_weather:
                 # Prepare input for decoder ConvLSTM cells
                 weather_t = (
-                    weather[:, context_length + t : context_length + t + 5, ...]
+                    weather[:, context_length + 10 + t : context_length + 10 + t + 5, ...]
                     .view(weather.shape[0], 1, -1, 1, 1)
                     .squeeze(1)
                     .repeat(1, 1, 128, 128)
