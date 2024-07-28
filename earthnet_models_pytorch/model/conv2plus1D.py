@@ -117,9 +117,7 @@ class StackedConv2plus1D(nn.Module):
         parser.add_argument("--input", type = str, default = "RGBNR")
         parser.add_argument("--target", type = str, default = False)
         parser.add_argument("--residual_connections", type = str2bool, default = False)
-        parser.add_argument("--teacher_forcing", type = str2bool, default = False)
         parser.add_argument("--use_weather", type = str2bool, default = True)
-        parser.add_argument("--spatial_shuffle", type = str2bool, default = False)
 
         return parser
     
@@ -133,19 +131,10 @@ class StackedConv2plus1D(nn.Module):
             else pred_start
         )
 
-        step = data["global_step"]
-        # Calculate teacher forcing coefficient
-        if self.hparams.teacher_forcing:
-            k = torch.tensor(0.1 * 10 * 12000)
-
-            teacher_forcing_decay = k / (k + torch.exp(step + (120000 / 2) / k))
-        else:
-            teacher_forcing_decay = 0
-
         # Extract data components
 
         # sentinel 2 bands
-        sentinel = data["dynamic"][0][:, : context_length, ...]
+        sentinel = data["dynamic"][0][:, 20 : context_length + 20, ...]
 
         # Extract the target for the teacher forcing method
         if self.hparams.teacher_forcing and self.training:
@@ -160,20 +149,6 @@ class StackedConv2plus1D(nn.Module):
         # Get the dimensions of the input data. Shape: batch size, temporal size, number of channels, height, width
         b, t_sentinel, c, h, w = sentinel.shape # TODO: remember to change: previously t
 
-
-        if self.hparams.spatial_shuffle:
-            perm = torch.randperm(b*h*w, device=sentinel.device)
-            invperm = inverse_permutation(perm)
-
-            if weather.shape[-1] == 1:
-                weather = weather.expand(-1, -1, -1, h, w)
-            else:
-                weather = nn.functional.interpolate(weather, size = (h,w), mode='nearest-exact')
-
-            sentinel = sentinel.permute(1, 2, 0, 3, 4).reshape(t, c, b*h*w)[:, :, perm].reshape(t, c, b, h, w).permute(2, 0, 1, 3, 4)
-            weather = weather.permute(1, 2, 0, 3, 4).reshape(t_w, c_w, b*h*w)[:, :, perm].reshape(t_w, c_w, b, h, w).permute(2, 0, 1, 3, 4).contiguous()
-            static = static.permute(1, 0, 2, 3).reshape(3, b*h*w)[:, perm].reshape(3, b, h, w).permute(1, 0, 2, 3)
-
         # Expand static tensor along the time dimension
         stacked_static = static.unsqueeze(1).expand(-1, t_sentinel + self.hparams.target_length, -1, -1, -1) # (b, 30, c_s, h, w)
 
@@ -185,7 +160,7 @@ class StackedConv2plus1D(nn.Module):
             weather_array = []
             for t_slice in range(t_sentinel):
                 weather_t = (
-                    weather[:, t_slice : t_slice + 5, ...]
+                    weather[:, t_slice + 20 : t_slice + 5 + 20, ...]
                     .view(weather.shape[0], 1, -1, 1, 1)
                     .squeeze(1)
                     .repeat(1, 1, 128, 128)
