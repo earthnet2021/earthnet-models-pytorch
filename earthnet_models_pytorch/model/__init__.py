@@ -11,6 +11,7 @@ from earthnet_models_pytorch.model.unet_lstm import UNetLSTM
 from earthnet_models_pytorch.model.contextformer import ContextFormer
 # from earthnet_models_pytorch.model.presto import Presto
 from earthnet_models_pytorch.model.cnn3D import StackedConv3D 
+from earthnet_models_pytorch.model.conv2plus1D import StackedConv2plus1D
 
 MODELS = {
     "cnn3d": StackedConv3D,
@@ -25,5 +26,6 @@ MODELS = {
     "convlstm_ae": ConvLSTMAE,
     "unet_lstm": UNetLSTM,
     "contextformer": ContextFormer,
+    "conv2plus1d": StackedConv2plus1D
     }
 

@@ -304,8 +304,8 @@ class SpatioTemporalTask(pl.LightningModule):
                                         time=slice(4, None, 5)
                                     ).isel(
                                         time=slice(
-                                            self.context_length,
-                                            self.context_length + self.target_length,
+                                            self.context_length + 20,
+                                            self.context_length + 20 + self.target_length,
                                         )
                                     ),
                                     "lat": lat,
