@@ -15,87 +15,39 @@ class StackedConv3D(nn.Module):
     A class representing a stack of 3D convolutional layers.
 
     This module is designed for next frame prediction tasks, where the goal is to predict
-    the subsequent frame in a sequence of 3D data.
+    the subsequent frames in a sequence of 3D data with less training time.
     """
     def __init__(self, hparams: argparse.Namespace):
-        super().__init__()
-
+        super(StackedConv3D, self).__init__()
+        
         self.hparams = hparams
         kernel_size = self.hparams.kernel_size
-        
+
         # Determine if NDVI prediction is required based on the specified settings
-        self.ndvi_pred = (hparams.setting in ["en21-veg", "europe-veg", "en21x", "en22", "en23"])
+        self.ndvi_pred = self.hparams.setting in ["en21-veg", "europe-veg", "en21x", "en22", "en23"]
         
         # Adjust input dimensions based on the selected input type
-        if self.hparams.input == 'RGBNR+W':
-            input_channels = 49
-        elif self.hparams.input == 'NDVI+T+W':
-            input_channels = 1 + 1 + 24
-        elif self.hparams.input == 'RGBNR':  
-            input_channels = 9
+        input_channels_map = {
+            'RGBNR+W': 49,
+            'NDVI+T+W': 1 + 1 + 24,
+            'RGBNR': 9
+        }
+        input_channels = input_channels_map.get(self.hparams.input, 1)  # Default to 1 if input type is not found
 
-        # Define convolutional layers
-        self.conv1 = nn.Sequential(
-            nn.Conv3d(
-                in_channels=input_channels, 
-                out_channels=64, 
-                kernel_size=kernel_size, 
-                stride=self.hparams.stride_size, 
-                padding = "same", 
-                bias=self.hparams.bias
-            ),
-            nn.BatchNorm3d(64),
-        )
+        def conv_block(in_channels, out_channels, kernel_size, stride, padding, bias):
+            return nn.Sequential(
+                nn.Conv3d(in_channels, out_channels, kernel_size, stride, padding, bias=bias),
+                nn.BatchNorm3d(out_channels)
+            )
         
-        self.conv2 = nn.Sequential(
-            nn.Conv3d(
-                in_channels=64, 
-                out_channels=49, 
-                kernel_size=kernel_size, 
-                stride=self.hparams.stride_size, 
-                padding = "same", 
-                bias=self.hparams.bias
-            ),
-            nn.BatchNorm3d(49),
-        )
-
-        self.conv3 = nn.Sequential(
-            nn.Conv3d(
-                in_channels=49, 
-                out_channels=64, 
-                kernel_size=kernel_size, 
-                stride=self.hparams.stride_size, 
-                padding = "same", 
-                bias=self.hparams.bias
-            ),
-            nn.BatchNorm3d(64),
-        )
-
-        self.conv4 = nn.Sequential(
-            nn.Conv3d(
-                in_channels=64, 
-                out_channels=49, 
-                kernel_size=kernel_size, 
-                stride=self.hparams.stride_size, 
-                padding = "same", 
-                bias=self.hparams.bias
-            ),
-            nn.BatchNorm3d(49),
-        )
-
-        # Define the final convolutional layer and activation function
-        self.final_conv = nn.Sequential(
-            nn.Conv3d(
-                in_channels=49, 
-                out_channels=1, 
-                kernel_size=(5, 3, 3), 
-                stride=(3, 1, 1), 
-                padding=(0, 1, 1), 
-                bias=self.hparams.bias
-            ),
-        nn.BatchNorm3d(1),
-        )
-
+        # Define convolutional layers using the conv_block function
+        self.conv1 = conv_block(input_channels, 64, kernel_size, self.hparams.stride_size, "same", self.hparams.bias)
+        self.conv2 = conv_block(64, 49, kernel_size, self.hparams.stride_size, "same", self.hparams.bias)
+        self.conv3 = conv_block(49, 64, kernel_size, self.hparams.stride_size, "same", self.hparams.bias)
+        self.conv4 = conv_block(64, 49, kernel_size, self.hparams.stride_size, "same", self.hparams.bias)
+        
+        self.final_conv = conv_block(49, 1, (5, 3, 3), (2, 1, 1), (0, 1, 1), self.hparams.bias)
+        
         # Final activation function
         self.activation_output = nn.Sigmoid()
 
@@ -123,9 +75,7 @@ class StackedConv3D(nn.Module):
         parser.add_argument("--target", type = str, default = False)
         parser.add_argument("--single_frame_prediciton", type = str2bool, default=True)
         parser.add_argument("--residual_connections", type = str2bool, default = False)
-        parser.add_argument("--teacher_forcing", type = str2bool, default = False)
         parser.add_argument("--use_weather", type = str2bool, default = True)
-        parser.add_argument("--spatial_shuffle", type = str2bool, default = False)
 
         return parser
     
@@ -139,19 +89,10 @@ class StackedConv3D(nn.Module):
             else pred_start
         )
 
-        step = data["global_step"]
-        # Calculate teacher forcing coefficient
-        if self.hparams.teacher_forcing:
-            k = torch.tensor(0.1 * 10 * 12000)
-
-            teacher_forcing_decay = k / (k + torch.exp(step + (120000 / 2) / k))
-        else:
-            teacher_forcing_decay = 0
-
         # Extract data components
 
         # sentinel 2 bands
-        sentinel = data["dynamic"][0][:, : context_length, ...]
+        sentinel = data["dynamic"][0][:, 20 : context_length + 20, ...]
 
         # Extract the target for the teacher forcing method
         if self.hparams.teacher_forcing and self.training:
@@ -166,20 +107,6 @@ class StackedConv3D(nn.Module):
         # Get the dimensions of the input data. Shape: batch size, temporal size, number of channels, height, width
         b, t_sentinel, c, h, w = sentinel.shape # TODO: remember to change: previously t
 
-
-        if self.hparams.spatial_shuffle:
-            perm = torch.randperm(b*h*w, device=sentinel.device)
-            invperm = inverse_permutation(perm)
-
-            if weather.shape[-1] == 1:
-                weather = weather.expand(-1, -1, -1, h, w)
-            else:
-                weather = nn.functional.interpolate(weather, size = (h,w), mode='nearest-exact')
-
-            sentinel = sentinel.permute(1, 2, 0, 3, 4).reshape(t, c, b*h*w)[:, :, perm].reshape(t, c, b, h, w).permute(2, 0, 1, 3, 4)
-            weather = weather.permute(1, 2, 0, 3, 4).reshape(t_w, c_w, b*h*w)[:, :, perm].reshape(t_w, c_w, b, h, w).permute(2, 0, 1, 3, 4).contiguous()
-            static = static.permute(1, 0, 2, 3).reshape(3, b*h*w)[:, perm].reshape(3, b, h, w).permute(1, 0, 2, 3)
-
         # Expand static tensor along the time dimension
         stacked_static = static.unsqueeze(1).expand(-1, t_sentinel + self.hparams.target_length, -1, -1, -1) # (b, 30, c_s, h, w)
 
@@ -191,7 +118,7 @@ class StackedConv3D(nn.Module):
             weather_array = []
             for t_slice in range(t_sentinel):
                 weather_t = (
-                    weather[:, t_slice : t_slice + 5, ...]
+                    weather[:, t_slice + 20 : t_slice + 20 + 5, ...]
                     .view(weather.shape[0], 1, -1, 1, 1)
                     .squeeze(1)
                     .repeat(1, 1, 128, 128)
@@ -232,8 +159,8 @@ class StackedConv3D(nn.Module):
             x = x + stacked_x
 
         x = nn.ReLU()(x)
-    
-        x = self.final_conv(x)        
+        x = self.final_conv(x) 
+
         # Output
         x = self.activation_output(x)
 
