@@ -169,7 +169,7 @@ class DeepExtremes2023Dataset(Dataset):
         filepath, start_date, end_date = self.metadata[idx]
         minicube = xr.open_dataset(filepath, engine="zarr").sel(
             time=slice(start_date, end_date),
-            event_time=slice(start_date, min(end_date, datetime.date(2021, 12, 31))),
+            event_time=slice(start_date, min(end_date, pd.Timestamp(year=2021, month=12, day=31))),
         )
 
         if (
@@ -350,7 +350,10 @@ class DeepExtremes2023DataModule(pl.LightningDataModule):
         parser.add_argument("--test_track", type=str, default="iid")
         parser.add_argument("--target", type=str, default="ndvi")
 
-        parser.add_argument("--lc_mask", type=bool, default=True)
+        parser.add_argument("--context_length", type=int, default=72)
+        parser.add_argument("--target_length", type=int, default=18)
+
+        parser.add_argument("--is_lc_mask", type=bool, default=True)
 
         parser.add_argument("--fp16", type=str2bool, default=False)
 
@@ -389,7 +392,7 @@ class DeepExtremes2023DataModule(pl.LightningDataModule):
                 train_subset,
                 target=self.hparams.target,
                 fp16=self.hparams.fp16,
-                is_lc_mask=self.hparams.lc_mask,
+                is_lc_mask=self.hparams.is_lc_mask,
             )
 
             self.earthnet_val = DeepExtremes2023Dataset(
@@ -397,7 +400,7 @@ class DeepExtremes2023DataModule(pl.LightningDataModule):
                 val_subset,
                 target=self.hparams.target,
                 fp16=self.hparams.fp16,
-                is_lc_mask=self.hparams.lc_mask,
+                is_lc_mask=self.hparams.is_lc_mask,
             )
 
         if stage == "test" or stage is None:
@@ -465,43 +468,51 @@ class DeepExtremes2023DataModule(pl.LightningDataModule):
         ]
 
         # 3 training minicubes between 2017 - 2020 (randomly starting in the first year), followed by 3 test minicubes in 2021
-        df["start_date"] = pd.to_datetime(
+        df["start_date0"] = pd.to_datetime(
             df["start_date"], format="%Y-%m-%dT%H:%M:%S.%f"
         )
-        df["start_date2"] = df["start_date"] + datetime.timedelta(days=450)
-        df["start_date3"] = df["start_date2"] + datetime.timedelta(days=450)
-        df["start_test1"] = df["start_date3"] + datetime.timedelta(days=450)
-        df["start_test2"] = df["start_test1"] + datetime.timedelta(days=90)
-        df["start_test3"] = df["start_test2"] + datetime.timedelta(days=90)
+        df = df.drop("start_date", axis=1)
+        df["start_date2"] = df["start_date0"] + datetime.timedelta(days=(self.hparams.target_length + self.hparams.context_length)*5)
+        df["start_date3"] = df["start_date2"] + datetime.timedelta(days=(self.hparams.target_length + self.hparams.context_length)*5)
+        df["start_test1"] = df["start_date3"] + datetime.timedelta(days=(self.hparams.target_length + self.hparams.context_length)*5)
+        df["start_test2"] = df["start_test1"] + datetime.timedelta(days=self.hparams.target_length * 5)
+        df["start_test3"] = df["start_test2"] + datetime.timedelta(days=self.hparams.target_length * 5)
         df = df.melt(["path", "group", "check"], value_name="start_date")
-        df["end_date"] = df["start_date"] + datetime.timedelta(days=449)
+        df["end_date"] = df["start_date"] + datetime.timedelta(days=(self.hparams.target_length + self.hparams.context_length) * 5 - 1 )
 
         # temporal test set 2021
         temporal_test_subset = df.loc[
-            (df["variable"].str.startswith("start_test")),
+            (df["variable"].str.startswith("start_test")) & (df["check"] == 0),
             ["path", "start_date", "end_date"],
-        ]
+        ].sort_values(by=["path","start_date"])
+        # print(temporal_test_subset.iloc[:10])
 
         # folds 2017 - 2020
-        df = df.loc[df["variable"].str.startswith("start_date")].drop("variable", 1)
+        df = df.loc[df["variable"].str.startswith("start_date")].drop("variable", axis=1)
+        # print(df)
+        # print(df.loc[(df["check"] == 0) & (df["group"] >= 9) , :])
 
         # training set
         train_subset = df.loc[
             (df["group"] != test_fold) & (df["group"] != val_fold) & (df["check"] == 0),
             ["path", "start_date", "end_date"],
-        ]
+        ].sort_values(by=["path","start_date"])
+        # print(train_subset.iloc[:10])
 
         # validation set
         val_subset = df.loc[
             (df["group"] == val_fold) & (df["check"] == 0),
             ["path", "start_date", "end_date"],
-        ]
+        ].sort_values(by=["path","start_date"])
+        # print(val_subset.iloc[:10])
 
         # iid test set
         spatial_test_subset = df.loc[
             (df["group"] == test_fold) & (df["check"] == 0),
             ["path", "start_date", "end_date"],
-        ]
+        ].sort_values(by=["path","start_date"])
+        # print(spatial_test_subset.iloc[:10])
+
 
         return train_subset, val_subset, spatial_test_subset, temporal_test_subset
 
