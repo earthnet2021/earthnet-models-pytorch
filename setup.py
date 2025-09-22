@@ -24,7 +24,6 @@ scripts = [
     "scripts/train.py",
     "scripts/test.py",
     "scripts/tune.py",
-    "demo/app.py",
     "scripts/slurmrun.sh",
 ]
 
