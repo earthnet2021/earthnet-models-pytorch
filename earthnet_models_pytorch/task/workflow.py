@@ -53,9 +53,12 @@ class SpatioTemporalTask(pl.LightningModule):
 
         self.metric = METRICS[self.hparams.metric](**self.hparams.metric_kwargs)
 
+        # Storage for outputs to support PyTorch Lightning 2.0 migration
+        self.test_step_outputs = []
+
     @staticmethod
     def add_task_specific_args(
-        parent_parser: Optional[Union[argparse.ArgumentParser, list]] = None
+        parent_parser: Optional[Union[argparse.ArgumentParser, list]] = None,
     ):  # Optional[X] is equivalent to Union[X, None].
         if parent_parser is None:
             parent_parser = []
@@ -79,7 +82,7 @@ class SpatioTemporalTask(pl.LightningModule):
             default='{"name": "masked", "args": {"distance_type": "L1"}}',
         )
         # Metric used for the test set and the validation set.
-        parser.add_argument("--metric", type=str, default="RMSE")
+        parser.add_argument("--metric", type=str, default="NNSE")
         parser.add_argument("--metric_kwargs", type=ast.literal_eval, default="{}")
 
         # Context and target length for temporal model. A temporal model use a context period to learn the temporal dependencies and predict the target period.
@@ -237,7 +240,8 @@ class SpatioTemporalTask(pl.LightningModule):
                     setting=self.hparams.setting,
                 )
 
-    def validation_epoch_end(self, validation_step_outputs):
+
+    def on_validation_epoch_end(self):
         current_scores = self.metric.compute()
         self.log_dict(current_scores, sync_dist=True)
         self.metric.reset()  # lagacy? To remove, shoudl me managed by the logger?
@@ -265,6 +269,7 @@ class SpatioTemporalTask(pl.LightningModule):
 
             with open(outpath, "w") as fp:
                 json.dump(scores, fp)
+
 
     def test_step(self, batch, batch_idx):
         """Operates on a single batch of data from the test set. In this step you generate examples or calculate anything of interest such as accuracy."""
@@ -454,9 +459,12 @@ class SpatioTemporalTask(pl.LightningModule):
             if self.hparams.compute_metric_on_test:
                 self.metric.update(preds, batch)
                 scores.append(self.metric.compute_batch(batch))
+
+        # Store outputs for PyTorch Lightning 2.0 compatibility
+        self.test_step_outputs.append(scores)
         return scores
 
-    def test_epoch_end(self, test_step_outputs):
+    def on_test_epoch_end(self):
         """Called at the end of a test epoch with the output of all test steps."""
         if self.hparams.compute_metric_on_test:
             self.pred_dir.mkdir(parents=True, exist_ok=True)
@@ -468,11 +476,11 @@ class SpatioTemporalTask(pl.LightningModule):
                     [
                         {
                             k: v if isinstance(v, str) else v.item()
-                            for k, v in test_step_outputs[i][j][l].items()
+                            for k, v in self.test_step_outputs[i][j][l].items()
                         }
-                        for i in range(len(test_step_outputs))
-                        for j in range(len(test_step_outputs[i]))
-                        for l in range(len(test_step_outputs[i][j]))
+                        for i in range(len(self.test_step_outputs))
+                        for j in range(len(self.test_step_outputs[i]))
+                        for l in range(len(self.test_step_outputs[i][j]))
                     ],
                     fp,
                 )
@@ -487,6 +495,9 @@ class SpatioTemporalTask(pl.LightningModule):
                         },
                         fp,
                     )
+
+        # Clear outputs for memory management (PyTorch Lightning 2.0 pattern)
+        self.test_step_outputs.clear()
 
     def teardown(self, stage):
         if stage == "test" and self.hparams.compute_metric_on_test:
