@@ -1,7 +1,11 @@
 """EarthNet Models PyTorch
 A library with models for Earth surface forecasting.
 """
-__version__ = "0.1.0"
+
+
+import importlib.metadata
+
+__version__ = importlib.metadata.version("earthnet_models_pytorch")
 __author__ = 'Vitus Benson, Claire Robin'
 __credits__ = 'Max Planck Institute for Biogeochemistry'
 

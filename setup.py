@@ -31,7 +31,7 @@ scripts = [
 
 setup(
     name="earthnet-models-pytorch",
-    version="0.1.0",
+    version="0.1.1",
     description="EarthNet Models PyTorch",
     author="Vitus Benson, Claire Robin",
     author_email="{vbenson, crobin}@bgc-jena.mpg.de",
