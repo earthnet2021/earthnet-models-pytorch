@@ -1,5 +1,5 @@
 """ConvLSTM_ae
-    ConvLSTM with an encoding-decoding architecture
+ConvLSTM with an encoding-decoding architecture
 """
 
 import argparse
@@ -203,7 +203,7 @@ class ConvLSTMAE(nn.Module):
 
     @staticmethod
     def add_model_specific_args(
-        parent_parser: Optional[Union[argparse.ArgumentParser, list]] = None
+        parent_parser: Optional[Union[argparse.ArgumentParser, list]] = None,
     ):
         """
         Add model-specific arguments to the command-line argument parser.
@@ -374,6 +374,8 @@ class ConvLSTMAE(nn.Module):
             if self.hparams.use_weather:
                 if self.hparams.weather_is_aggregated:
                     weather_t = weather[:, t, ...].expand(-1, -1, h, w)
+                elif weather.shape[1] == 90:  # weather is 5 days resolution
+                    weather_t = weather[:, t, ...].repeat(1, 1, 128, 128)
                 else:
                     weather_t = (
                         weather[:, t : t + 5, ...]
@@ -426,6 +428,10 @@ class ConvLSTMAE(nn.Module):
                 # Prepare input for decoder ConvLSTM cells
                 if self.hparams.weather_is_aggregated:
                     weather_t = weather[:, context_length + t, ...].expand(-1, -1, h, w)
+                elif weather.shape[1] == 90:  # weather is 5 days resolution
+                    weather_t = weather[:, context_length + t, ...].repeat(
+                        1, 1, 128, 128
+                    )
                 else:
                     weather_t = (
                         weather[:, context_length + t : context_length + t + 5, ...]

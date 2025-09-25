@@ -15,11 +15,12 @@ from torch.utils.data import DataLoader, Dataset, random_split
 
 
 class EarthNet2021XOldDataset(Dataset):
-
     def __init__(
         self,
         folder: Union[Path, str],
         fp16=False,
+        lc_min=40,
+        lc_max=90,
         spatial_eobs=True,
         eobs_spread=False,
         soilgrids_all=False,
@@ -32,6 +33,9 @@ class EarthNet2021XOldDataset(Dataset):
         )  # Listing Python source files in this directory tree
 
         self.type = np.float16 if fp16 else np.float32
+
+        self.lc_min = lc_min
+        self.lc_max = lc_max
 
         self.spatial_eobs = spatial_eobs
 
@@ -136,7 +140,6 @@ class EarthNet2021XOldDataset(Dataset):
         ]
 
     def __getitem__(self, idx: int) -> dict:
-
         filepath = self.filepaths[idx]
 
         minicube = xr.open_dataset(filepath)
@@ -220,12 +223,15 @@ class EarthNet2021XOldDataset(Dataset):
 
         lc[np.isnan(lc)] = 0
 
+        lc_mask = (lc <= self.lc_min) | (lc >= self.lc_max)
+
         data = {
             "dynamic": [torch.from_numpy(kndvi), torch.from_numpy(eobs)],
             "dynamic_mask": [],
             "static": [torch.from_numpy(highresstatic)],
             "static_mask": [],
             "landcover": torch.from_numpy(lc),
+            "landcover_mask": torch.from_numpy(lc_mask).bool(),
             "filepath": str(filepath),
             "cubename": self.__name_getter(filepath),
         }
@@ -253,7 +259,6 @@ class EarthNet2021XOldDataset(Dataset):
 
 
 class EarthNet2021XpxOldDataset(Dataset):
-
     def __init__(
         self,
         folder: Union[Path, str],
@@ -373,7 +378,6 @@ class EarthNet2021XpxOldDataset(Dataset):
         print("Initialized dataset")
 
     def __getitem__(self, idx: int) -> dict:
-
         pixel = self.dataset.isel(loc=idx)
 
         kndvi = pixel.kndvi.values[:, None].astype(self.type)  # t c
@@ -445,6 +449,7 @@ class EarthNet2021XpxOldDataset(Dataset):
         lc = pixel.lc.values[None, ...].astype(self.type)  # c
 
         lc[np.isnan(lc)] = 0
+        lc_mask = (lc <= self.lc_min) | (lc >= self.lc_max)
 
         data = {
             "dynamic": [torch.from_numpy(kndvi), torch.from_numpy(eobs)],
@@ -452,6 +457,7 @@ class EarthNet2021XpxOldDataset(Dataset):
             "static": [torch.from_numpy(highresstatic)],
             "static_mask": [],
             "landcover": torch.from_numpy(lc),
+            "landcover_mask": torch.from_numpy(lc_mask).bool(),
             "filepath": "",
             "cubename": str(pixel["loc"].values),
         }
@@ -463,7 +469,6 @@ class EarthNet2021XpxOldDataset(Dataset):
 
 
 class EarthNet2021XOldDataModule(pl.LightningDataModule):
-
     def __init__(self, hparams: argparse.Namespace):
         super().__init__()
         self.save_hyperparameters(copy.deepcopy(hparams))
@@ -484,6 +489,8 @@ class EarthNet2021XOldDataModule(pl.LightningDataModule):
         parser.add_argument("--test_track", type=str, default="iid")
 
         parser.add_argument("--fp16", type=str2bool, default=False)
+        parser.add_argument("--lc_min", type=int, default=40)
+        parser.add_argument("--lc_max", type=int, default=90)
         parser.add_argument("--spatial_eobs", type=str2bool, default=True)
         parser.add_argument("--eobs_spread", type=str2bool, default=True)
         parser.add_argument("--soilgrids_all", type=str2bool, default=True)
@@ -505,6 +512,8 @@ class EarthNet2021XOldDataModule(pl.LightningDataModule):
             earthnet_corpus = EarthNet2021XOldDataset(
                 self.base_dir / "train",
                 fp16=self.hparams.fp16,
+                lc_min=self.hparams.lc_min,
+                lc_max=self.hparams.lc_max,
                 spatial_eobs=self.hparams.spatial_eobs,
                 eobs_spread=self.hparams.eobs_spread,
                 soilgrids_all=self.hparams.soilgrids_all,
@@ -530,6 +539,8 @@ class EarthNet2021XOldDataModule(pl.LightningDataModule):
             self.earthnet_test = EarthNet2021XOldDataset(
                 self.base_dir / "test" / self.hparams.test_track,
                 fp16=self.hparams.fp16,
+                lc_min=self.hparams.lc_min,
+                lc_max=self.hparams.lc_max,
                 spatial_eobs=self.hparams.spatial_eobs,
                 eobs_spread=self.hparams.eobs_spread,
                 soilgrids_all=self.hparams.soilgrids_all,
@@ -562,7 +573,6 @@ class EarthNet2021XOldDataModule(pl.LightningDataModule):
 
 
 class EarthNet2021XpxOldDataModule(pl.LightningDataModule):
-
     def __init__(self, hparams: argparse.Namespace):
         super().__init__()
         self.save_hyperparameters(copy.deepcopy(hparams))
@@ -583,6 +593,9 @@ class EarthNet2021XpxOldDataModule(pl.LightningDataModule):
         parser.add_argument("--test_track", type=str, default="iid")
 
         parser.add_argument("--fp16", type=str2bool, default=False)
+        parser.add_argument("--lc_min", type=int, default=40)
+        parser.add_argument("--lc_max", type=int, default=90)
+
         parser.add_argument("--spatial_eobs", type=str2bool, default=True)
         parser.add_argument("--eobs_spread", type=str2bool, default=True)
         parser.add_argument("--soilgrids_all", type=str2bool, default=True)
@@ -605,6 +618,8 @@ class EarthNet2021XpxOldDataModule(pl.LightningDataModule):
             earthnet_corpus = EarthNet2021XOldDataset(
                 self.base_dir / "train",
                 fp16=self.hparams.fp16,
+                lc_min=self.hparams.lc_min,
+                lc_max=self.hparams.lc_max,
                 spatial_eobs=self.hparams.spatial_eobs,
                 eobs_spread=self.hparams.eobs_spread,
                 soilgrids_all=self.hparams.soilgrids_all,
@@ -629,6 +644,8 @@ class EarthNet2021XpxOldDataModule(pl.LightningDataModule):
             self.earthnet_train = EarthNet2021XpxOldDataset(
                 self.base_dir,
                 fp16=self.hparams.fp16,
+                lc_min=self.hparams.lc_min,
+                lc_max=self.hparams.lc_max,
                 eobs_spread=self.hparams.eobs_spread,
                 soilgrids_all=self.hparams.soilgrids_all,
             )

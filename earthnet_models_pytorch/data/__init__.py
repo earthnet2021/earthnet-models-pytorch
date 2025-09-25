@@ -1,3 +1,4 @@
+from earthnet_models_pytorch.data.de23_data import DeepExtremes2023DataModule
 from earthnet_models_pytorch.data.en21_data import EarthNet2021DataModule
 from earthnet_models_pytorch.data.en21x_data import EarthNet2021XDataModule
 from earthnet_models_pytorch.data.en21x_data_old import (
@@ -17,6 +18,7 @@ SETTINGS = [
     "en21x-pxold",
     "en22",
     "en23",
+    "de23",
 ]
 
 DATASETS = {
@@ -28,6 +30,7 @@ DATASETS = {
     "en21x-pxold": EarthNet2021XpxOldDataModule,
     "en22": EarthNet2022DataModule,
     "en23": EarthNet2023DataModule,
+    "de23": DeepExtremes2023DataModule,
 }
 
 METRIC_CHECKPOINT_INFO = {
@@ -67,6 +70,11 @@ METRIC_CHECKPOINT_INFO = {
         "mode": "min",
     },
     "en23": {
+        "monitor": "RMSE_Veg",
+        "filename": "Epoch-{epoch:02d}-RMSE (Vegetation)-{RMSE_Veg:.4f}",
+        "mode": "min",
+    },
+    "de23": {
         "monitor": "RMSE_Veg",
         "filename": "Epoch-{epoch:02d}-RMSE (Vegetation)-{RMSE_Veg:.4f}",
         "mode": "min",

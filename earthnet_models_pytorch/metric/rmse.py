@@ -6,8 +6,6 @@ class RootMeanSquaredError(Metric):
     # Each state variable should be called using self.add_state(...)
     def __init__(
         self,
-        lc_min: int,
-        lc_max: int,
         context_length: int,
         target_length: int,
         dist_sync_on_step: bool = False,
@@ -42,20 +40,14 @@ class RootMeanSquaredError(Metric):
         )
 
         # State variables for the metric
-        self.add_state(
-            "sum_squared_error", default=torch.tensor(0.0), dist_reduce_fx="sum"
-        )
-        self.add_state("total", default=torch.tensor(0), dist_reduce_fx="sum")
+        self.add_state("total", default=torch.tensor(0.0), dist_reduce_fx="sum")
+        self.add_state("n_samples", default=torch.tensor(0), dist_reduce_fx="sum")
         self.add_state("current_scores", default=torch.tensor(0), dist_reduce_fx=None)
 
         self.context_length = context_length
         self.target_length = target_length
 
-        self.lc_min = lc_min
-        self.lc_max = lc_max
-        print(
-            f"Using Masked RootMeanSquaredError metric Loss with Landcover boundaries ({self.lc_min, self.lc_max})."
-        )
+        print(f"Using Masked RootMeanSquaredError metric Loss.")
 
     def update(self, preds, targs):
         """
@@ -90,13 +82,14 @@ class RootMeanSquaredError(Metric):
             )
 
         # Landcover mask
-        lc = targs["landcover"]
-        lc_mask = (
-            ((lc <= self.lc_min).bool() | (lc >= self.lc_max).bool())
-            .type_as(s2_mask)
-            .unsqueeze(1)
-            .repeat(1, preds.shape[1], 1, 1, 1)
-        )
+        lc_mask = targs["landcover_mask"]
+
+        if len(lc_mask.shape) < 5:  # spatial landcover mask
+            lc_mask = lc_mask.unsqueeze(1).repeat(1, preds.shape[1], 1, 1, 1)
+        else:  # spato-temporal landcover mask
+            lc_mask = lc_mask[
+                :, self.context_length : self.context_length + self.target_length, ...
+            ]
 
         mask = s2_mask * lc_mask
 
@@ -105,9 +98,10 @@ class RootMeanSquaredError(Metric):
         n_obs = (mask == 1).sum((1, 2, 3, 4))  # sum of pixel with vegetation
 
         # Update the states variables
-        self.current_scores = sum_squared_error / (n_obs + 1e-8)
-        self.sum_squared_error += sum_squared_error.sum()
-        self.total += n_obs.sum()
+        self.current_scores = torch.sqrt(sum_squared_error / (n_obs + 1e-8))
+        self.total += (sum_squared_error / (n_obs + 1e-8)).sum()
+        self.n_samples += len(n_obs.shape)
+        # print(n_obs)
 
     def compute(self):
         """
@@ -118,7 +112,8 @@ class RootMeanSquaredError(Metric):
         dict
             Dictionary containing the computed RMSE for vegetation pixels.
         """
-        return {"RMSE_Veg": torch.sqrt(self.sum_squared_error / self.total)}
+        # print(self.total, self.n_samples, torch.sqrt(self.total / (self.n_samples)))
+        return {"RMSE_Veg": torch.sqrt(self.total / (self.n_samples))}
 
     def compute_batch(self, targs):
         """
