@@ -1,20 +1,18 @@
-from typing import Optional, Union
-from pathlib import Path
-
 import argparse
 import ast
 import copy
 import json
-import torch
-from torch import nn
+from pathlib import Path
+from typing import Optional, Union
+
 import numpy as np
-import xarray as xr
 import pytorch_lightning as pl
-
-
-from earthnet_models_pytorch.utils import str2bool, log_viz
-from earthnet_models_pytorch.task import setup_loss, SHEDULERS
+import torch
+import xarray as xr
 from earthnet_models_pytorch.metric import METRICS
+from earthnet_models_pytorch.task import SHEDULERS, setup_loss
+from earthnet_models_pytorch.utils import log_viz, str2bool
+from torch import nn
 
 
 class SpatioTemporalTask(pl.LightningModule):
@@ -47,20 +45,20 @@ class SpatioTemporalTask(pl.LightningModule):
 
         self.n_stochastic_preds = hparams.n_stochastic_preds
 
-
         self.shedulers = []
         for shedule in self.hparams.shedulers:
             self.shedulers.append(
                 (shedule["call_name"], SHEDULERS[shedule["name"]](**shedule["args"]))
             )
 
-
         self.metric = METRICS[self.hparams.metric](**self.hparams.metric_kwargs)
-        
+
+        # Storage for outputs to support PyTorch Lightning 2.0 migration
+        self.test_step_outputs = []
 
     @staticmethod
     def add_task_specific_args(
-        parent_parser: Optional[Union[argparse.ArgumentParser, list]] = None
+        parent_parser: Optional[Union[argparse.ArgumentParser, list]] = None,
     ):  # Optional[X] is equivalent to Union[X, None].
         if parent_parser is None:
             parent_parser = []
@@ -84,8 +82,8 @@ class SpatioTemporalTask(pl.LightningModule):
             default='{"name": "masked", "args": {"distance_type": "L1"}}',
         )
         # Metric used for the test set and the validation set.
-        parser.add_argument("--metric", type=str, default="RMSE")
-        parser.add_argument('--metric_kwargs', type = ast.literal_eval, default = '{}')
+        parser.add_argument("--metric", type=str, default="NNSE")
+        parser.add_argument("--metric_kwargs", type=ast.literal_eval, default="{}")
 
         # Context and target length for temporal model. A temporal model use a context period to learn the temporal dependencies and predict the target period.
         parser.add_argument("--context_length", type=int, default=10)
@@ -156,7 +154,6 @@ class SpatioTemporalTask(pl.LightningModule):
         for shedule_name, shedule in self.shedulers:
             kwargs[shedule_name] = shedule(self.global_step)
 
-
         # Predictions generation
         preds, aux = self(batch, kwargs=kwargs)
         loss, logs = self.loss(preds, batch, aux, current_step=self.global_step)
@@ -184,8 +181,12 @@ class SpatioTemporalTask(pl.LightningModule):
 
         batch_size = torch.tensor(self.hparams.val_batch_size, dtype=torch.int64)
 
-        # Select only the context data for the model
-        data["dynamic"][0] = data["dynamic"][0][:, :self.context_length, ...]
+        # # Select only the context data for the model
+        # data["dynamic"][0] = data["dynamic"][0][:, : self.context_length, ...]
+        # if len(data["dynamic_mask"]) > 0:
+        #     data["dynamic_mask"][0] = data["dynamic_mask"][0][
+        #         :, : self.context_length, ...
+        #     ]
 
         loss_logs = []  # list of loss values
         viz_logs = []  # list of (preds, scores)
@@ -239,7 +240,8 @@ class SpatioTemporalTask(pl.LightningModule):
                     setting=self.hparams.setting,
                 )
 
-    def validation_epoch_end(self, validation_step_outputs):
+
+    def on_validation_epoch_end(self):
         current_scores = self.metric.compute()
         self.log_dict(current_scores, sync_dist=True)
         self.metric.reset()  # lagacy? To remove, shoudl me managed by the logger?
@@ -250,9 +252,11 @@ class SpatioTemporalTask(pl.LightningModule):
         ):
             current_scores["epoch"] = self.current_epoch
             current_scores = {
-                k: str(v.detach().cpu().item())
-                if isinstance(v, torch.Tensor)
-                else str(v)
+                k: (
+                    str(v.detach().cpu().item())
+                    if isinstance(v, torch.Tensor)
+                    else str(v)
+                )
                 for k, v in current_scores.items()
             }
             outpath = Path(self.logger.log_dir) / "validation_scores.json"
@@ -266,14 +270,15 @@ class SpatioTemporalTask(pl.LightningModule):
             with open(outpath, "w") as fp:
                 json.dump(scores, fp)
 
+
     def test_step(self, batch, batch_idx):
         """Operates on a single batch of data from the test set. In this step you generate examples or calculate anything of interest such as accuracy."""
         scores = []
 
         data = copy.deepcopy(batch)
 
-        #data["dynamic"][0] =  data["dynamic"][0][:,:self.context_length,...]  # selection only the context data
-        #if len(data["dynamic_mask"]) > 0:
+        # data["dynamic"][0] =  data["dynamic"][0][:,:self.context_length,...]  # selection only the context data
+        # if len(data["dynamic_mask"]) > 0:
         #    data["dynamic_mask"][0] = data["dynamic_mask"][0][:,:self.context_length,...]
 
         for i in range(self.n_stochastic_preds):
@@ -286,7 +291,7 @@ class SpatioTemporalTask(pl.LightningModule):
             static = batch["static"][0]
 
             for j in range(preds.shape[0]):
-                if self.hparams.setting in ["en21x", "en23"]:
+                if self.hparams.setting in ["en21x", "en23", "greenearthnet"]:
                     # Targets
                     targ_path = Path(batch["filepath"][j])
                     targ_cube = xr.open_dataset(targ_path)
@@ -457,7 +462,6 @@ class SpatioTemporalTask(pl.LightningModule):
                             pred_path,
                             encoding={
                                 "ndvi_pred": {"dtype": "float32"},
-
                             },
                         )
 
@@ -508,9 +512,12 @@ class SpatioTemporalTask(pl.LightningModule):
             if self.hparams.compute_metric_on_test:
                 self.metric.update(preds, batch)
                 scores.append(self.metric.compute_batch(batch))
+
+        # Store outputs for PyTorch Lightning 2.0 compatibility
+        self.test_step_outputs.append(scores)
         return scores
 
-    def test_epoch_end(self, test_step_outputs):
+    def on_test_epoch_end(self):
         """Called at the end of a test epoch with the output of all test steps."""
         if self.hparams.compute_metric_on_test:
             self.pred_dir.mkdir(parents=True, exist_ok=True)
@@ -521,11 +528,11 @@ class SpatioTemporalTask(pl.LightningModule):
                     [
                         {
                             k: v if isinstance(v, str) else v.item()
-                            for k, v in test_step_outputs[i][j][l].items()
+                            for k, v in self.test_step_outputs[i][j][l].items()
                         }
-                        for i in range(len(test_step_outputs))
-                        for j in range(len(test_step_outputs[i]))
-                        for l in range(len(test_step_outputs[i][j]))
+                        for i in range(len(self.test_step_outputs))
+                        for j in range(len(self.test_step_outputs[i]))
+                        for l in range(len(self.test_step_outputs[i][j]))
                     ],
                     fp,
                 )
@@ -540,6 +547,9 @@ class SpatioTemporalTask(pl.LightningModule):
                         },
                         fp,
                     )
+
+        # Clear outputs for memory management (PyTorch Lightning 2.0 pattern)
+        self.test_step_outputs.clear()
 
     def teardown(self, stage):
         if stage == "test" and self.hparams.compute_metric_on_test:

@@ -1,24 +1,20 @@
-from typing import Union, Optional
-import warnings
-
-warnings.simplefilter(action="ignore", category=FutureWarning)
-
 import argparse
 import copy
 import multiprocessing
 import re
-
+import warnings
 from pathlib import Path
+from typing import Optional, Union
 
 import numpy as np
 import pytorch_lightning as pl
 import torch
 import xarray as xr
-
-from torch import nn
-from torch.utils.data import Dataset, DataLoader, random_split
-
 from earthnet_models_pytorch.utils import str2bool
+from torch import nn
+from torch.utils.data import DataLoader, Dataset, random_split
+
+warnings.simplefilter(action="ignore", category=FutureWarning)
 
 
 class EarthNet2021XDataset(Dataset):
@@ -30,12 +26,10 @@ class EarthNet2021XDataset(Dataset):
         eobs_vars=["fg", "hu", "pp", "qq", "rr", "tg", "tn", "tx"],
         eobs_agg=["mean", "min", "max"],
         static_vars=["nasa_dem", "alos_dem", "cop_dem", "esawc_lc", "geom_cls"],
-        lc_min=40,
-        lc_max=90,
         start_month_extreme=None,
         dl_cloudmask=False,
         allow_fastaccess=False,
-    ):  # , fg_masked = False):
+    ):
         if not isinstance(folder, Path):
             folder = Path(folder)
 
@@ -138,8 +132,6 @@ class EarthNet2021XDataset(Dataset):
             },
         )
 
-        # self.fg_masked = fg_masked
-
         print(f"dataset has {len(self)} samples")
 
     def __getitem__(self, idx: int) -> dict:
@@ -154,16 +146,11 @@ class EarthNet2021XDataset(Dataset):
                 ],
                 "dynamic_mask": [torch.from_numpy(npz["sen2mask"].astype(self.type))],
                 "static": [torch.from_numpy(npz["staticarr"].astype(self.type))],
+                "static_mask": [],
                 "landcover": torch.from_numpy(npz["lc"].astype(self.type)),
-                # WARNING: what is the landcover map? if same than En23, ok, otherwise to update with : lc_mask = ((lc >= self.lc_min).bool() & (lc <= self.lc_max).bool()).type_as(preds)  # b c h w
-                "landcover_mask": torch.from_numpy(
-                    (npz["lc_mask"].astype(self.type) <= self.lc_min)
-                    | (npz["lc_mask"].astype(self.type) >= self.lc_max)
-                ).bool(),
                 "filepath": str(
-                    Path(
-                        f"/Net/Groups/BGI/work_1/scratch/EarthNet2021/data/datasets/en21x/{filepath.parent.parent.stem[:-11]}/"
-                    )
+                    filepath.parent.parent.parent
+                    / f"{filepath.parent.parent.stem[:-11]}/"
                     / filepath.parent.stem
                     / f"{filepath.stem}.nc"
                 ),
@@ -217,10 +204,6 @@ class EarthNet2021XDataset(Dataset):
             )
             sen2mask[np.isnan(sen2mask)] = 4.0
 
-        # if self.fg_masked:
-        #     fg = xr.open_zarr("/Net/Groups/BGI/work_2/Landscapes_dynamics/downloads/Eobs/v26/eobs_2016_2022_fg.zarr")
-        #     minicube["eobs_fg"] = fg.sel(latitude = minicube.latitude_eobs.item(), method = "nearest").sel(longitude = minicube.longitude_eobs.item(), method = "nearest").fg.drop_vars(["latitude", "longitude"])
-
         eobs = (
             (
                 minicube[[f"eobs_{v}" for v in self.eobs_vars]].to_array("variable")
@@ -242,10 +225,6 @@ class EarthNet2021XDataset(Dataset):
         eobsarr = np.concatenate(eobsarr, axis=1)
 
         eobsarr[np.isnan(eobsarr)] = 0.0  # MAYBE BAD IDEA......
-
-        # for static_var in self.static_vars + ["esawc_lc"]: # somehow sometimes a DEM might be missing..
-        #     if static_var not in minicube:
-        #         minicube[static_var] = xr.DataArray(data = np.full(shape = (len(minicube.lat), len(minicube.lon)), fill_value = np.NaN), coords = {"lat": minicube.lat, "lon": minicube.lon}, dims = ("lat", "lon"))
 
         staticarr = (
             (
@@ -305,17 +284,12 @@ class EarthNet2021XDataModule(pl.LightningDataModule):
         parser.add_argument("--base_dir", type=str, default="data/datasets/")
         parser.add_argument("--test_track", type=str, default="iid")
 
-        parser.add_argument("--allow_fastaccess", type=str2bool, default=False)
-        parser.add_argument("--shuffle_train", type=str2bool, default=False)
-        parser.add_argument("--new_valset", type=str2bool, default=False)
-        # parser.add_argument('--fg_masked', type = str2bool, default = False)
-
         parser.add_argument("--fp16", type=str2bool, default=False)
         parser.add_argument("--dl_cloudmask", type=str2bool, default=False)
-
-        parser.add_argument("--lc_min", type=int, default=40)
-        parser.add_argument("--lc_max", type=int, default=90)
-
+        parser.add_argument("--allow_fastaccess", type=str2bool, default=False)
+        parser.add_argument("--shuffle_train", type=str2bool, default=False)
+        
+        parser.add_argument('--new_valset', type = str2bool, default = False)
         parser.add_argument("--val_pct", type=float, default=0.05)
         parser.add_argument("--val_split_seed", type=float, default=42)
 
@@ -335,16 +309,12 @@ class EarthNet2021XDataModule(pl.LightningDataModule):
                 self.earthnet_train = EarthNet2021XDataset(
                     self.base_dir / "train",
                     fp16=self.hparams.fp16,
-                    lc_min=self.hparams.lc_min,
-                    lc_max=self.hparams.lc_max,
                     dl_cloudmask=self.hparams.dl_cloudmask,
                     allow_fastaccess=self.hparams.allow_fastaccess,
                 )
                 self.earthnet_val = EarthNet2021XDataset(
-                    self.base_dir / "ood-t_chopped/",
+                    self.base_dir / "val_chopped/",
                     fp16=self.hparams.fp16,
-                    lc_min=self.hparams.lc_min,
-                    lc_max=self.hparams.lc_max,
                     dl_cloudmask=self.hparams.dl_cloudmask,
                     allow_fastaccess=self.hparams.allow_fastaccess,
                 )
@@ -352,8 +322,6 @@ class EarthNet2021XDataModule(pl.LightningDataModule):
                 earthnet_corpus = EarthNet2021XDataset(
                     self.base_dir / "train",
                     fp16=self.hparams.fp16,
-                    lc_min=self.hparams.lc_min,
-                    lc_max=self.hparams.lc_max,
                     dl_cloudmask=self.hparams.dl_cloudmask,
                     allow_fastaccess=self.hparams.allow_fastaccess,
                 )
@@ -380,8 +348,6 @@ class EarthNet2021XDataModule(pl.LightningDataModule):
                 self.earthnet_test = EarthNet2021XDataset(
                     self.base_dir / "extreme",
                     fp16=self.hparams.fp16,
-                    lc_min=self.hparams.lc_min,
-                    lc_max=self.hparams.lc_max,
                     start_month_extreme=start_month_extreme,
                     dl_cloudmask=self.hparams.dl_cloudmask,
                     allow_fastaccess=self.hparams.allow_fastaccess,
@@ -390,8 +356,6 @@ class EarthNet2021XDataModule(pl.LightningDataModule):
                 self.earthnet_test = EarthNet2021XDataset(
                     self.base_dir / self.hparams.test_track,
                     fp16=self.hparams.fp16,
-                    lc_min=self.hparams.lc_min,
-                    lc_max=self.hparams.lc_max,
                     dl_cloudmask=self.hparams.dl_cloudmask,
                     allow_fastaccess=self.hparams.allow_fastaccess,
                 )  # , fg_masked = self.hparams.fg_masked)

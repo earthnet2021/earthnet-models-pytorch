@@ -90,7 +90,10 @@ def parse_setting(setting_file, track = None):
     setting_dict["Checkpointer"] = {**setting_dict["Checkpointer"], **METRIC_CHECKPOINT_INFO[setting_dict["Setting"]]} if "Checkpointer" in setting_dict else METRIC_CHECKPOINT_INFO[setting_dict["Setting"]]
     
     bs = setting_dict["Data"]["train_batch_size"]
-    gpus = setting_dict["Trainer"]["gpus"] if "gpus" in setting_dict["Trainer"] else setting_dict["Trainer"]["devices"]
+    if "gpus" in setting_dict["Trainer"]:
+        setting_dict["Trainer"]["devices"] = setting_dict["Trainer"].pop("gpus")
+
+    gpus = setting_dict["Trainer"]["devices"]
     ddp = (setting_dict["Trainer"]["strategy"] == "ddp")
     
     optimizers = setting_dict["Task"]["optimization"]["optimizer"]
@@ -116,7 +119,6 @@ def parse_setting(setting_file, track = None):
     # Cpy information for others modules   
     setting_dict["Model"]["context_length"] = setting_dict["Task"]["context_length"]        
     setting_dict["Model"]["target_length"] = setting_dict["Task"]["target_length"]
-        
     if "target" in setting_dict["Data"]:
         setting_dict["Model"]["target"] = setting_dict["Data"]["target"]
 

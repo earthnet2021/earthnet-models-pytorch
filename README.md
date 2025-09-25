@@ -20,11 +20,10 @@ In earthnet-models-pytorch there is three main components:
 We recommend using Anaconda for managing dependencies of this library. The following bash commands create a suitable environment. Please note the PyTorch installation requirements for your system, see (https://pytorch.org/) - esp. cudatoolkit might have to be installed with a different cuda version.
 
 ```
-conda create -n emp python=3.10
+conda create -n emp -c conda-forge python 
 conda activate emp
-conda install pytorch==1.13.1 torchvision==0.14.1 torchaudio==0.13.1 pytorch-cuda=11.6 -c pytorch -c nvidia
-conda install -c conda-forge numpy matplotlib pillow xarray zarr netcdf4 scipy imageio networkx scikit-image s3fs pyproj tensorboard pyarrow seaborn cartopy dask pytorch-lightning=1.7.7 torchmetrics=0.7.3
-pip install earthnet segmentation-models-pytorch
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu126
+pip install numpy matplotlib pillow xarray zarr netcdf4 scipy imageio networkx scikit-image s3fs pyproj pyarrow seaborn cartopy tensorboard dask pytorch-lightning torchmetrics statsmodels earthnet earthnet-minicuber segmentation-models-pytorch albumentations ipykernel
 ```
 
 ## Installation

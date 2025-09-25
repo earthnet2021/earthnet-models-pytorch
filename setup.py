@@ -24,14 +24,13 @@ scripts = [
     "scripts/train.py",
     "scripts/test.py",
     "scripts/tune.py",
-    "demo/app.py",
     "scripts/slurmrun.sh",
 ]
 
 
 setup(
     name="earthnet-models-pytorch",
-    version="0.0.1",
+    version="0.1.1",
     description="EarthNet Models PyTorch",
     author="Vitus Benson, Claire Robin",
     author_email="{vbenson, crobin}@bgc-jena.mpg.de",

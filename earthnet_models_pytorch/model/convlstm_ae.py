@@ -1,14 +1,16 @@
 """ConvLSTM_ae
-    ConvLSTM with an encoding-decoding architecture
+ConvLSTM with an encoding-decoding architecture
 """
-from typing import Optional, Union
-import sys
+
 import argparse
 import ast
-import torch.nn as nn
-import torch
-from earthnet_models_pytorch.utils import str2bool
+import sys
+from typing import Optional, Union
 
+import torch
+import torch.nn as nn
+from earthnet_models_pytorch.model.layer_utils import inverse_permutation
+from earthnet_models_pytorch.utils import str2bool
 
 # Mapping of class labels to indices
 class_mapping = {
@@ -165,7 +167,11 @@ class ConvLSTMAE(nn.Module):
         )
 
         self.decoder_1_convlstm = ConvLSTMCell(
-            input_dim=self.hparams.num_inputs - 7,  # nb of s2 bands.
+            input_dim=(
+                self.hparams.num_inputs - 4
+                if self.hparams.decoder_input_subtract_s2bands
+                else self.hparams.num_inputs
+            ),  # nb of s2 bands.
             hidden_dim=self.hparams.hidden_dim[0],
             kernel_size=self.hparams.kernel_size,
             bias=self.hparams.bias,
@@ -197,7 +203,7 @@ class ConvLSTMAE(nn.Module):
 
     @staticmethod
     def add_model_specific_args(
-        parent_parser: Optional[Union[argparse.ArgumentParser, list]] = None
+        parent_parser: Optional[Union[argparse.ArgumentParser, list]] = None,
     ):
         """
         Add model-specific arguments to the command-line argument parser.
@@ -235,7 +241,11 @@ class ConvLSTMAE(nn.Module):
         parser.add_argument("--teacher_forcing", type=str2bool, default=False)
         parser.add_argument("--target", type=str, default=False)
         parser.add_argument("--use_weather", type=str2bool, default=True)
-        parser.add_argument("--spatial_shuffle", type = str2bool, default = False)
+        parser.add_argument("--spatial_shuffle", type=str2bool, default=False)
+        parser.add_argument(
+            "--decoder_input_subtract_s2bands", type=str2bool, default=True
+        )
+        parser.add_argument("--weather_is_aggregated", type=str2bool, default=False)
         return parser
 
     def forward(
@@ -299,36 +309,53 @@ class ConvLSTMAE(nn.Module):
         # landcover = data["landcover"]
         # for key in list(class_mapping.keys()):
         #     landcover[landcover == key] = class_mapping.get(key)
-# 
+        #
         # landcover = (
         #     nn.functional.one_hot(landcover.to(torch.int64), 11)
         #     .transpose(1, 4)
         #     .squeeze(4)
         # )
-# 
+        #
         # # Concatenate static data with landcover
         # static = torch.cat((data["static"][0], data["static"][1]), dim=1)
         # static = torch.cat((static, landcover), dim=1)
 
-        static = data["static"][0]
+        static = data["static"][0][:, :3, ...]
 
         # Get the dimensions of the input data. Shape: batch size, temporal size, number of channels, height, width
-        b, t, _, h, w = sentinel.shape
+        b, t, c, h, w = sentinel.shape
+        _, t_w, c_w, _, _ = weather.shape
 
         if self.hparams.spatial_shuffle:
-            perm = torch.randperm(b*h*w, device=sentinel.device)
+            perm = torch.randperm(b * h * w, device=sentinel.device)
             invperm = inverse_permutation(perm)
 
             if weather.shape[-1] == 1:
-                weather = weather.expand(-1, -1, -1, h,w)
+                weather = weather.expand(-1, -1, -1, h, w)
             else:
-                weather = nn.functional.interpolate(weather, size = (h,w), mode='nearest-exact')
+                weather = nn.functional.interpolate(
+                    weather, size=(h, w), mode="nearest-exact"
+                )
 
-            sentinel = sentinel.permute(1, 2, 0, 3, 4).reshape(t, c, b*h*w)[:, :, perm].reshape(t, c, b, h, w).permute(2, 0, 1, 3, 4)
-            weather = weather.permute(1, 2, 0, 3, 4).reshape(t_w, c_w, b*h*w)[:, :, perm].reshape(t_w, c_w, b, h, w).permute(2, 0, 1, 3, 4).contiguous()
-            static = static.permute(1, 0, 2, 3).reshape(3, b*h*w)[:, perm].reshape(3, b, h, w).permute(1, 0, 2, 3)
-
-
+            sentinel = (
+                sentinel.permute(1, 2, 0, 3, 4)
+                .reshape(t, c, b * h * w)[:, :, perm]
+                .reshape(t, c, b, h, w)
+                .permute(2, 0, 1, 3, 4)
+            )
+            weather = (
+                weather.permute(1, 2, 0, 3, 4)
+                .reshape(t_w, c_w, b * h * w)[:, :, perm]
+                .reshape(t_w, c_w, b, h, w)
+                .permute(2, 0, 1, 3, 4)
+                .contiguous()
+            )
+            static = (
+                static.permute(1, 0, 2, 3)
+                .reshape(3, b * h * w)[:, perm]
+                .reshape(3, b, h, w)
+                .permute(1, 0, 2, 3)
+            )
 
         # Initialize hidden states for encoder ConvLSTM cells
         h_t, c_t = self.encoder_1_convlstm.init_hidden(batch_size=b, height=h, width=w)
@@ -342,20 +369,20 @@ class ConvLSTMAE(nn.Module):
         for t in range(context_length):
             # Prepare input for encoder ConvLSTM cells
             input = torch.cat((sentinel[:, t, ...], static), dim=1)
-            
+            # WARNING only for En23
+
             if self.hparams.use_weather:
-                if weather.shape[1] == 90: # weather is 5 days resolution
+                if self.hparams.weather_is_aggregated:
+                    weather_t = weather[:, t, ...].expand(-1, -1, h, w)
+                elif weather.shape[1] == 90:  # weather is 5 days resolution
+                    weather_t = weather[:, t, ...].repeat(1, 1, 128, 128)
+                else:
                     weather_t = (
-                    weather[:, t, ...]
-                    .repeat(1, 1, 128, 128)
+                        weather[:, t : t + 5, ...]
+                        .view(weather.shape[0], 1, -1, 1, 1)
+                        .squeeze(1)
+                        .repeat(1, 1, 128, 128)
                     )
-                else: # weather is daily
-                    weather_t = (
-                    weather[:, t : t + 5, ...]
-                    .view(weather.shape[0], 1, -1, 1, 1)
-                    .squeeze(1)
-                    .repeat(1, 1, 128, 128)
-                )
                 input = torch.cat((input, weather_t), dim=1)
 
             # First ConvLSTM block
@@ -379,25 +406,33 @@ class ConvLSTMAE(nn.Module):
             # Copy the previous prediction for skip connections
             pred_previous = torch.clone(pred)
 
-            
-
             # Teacher forcing scheduled sampling
             if (
                 self.hparams.teacher_forcing
                 and self.training
                 and torch.bernoulli(teacher_forcing_decay)
             ):
-                pred = target[:, t, 0, ...].unsqueeze(1)
+                pred = target[
+                    :,
+                    t,
+                    : (
+                        self.hparams.num_outputs
+                        if not self.hparams.decoder_input_subtract_s2bands
+                        else 1
+                    ),
+                    ...,
+                ]
 
             pred = torch.cat((pred, static), dim=1)
             if self.hparams.use_weather:
                 # Prepare input for decoder ConvLSTM cells
-                if weather.shape[1] == 90: # weather is 5 days resolution
-                        weather_t = (
-                        weather[:,  context_length + t, ...]
-                        .repeat(1, 1, 128, 128)
+                if self.hparams.weather_is_aggregated:
+                    weather_t = weather[:, context_length + t, ...].expand(-1, -1, h, w)
+                elif weather.shape[1] == 90:  # weather is 5 days resolution
+                    weather_t = weather[:, context_length + t, ...].repeat(
+                        1, 1, 128, 128
                     )
-                else: # weather is daily
+                else:
                     weather_t = (
                         weather[:, context_length + t : context_length + t + 5, ...]
                         .view(weather.shape[0], 1, -1, 1, 1)
@@ -428,7 +463,14 @@ class ConvLSTMAE(nn.Module):
         output = torch.cat(output, dim=1)  # .unsqueeze(2)
 
         if self.hparams.spatial_shuffle:
-            output = output.permute(1, 2, 0, 3, 4).reshape(self.hparams.target_length, self.hparams.num_outputs, b*h*w)[:, :, invperm].reshape(self.hparams.target_length, self.hparams.num_outputs, b, h, w).permute(2, 0, 1, 3, 4)
+            output = (
+                output.permute(1, 2, 0, 3, 4)
+                .reshape(
+                    self.hparams.target_length, self.hparams.num_outputs, b * h * w
+                )[:, :, invperm]
+                .reshape(self.hparams.target_length, self.hparams.num_outputs, b, h, w)
+                .permute(2, 0, 1, 3, 4)
+            )
 
             output = output[:, :, :1, :, :]
 

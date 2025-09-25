@@ -1,21 +1,17 @@
-from typing import Union, Optional
-
 import argparse
 import copy
 import multiprocessing
 import re
-
 from pathlib import Path
+from typing import Optional, Union
 
 import numpy as np
 import pytorch_lightning as pl
 import torch
 import xarray as xr
-
-from torch import nn
-from torch.utils.data import Dataset, DataLoader, random_split
-
 from earthnet_models_pytorch.utils import str2bool
+from torch import nn
+from torch.utils.data import DataLoader, Dataset, random_split
 
 
 class EarthNet2021XOldDataset(Dataset):
@@ -233,6 +229,7 @@ class EarthNet2021XOldDataset(Dataset):
             "dynamic": [torch.from_numpy(kndvi), torch.from_numpy(eobs)],
             "dynamic_mask": [],
             "static": [torch.from_numpy(highresstatic)],
+            "static_mask": [],
             "landcover": torch.from_numpy(lc),
             "landcover_mask": torch.from_numpy(lc_mask).bool(),
             "filepath": str(filepath),
@@ -253,7 +250,7 @@ class EarthNet2021XOldDataset(Dataset):
             [str]: cubename (has format tile_stuff.npz)
         """
         components = path.name.split("_")
-        regex = re.compile("\d{2}[A-Z]{3}")
+        regex = re.compile(r"\d{2}[A-Z]{3}")
         if bool(regex.match(components[0])):
             return path.name
         else:
@@ -458,6 +455,7 @@ class EarthNet2021XpxOldDataset(Dataset):
             "dynamic": [torch.from_numpy(kndvi), torch.from_numpy(eobs)],
             "dynamic_mask": [],
             "static": [torch.from_numpy(highresstatic)],
+            "static_mask": [],
             "landcover": torch.from_numpy(lc),
             "landcover_mask": torch.from_numpy(lc_mask).bool(),
             "filepath": "",
@@ -478,7 +476,7 @@ class EarthNet2021XOldDataModule(pl.LightningDataModule):
 
     @staticmethod
     def add_data_specific_args(
-        parent_parser: Optional[Union[argparse.ArgumentParser, list]] = None
+        parent_parser: Optional[Union[argparse.ArgumentParser, list]] = None,
     ):
         if parent_parser is None:
             parent_parser = []
@@ -582,7 +580,7 @@ class EarthNet2021XpxOldDataModule(pl.LightningDataModule):
 
     @staticmethod
     def add_data_specific_args(
-        parent_parser: Optional[Union[argparse.ArgumentParser, list]] = None
+        parent_parser: Optional[Union[argparse.ArgumentParser, list]] = None,
     ):
         if parent_parser is None:
             parent_parser = []
@@ -615,6 +613,7 @@ class EarthNet2021XpxOldDataModule(pl.LightningDataModule):
         return parser
 
     def setup(self, stage: str = None):
+
         if stage == "fit" or stage is None:
             earthnet_corpus = EarthNet2021XOldDataset(
                 self.base_dir / "train",

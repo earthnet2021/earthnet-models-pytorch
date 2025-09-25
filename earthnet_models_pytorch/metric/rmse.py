@@ -1,5 +1,5 @@
-from torchmetrics import Metric
 import torch
+from torchmetrics import Metric
 
 
 class RootMeanSquaredError(Metric):
@@ -8,7 +8,6 @@ class RootMeanSquaredError(Metric):
         self,
         context_length: int,
         target_length: int,
-        compute_on_step: bool = False,
         dist_sync_on_step: bool = False,
         process_group=None,
         dist_sync_fn=None,
@@ -26,8 +25,6 @@ class RootMeanSquaredError(Metric):
             Length of the context for predictions.
         target_length : int
             Length of the target sequence for predictions.
-        compute_on_step : bool, optional
-            If True, compute the metric on each forward call (default is False).
         dist_sync_on_step : bool, optional
             If True, synchronize metric computation across devices in a distributed environment (default is False).
         process_group : optional
@@ -37,7 +34,6 @@ class RootMeanSquaredError(Metric):
         """
         super().__init__(
             # Advanced metric settings
-            compute_on_step=compute_on_step,
             dist_sync_on_step=dist_sync_on_step,  # distributed environment, if the metric should synchronize between different devices every time forward is called
             process_group=process_group,  # distributed environment, by default we synchronize across the world i.e. all processes being computed on. Specify exactly what devices should be synchronized over
             dist_sync_fn=dist_sync_fn,  # distributed environment, by default we use torch.distributed.all_gather() to perform the synchronization between devices.

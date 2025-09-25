@@ -1,19 +1,18 @@
-from typing import Union, Optional
-
 import argparse
-import sys
 import copy
+import json
 import multiprocessing
 import re
-import json
+import sys
 from pathlib import Path
+from typing import Optional, Union
+
 import numpy as np
 import pytorch_lightning as pl
 import torch
 import xarray as xr
-from torch.utils.data import Dataset, DataLoader, random_split
-
 from earthnet_models_pytorch.utils import str2bool
+from torch.utils.data import DataLoader, Dataset, random_split
 
 variables = {
     # Sentinel 2 bands. Spatio-temporal data. Every 5 days.
@@ -485,7 +484,7 @@ class EarthNet2023Dataset(Dataset):
             [str]: cubename (has format tile_stuff.npz)
         """
         components = path.name.split("_")
-        regex = re.compile("\d{2}[A-Z]{3}")
+        regex = re.compile(r"\d{2}[A-Z]{3}")
         if bool(regex.match(components[0])):
             return path.name
         else:
@@ -527,7 +526,7 @@ class EarthNet2023DataModule(pl.LightningDataModule):
 
     @staticmethod
     def add_data_specific_args(
-        parent_parser: Optional[Union[argparse.ArgumentParser, list]] = None
+        parent_parser: Optional[Union[argparse.ArgumentParser, list]] = None,
     ):
         if parent_parser is None:
             parent_parser = []

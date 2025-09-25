@@ -9,7 +9,6 @@ from earthnet_models_pytorch.model.spatiotemporal_unet import SpatioTemporalUNet
 from earthnet_models_pytorch.model.unet_lstm import UNetLSTM
 from earthnet_models_pytorch.model.contextformer import ContextFormer
 
-
 MODELS = {
     "local-rnn": LocalRNN,
     "rnn": RNN,
