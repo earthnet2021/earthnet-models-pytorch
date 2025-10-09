@@ -23,7 +23,7 @@ We recommend using Anaconda for managing dependencies of this library. The follo
 conda create -n emp -c conda-forge python 
 conda activate emp
 pip install torch torchvision --index-url https://download.pytorch.org/whl/cu126
-pip install numpy matplotlib pillow xarray zarr netcdf4 scipy imageio networkx scikit-image s3fs pyproj pyarrow seaborn cartopy tensorboard dask pytorch-lightning torchmetrics statsmodels earthnet earthnet-minicuber segmentation-models-pytorch albumentations ipykernel
+pip install numpy matplotlib pillow xarray zarr netcdf4 scipy imageio networkx scikit-image s3fs pyproj pyarrow seaborn cartopy tensorboard dask pytorch-lightning torchmetrics statsmodels earthnet earthnet-minicuber segmentation-models-pytorch albumentations ipykernel geopandas
 ```
 
 ## Installation

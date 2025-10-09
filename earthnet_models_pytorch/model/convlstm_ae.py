@@ -168,7 +168,7 @@ class ConvLSTMAE(nn.Module):
 
         self.decoder_1_convlstm = ConvLSTMCell(
             input_dim=(
-                self.hparams.num_inputs - 4
+                self.hparams.num_inputs - self.hparams.num_s2bands
                 if self.hparams.decoder_input_subtract_s2bands
                 else self.hparams.num_inputs
             ),  # nb of s2 bands.
@@ -245,6 +245,7 @@ class ConvLSTMAE(nn.Module):
         parser.add_argument(
             "--decoder_input_subtract_s2bands", type=str2bool, default=True
         )
+        parser.add_argument("--num_s2bands", type=int, default=7)
         parser.add_argument("--weather_is_aggregated", type=str2bool, default=False)
         return parser
 
@@ -320,7 +321,7 @@ class ConvLSTMAE(nn.Module):
         # static = torch.cat((data["static"][0], data["static"][1]), dim=1)
         # static = torch.cat((static, landcover), dim=1)
 
-        static = data["static"][0][:, :3, ...]
+        static = data["static"][0]
 
         # Get the dimensions of the input data. Shape: batch size, temporal size, number of channels, height, width
         b, t, c, h, w = sentinel.shape

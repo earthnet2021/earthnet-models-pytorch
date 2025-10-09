@@ -29,6 +29,8 @@ class EarthNet2021XDataset(Dataset):
         start_month_extreme=None,
         dl_cloudmask=False,
         allow_fastaccess=False,
+        lc_min = 40,
+        lc_max = 90,
     ):
         if not isinstance(folder, Path):
             folder = Path(folder)

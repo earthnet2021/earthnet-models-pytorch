@@ -513,7 +513,6 @@ class DeepExtremes2023DataModule(pl.LightningDataModule):
         ].sort_values(by=["path","start_date"])
         # print(spatial_test_subset.iloc[:10])
 
-
         return train_subset, val_subset, spatial_test_subset, temporal_test_subset
 
     def dataset_split_continent(self):
@@ -553,7 +552,7 @@ class DeepExtremes2023DataModule(pl.LightningDataModule):
             return africa.contains(point).any()
 
         # Load a world map dataset (included in geopandas)
-        world = gpd.read_file(gpd.datasets.get_path("naturalearth_lowres"))
+        world = gpd.read_file("https://d2ad6b4ur7yvpq.cloudfront.net/naturalearth-3.3.0/ne_110m_admin_0_countries.geojson")
         africa = world[world["continent"] == "Africa"]
         # Apply the is_in_africa function to each row
         df["in_africa"] = df.apply(lambda row: is_in_africa(row, africa), axis=1)
