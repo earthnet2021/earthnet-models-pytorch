@@ -1,5 +1,5 @@
 """ConvLSTM_ae
-    ConvLSTM with an encoding-decoding architecture
+ConvLSTM with an encoding-decoding architecture
 """
 
 import argparse
@@ -168,7 +168,7 @@ class ConvLSTMAE(nn.Module):
 
         self.decoder_1_convlstm = ConvLSTMCell(
             input_dim=(
-                self.hparams.num_inputs - 4
+                self.hparams.num_inputs - self.hparams.num_s2bands
                 if self.hparams.decoder_input_subtract_s2bands
                 else self.hparams.num_inputs
             ),  # nb of s2 bands.
@@ -203,7 +203,7 @@ class ConvLSTMAE(nn.Module):
 
     @staticmethod
     def add_model_specific_args(
-        parent_parser: Optional[Union[argparse.ArgumentParser, list]] = None
+        parent_parser: Optional[Union[argparse.ArgumentParser, list]] = None,
     ):
         """
         Add model-specific arguments to the command-line argument parser.
@@ -245,6 +245,7 @@ class ConvLSTMAE(nn.Module):
         parser.add_argument(
             "--decoder_input_subtract_s2bands", type=str2bool, default=True
         )
+        parser.add_argument("--num_s2bands", type=int, default=7)
         parser.add_argument("--weather_is_aggregated", type=str2bool, default=False)
         return parser
 
@@ -320,7 +321,7 @@ class ConvLSTMAE(nn.Module):
         # static = torch.cat((data["static"][0], data["static"][1]), dim=1)
         # static = torch.cat((static, landcover), dim=1)
 
-        static = data["static"][0][:, :3, ...]
+        static = data["static"][0]
 
         # Get the dimensions of the input data. Shape: batch size, temporal size, number of channels, height, width
         b, t, c, h, w = sentinel.shape
@@ -374,6 +375,8 @@ class ConvLSTMAE(nn.Module):
             if self.hparams.use_weather:
                 if self.hparams.weather_is_aggregated:
                     weather_t = weather[:, t, ...].expand(-1, -1, h, w)
+                elif weather.shape[1] == 90:  # weather is 5 days resolution
+                    weather_t = weather[:, t, ...].repeat(1, 1, 128, 128)
                 else:
                     weather_t = (
                         weather[:, t : t + 5, ...]
@@ -426,6 +429,10 @@ class ConvLSTMAE(nn.Module):
                 # Prepare input for decoder ConvLSTM cells
                 if self.hparams.weather_is_aggregated:
                     weather_t = weather[:, context_length + t, ...].expand(-1, -1, h, w)
+                elif weather.shape[1] == 90:  # weather is 5 days resolution
+                    weather_t = weather[:, context_length + t, ...].repeat(
+                        1, 1, 128, 128
+                    )
                 else:
                     weather_t = (
                         weather[:, context_length + t : context_length + t + 5, ...]

@@ -157,12 +157,13 @@ class EarthNet2022Dataset(Dataset):
 
         meteo[np.isnan(meteo)] = 0
 
-        highresstatic = minicube.dem.values[None, ...].astype(self.type)  # c h w
-        highresstatic /= 2000
+        highresstatic = minicube.dem.values[None, ...].astype(self.type) / 2000
         highresstatic[np.isnan(highresstatic)] = 0
 
         lc = minicube.lc.values[None, ...].astype(self.type)  # c h w
         lc[np.isnan(lc)] = 0
+
+        lc_mask = (lc >= self.lc_min) & (lc <= self.lc_max)
 
         data = {
             "dynamic": [torch.from_numpy(hr), self.transform_meteo(meteo)],
@@ -170,6 +171,7 @@ class EarthNet2022Dataset(Dataset):
             "static": [torch.from_numpy(highresstatic)],
             "static_mask": [],
             "landcover": torch.from_numpy(lc),
+            "landcover_mask": torch.from_numpy(lc_mask).bool(),
             "filepath": str(filepath),
             "cubename": self.__name_getter(filepath),
         }

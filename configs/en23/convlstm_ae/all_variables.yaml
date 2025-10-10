@@ -33,9 +33,9 @@ Trainer:
     val_check_interval: 0.25 #0.005 # 
   
 Data:
-    base_dir: "/scratch/crobin/earthnet2023/" 
+    base_dir: "/scratch/crobin/earthnet2023_preprocessing/" 
     test_track: "iid"
-    target: "anomalie_ndvi"
+    target: "ndvi"
     train_batch_size: 4
     val_batch_size: 4
     test_batch_size: 4

@@ -13,7 +13,6 @@ import copy
 import sys
 import torch
 import pytorch_lightning as pl
-from pytorch_lightning.strategies import DDPStrategy
 
 from earthnet_models_pytorch.model import MODELS
 from earthnet_models_pytorch.task import SpatioTemporalTask

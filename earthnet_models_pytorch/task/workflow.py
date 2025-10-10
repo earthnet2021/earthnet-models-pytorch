@@ -40,8 +40,8 @@ class SpatioTemporalTask(pl.LightningModule):
         self.context_length = hparams.context_length
         self.target_length = hparams.target_length
 
-        self.lc_min = hparams.lc_min
-        self.lc_max = hparams.lc_max
+        #self.lc_min = hparams.lc_min
+        #self.lc_max = hparams.lc_max
 
         self.n_stochastic_preds = hparams.n_stochastic_preds
 
@@ -90,8 +90,8 @@ class SpatioTemporalTask(pl.LightningModule):
         parser.add_argument("--target_length", type=int, default=20)
 
         # Landcover bounds. Used as mask on the non-vegetation pixel.
-        parser.add_argument("--lc_min", type=int, default=10)
-        parser.add_argument("--lc_max", type=int, default=20)
+        #parser.add_argument("--lc_min", type=int, default=10)
+        #parser.add_argument("--lc_max", type=int, default=20)
 
         # Number of stochastic prediction for statistical models.
         parser.add_argument("--n_stochastic_preds", type=int, default=1)
@@ -295,7 +295,7 @@ class SpatioTemporalTask(pl.LightningModule):
                     # Targets
                     targ_path = Path(batch["filepath"][j])
                     targ_cube = xr.open_dataset(targ_path)
-
+                    
                     lat = targ_cube.lat
                     lon = targ_cube.lon
 
@@ -332,6 +332,59 @@ class SpatioTemporalTask(pl.LightningModule):
                         pred_cube.to_netcdf(
                             pred_path, encoding={"ndvi_pred": {"dtype": "float32"}}
                         )
+                elif self.hparams.setting in ["de23"]:
+                    # Targets
+                    targ_path = Path(batch["filepath"][j])
+                    targ_cube = xr.open_dataset(targ_path, engine='zarr')
+                    start_time = batch["cubename"][j][-10:]
+                    t0 = np.datetime64(start_time)
+                    t1 = t0 + np.timedelta64(self.context_length*5-1, 'D')
+                    t2 = t1 + np.timedelta64(self.target_length*5-1, 'D')
+                    lat = targ_cube.x
+                    lon = targ_cube.y
+                    ndvi_preds = preds[j, :, 0, ...].detach().cpu().numpy()
+                    pred_cube = xr.Dataset(
+                        {
+                            "ndvi_pred": xr.DataArray(
+                                data=ndvi_preds,
+                                coords={
+                                    "time": targ_cube.time.sel(
+                                        time=slice(t1, t2)
+                                    ),
+                                    "y": lon,
+                                    "x": lat,
+                                },
+                                dims=["time", "y", "x"],
+                            )
+                        }
+                    )
+                    # print(pred_cube)
+                    pred_dir = self.pred_dir
+                    pred_path = pred_dir / Path(batch["cubename"][j] + ".zarr") # targ_path.parent.stem / targ_path.name
+                    pred_path.parent.mkdir(parents=True, exist_ok=True)
+
+                    if pred_path.is_file():
+                        pred_path.unlink()
+
+                    if not pred_path.is_file():
+                        pred_cube.to_zarr(
+                            pred_path,
+                            chunk_store=None,
+                            mode="w",
+                            synchronizer=None,
+                            group=None,
+                            encoding={"ndvi_pred": {"dtype": "float32"}},
+                            compute=True,
+                            consolidated=True,
+                            append_dim=None,
+                            region=None,
+                            safe_chunks=True,
+                            storage_options=None,
+                            zarr_version=None
+                        )
+                        # pred_cube.to_netcdf(
+                        #     pred_path, encoding={"ndvi_pred": {"dtype": "float32"}}
+                        # )
 
                 elif self.hparams.setting in ["en21xold", "en22"]:
                     # Targets
@@ -468,7 +521,6 @@ class SpatioTemporalTask(pl.LightningModule):
         """Called at the end of a test epoch with the output of all test steps."""
         if self.hparams.compute_metric_on_test:
             self.pred_dir.mkdir(parents=True, exist_ok=True)
-            print(self.pred_dir)
             with open(
                 self.pred_dir / f"individual_scores_{self.global_rank}.json", "w"
             ) as fp:

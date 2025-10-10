@@ -27,8 +27,6 @@ class NormalizedNashSutcliffeEfficiency(Metric):
         self.add_state("nnse_sum", default=torch.tensor(0.0), dist_reduce_fx="sum")
         self.add_state("n_obs", default=torch.tensor(1e-6), dist_reduce_fx="sum")
 
-        self.lc_min = lc_min
-        self.lc_max = lc_max
         self.ndvi_pred_idx = ndvi_pred_idx
         self.ndvi_targ_idx = ndvi_targ_idx
         self.mask_hq_only = mask_hq_only
@@ -84,6 +82,14 @@ class NormalizedNashSutcliffeEfficiency(Metric):
         )  # b c h w
 
         nse = 1 - sum_squared_error / (sum_squared_deviation + 1e-8)  # b c h w
+
+        # Landcover mask
+        lc_mask = batch["landcover_mask"]
+
+        if len(lc_mask.shape) < 5: # spatial landcover mask
+            lc_mask = lc_mask.unsqueeze(1).repeat(1, preds.shape[1], 1, 1, 1)
+        else: # spato-temporal landcover mask
+            lc_mask = lc_mask[:, self.context_length : self.context_length + self.target_length, ...]
 
         if self.mask_hq_only:
             lc_mask = (

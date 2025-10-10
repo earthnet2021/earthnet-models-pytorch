@@ -340,7 +340,13 @@ statistic = {
 
 class EarthNet2023Dataset(Dataset):
     def __init__(
-        self, folder: Union[Path, str], target: str, variables=variables, fp16=False
+        self,
+        folder: Union[Path, str],
+        target: str,
+        lc_min: int,
+        lc_max: int,
+        variables=variables,
+        fp16=False,
     ):
         if not isinstance(folder, Path):
             folder = Path(folder)
@@ -349,9 +355,11 @@ class EarthNet2023Dataset(Dataset):
             if len(sorted(list(folder.glob("*.nc")))) > 0
             else sorted(list(folder.glob("*/*.nc")))
         )
-        print(folder)
+        print("path of the dataset: ", folder)
         self.type = np.float16 if fp16 else np.float32
         self.target = target
+        self.lc_min = lc_min
+        self.lc_max = lc_max
         self.variables = variables
 
     def __getitem__(self, idx: int) -> dict:
@@ -406,7 +414,6 @@ class EarthNet2023Dataset(Dataset):
         )  # c h w
 
         # Rescaling
-
         for variable in (
             self.variables["era5"]
             + self.variables["era5lands"]
@@ -443,6 +450,7 @@ class EarthNet2023Dataset(Dataset):
         landcover = np.where(
             np.isnan(landcover), np.zeros(1).astype(self.type), landcover
         )
+        lc_mask = (landcover <= self.lc_min) | (landcover >= self.lc_max)
 
         # Concatenation
         satellite_data = np.concatenate((target, s2_cube), axis=1)
@@ -457,6 +465,7 @@ class EarthNet2023Dataset(Dataset):
             "static": [torch.from_numpy(topography), torch.from_numpy(sg_cube)],
             # "target": torch.from_numpy(target),
             "landcover": torch.from_numpy(landcover),
+            "landcover_mask": torch.from_numpy(lc_mask).bool(),
             "filepath": str(filepath),
             "cubename": self.__name_getter(filepath),
         }
@@ -530,6 +539,9 @@ class EarthNet2023DataModule(pl.LightningDataModule):
         parser.add_argument("--test_track", type=str, default="iid")
         parser.add_argument("--target", type=str, default="ndvi")
 
+        parser.add_argument("--lc_min", type=int, default=40)
+        parser.add_argument("--lc_max", type=int, default=90)
+
         parser.add_argument("--fp16", type=str2bool, default=False)
 
         parser.add_argument("--train_batch_size", type=int, default=1)
@@ -549,6 +561,8 @@ class EarthNet2023DataModule(pl.LightningDataModule):
             earthnet_full = EarthNet2023Dataset(
                 self.base_dir / "train",
                 target=self.hparams.target,
+                lc_min=self.hparams.lc_min,
+                lc_max=self.hparams.lc_max,
                 fp16=self.hparams.fp16,
             )
             self.earthnet_train, self.earthnet_val = random_split(
@@ -561,6 +575,8 @@ class EarthNet2023DataModule(pl.LightningDataModule):
             self.earthnet_test = EarthNet2023Dataset(
                 self.base_dir / "test",
                 target=self.hparams.target,
+                lc_min=self.hparams.lc_min,
+                lc_max=self.hparams.lc_max,
                 fp16=self.hparams.fp16,
             )
 

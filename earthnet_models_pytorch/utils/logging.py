@@ -117,6 +117,12 @@ def log_viz(
     targs = batch["dynamic"][0]
     nrow = 9 if targs.shape[1] % 9 == 0 else 10
 
+    if "landcover_mask" in batch:
+        # print("lc_mask in batch")
+        lc_mask = batch["landcover_mask"]
+    # else:
+    # print("need to set mask from lc")
+
     if "landcover" in batch:
         lc = batch["landcover"]
         if setting == "en21x":
@@ -192,6 +198,34 @@ def log_viz(
                     setting=setting,
                 )
                 grid = torchvision.utils.make_grid(ndvi, nrow=nrow)
+            elif setting == "de23":
+                # print(lc_mask.size())
+                if len(lc_mask.shape) < 5:  # spatial landcover mask
+                    lc_mask1 = lc_mask.unsqueeze(1).repeat(1, preds.shape[1], 1, 1, 1)
+                else:  # spato-temporal landcover mask
+                    # print(preds.size())
+                    target_length = preds.size(dim=1)
+                    context_length = lc_mask.size(dim=1) - target_length
+                    lc_mask1 = lc_mask[
+                        j, context_length : context_length + target_length, ...
+                    ]
+                    # print(lc_mask1.size())
+                ndvi = veg_colorize(
+                    preds[j, ...].squeeze(),
+                    mask=None if "landcover_mask" not in batch else lc_mask1,
+                    setting=setting,
+                )
+                text = f"Cube: {scores[j]['name']} Score: {scores[j]['rmse' if 'rmse' in scores[j] else 'veg_score']:.4f}"
+                grid = torchvision.utils.make_grid(ndvi, nrow=nrow)
+                text = (
+                    torch.tensor(
+                        text_phantom(text, width=grid.shape[-1]),
+                        dtype=torch.float32,
+                        device=targs.device,
+                    )
+                    .type_as(grid)
+                    .permute(2, 0, 1)
+                )
             else:
 
                 ndvi = veg_colorize(
@@ -296,6 +330,35 @@ def log_viz(
                         clouds=masks[j, :, 0, ...] if masks is not None else None,
                         mode="ndvi",
                     )
+                elif setting == "de23":
+                    rgb = torch.cat(
+                        [
+                            targs[j, :, 3, ...].unsqueeze(1) * 10000,
+                            targs[j, :, 2, ...].unsqueeze(1) * 10000,
+                            targs[j, :, 1, ...].unsqueeze(1) * 10000,
+                        ],
+                        dim=1,
+                    )
+                    grid = torchvision.utils.make_grid(
+                        rgb, nrow=nrow, normalize=True, value_range=(0, 5000)
+                    )
+                    tensorboard_logger.add_image(
+                        f"Cube: {batch_idx*preds.shape[0] + j} RGB Targets",
+                        grid,
+                        current_epoch,
+                    )
+
+                    ndvi = veg_colorize(
+                        targs[j, :, 0, ...],
+                        mask=(
+                            None
+                            if "landcover_mask" not in batch
+                            else lc_mask[j, :, 0, ...]
+                        ),
+                        clouds=masks[j, :, 0, ...],
+                        setting=setting,
+                    )
+
                 else:  # kndvi
                     ndvi = veg_colorize(
                         targs[j, :, 0, ...],

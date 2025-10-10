@@ -18,7 +18,6 @@ warnings.simplefilter(action="ignore", category=FutureWarning)
 
 
 class EarthNet2021XDataset(Dataset):
-
     def __init__(
         self,
         folder: Union[Path, str],
@@ -30,6 +29,8 @@ class EarthNet2021XDataset(Dataset):
         start_month_extreme=None,
         dl_cloudmask=False,
         allow_fastaccess=False,
+        lc_min = 40,
+        lc_max = 90,
     ):
         if not isinstance(folder, Path):
             folder = Path(folder)
@@ -64,6 +65,8 @@ class EarthNet2021XDataset(Dataset):
 
         self.s2_bands = s2_bands
         self.eobs_vars = eobs_vars
+        self.lc_min = lc_min
+        self.lc_max = lc_max
         self.eobs_agg = eobs_agg
         self.static_vars = static_vars
         self.start_month_extreme = start_month_extreme
@@ -134,11 +137,9 @@ class EarthNet2021XDataset(Dataset):
         print(f"dataset has {len(self)} samples")
 
     def __getitem__(self, idx: int) -> dict:
-
         filepath = self.filepaths[idx]
 
         if self.fast_access:
-
             npz = np.load(filepath)
             data = {
                 "dynamic": [
@@ -244,6 +245,7 @@ class EarthNet2021XDataset(Dataset):
             .transpose("variable", "lat", "lon")
             .values
         )  # c h w
+        lc_mask = (lc <= self.lc_min) | (lc >= self.lc_max)
 
         data = {
             "dynamic": [
@@ -252,8 +254,8 @@ class EarthNet2021XDataset(Dataset):
             ],
             "dynamic_mask": [torch.from_numpy(sen2mask.astype(self.type))],
             "static": [torch.from_numpy(staticarr.astype(self.type))],
-            "static_mask": [],
             "landcover": torch.from_numpy(lc.astype(self.type)),
+            "landcover_mask": torch.from_numpy(lc_mask).bool(),
             "filepath": str(filepath),
             "cubename": filepath.stem,
         }
@@ -305,7 +307,6 @@ class EarthNet2021XDataModule(pl.LightningDataModule):
 
     def setup(self, stage: str = None):
         if stage == "fit" or stage is None:
-
             if self.hparams.new_valset:
                 self.earthnet_train = EarthNet2021XDataset(
                     self.base_dir / "train",
